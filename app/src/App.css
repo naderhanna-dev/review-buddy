@@ -148,8 +148,14 @@
   color: #cf222e;
 }
 
-.updated-since-review,
-.updated {
+.required-review,
+.required-and-updated {
+  background: #ffebe9;
+  border-color: #ff8182;
+  color: #cf222e;
+}
+
+.updated-since-review {
   background: #fff8c5;
   border-color: #d4a72c;
   color: #9a6700;
@@ -159,6 +165,12 @@
   background: #ddf4ff;
   border-color: #54aeff;
   color: #0969da;
+}
+
+.viewed-updated {
+  background: #fbefff;
+  border-color: #bf87ff;
+  color: #8250df;
 }
 
 .reason {

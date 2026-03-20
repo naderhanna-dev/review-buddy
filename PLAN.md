@@ -71,11 +71,11 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - [x] Initial technical decisions locked.
 - [x] Vite + React scaffold created.
 - [x] GitHub data layer implemented.
-- [ ] Classification engine implemented.
+- [x] Classification engine implemented.
 - [x] UI section rendering implemented.
 - [ ] OAuth flow implemented.
 - [ ] Tests and docs completed.
 
 ## Next Step
 
-Implement the classification engine using GitHub review requests + reviews + update timestamps to split PRs into "Needs your attention" and "Related to you".
+Improve quality and docs: extract classification logic for unit tests, add README setup with required PAT scopes, and document local "viewed" tracking behavior.
