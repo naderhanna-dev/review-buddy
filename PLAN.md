@@ -69,13 +69,13 @@ Build a small webapp that shows which pull requests need your attention, inspire
 
 - [x] Problem framing and core rules defined.
 - [x] Initial technical decisions locked.
-- [ ] Vite + React scaffold created.
+- [x] Vite + React scaffold created.
 - [ ] GitHub data layer implemented.
 - [ ] Classification engine implemented.
-- [ ] UI section rendering implemented.
+- [x] UI section rendering implemented.
 - [ ] OAuth flow implemented.
 - [ ] Tests and docs completed.
 
 ## Next Step
 
-Scaffold the React + Vite app and start with a minimal page that shows the two target sections using mocked data, then wire real GitHub data.
+Implement auth + configuration for first iteration with PAT, then wire GitHub API reads for open pull requests in a single org.

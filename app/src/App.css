@@ -1,0 +1,142 @@
+.app-shell {
+  width: min(980px, 100% - 2rem);
+  margin: 2rem auto;
+  display: grid;
+  gap: 1rem;
+}
+
+.page-header {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.page-header p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+
+.section-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--subtle);
+  border-bottom: 1px solid var(--border);
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.section-header span {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.pr-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem 1rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pr-row:last-child {
+  border-bottom: 0;
+}
+
+.pr-title {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.pr-title:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+.pr-meta,
+.reason,
+.updated-at {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.status-group {
+  justify-self: end;
+  text-align: right;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.pill {
+  border-radius: 999px;
+  border: 1px solid;
+  padding: 0.14rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  width: fit-content;
+  justify-self: end;
+}
+
+.changes-requested {
+  background: #ffebe9;
+  border-color: #ff8182;
+  color: #cf222e;
+}
+
+.updated-since-review,
+.updated {
+  background: #fff8c5;
+  border-color: #d4a72c;
+  color: #9a6700;
+}
+
+.team-review {
+  background: #ddf4ff;
+  border-color: #54aeff;
+  color: #0969da;
+}
+
+.reason {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    width: min(980px, 100% - 1rem);
+    margin: 1rem auto;
+  }
+
+  .pr-row {
+    grid-template-columns: 1fr;
+  }
+
+  .status-group {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .pill {
+    justify-self: start;
+  }
+}
