@@ -74,8 +74,8 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - [x] Classification engine implemented.
 - [x] UI section rendering implemented.
 - [ ] OAuth flow implemented.
-- [ ] Tests and docs completed.
+- [x] Tests and docs completed.
 
 ## Next Step
 
-Improve quality and docs: extract classification logic for unit tests, add README setup with required PAT scopes, and document local "viewed" tracking behavior.
+Implement OAuth app flow so PAT is no longer needed in normal usage.
