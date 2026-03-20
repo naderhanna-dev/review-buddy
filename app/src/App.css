@@ -66,6 +66,13 @@
   font-size: 0.82rem;
 }
 
+.warning-copy {
+  color: #9a6700;
+  background: #fff8c5;
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+}
+
 .section-card {
   background: var(--surface);
   border: 1px solid var(--border);

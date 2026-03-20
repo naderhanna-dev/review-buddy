@@ -63,6 +63,15 @@ describe('classifyPullRequest', () => {
     expect(result.needsAttention).toBeUndefined()
   })
 
+  it('skips team signal when user has no readable team membership', () => {
+    const pull = createPull({ requested_teams: [{ slug: 'reviewers-platform' }] })
+
+    const result = classifyPullRequest(pull, [], 'me', new Set())
+
+    expect(result.relatedToYou).toBeUndefined()
+    expect(result.needsAttention).toBeUndefined()
+  })
+
   it('marks PR as related when viewed without review and updated since', () => {
     const pull = createPull({ updated_at: '2026-03-20T12:00:00Z' })
 

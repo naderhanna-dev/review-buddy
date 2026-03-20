@@ -34,6 +34,7 @@ type Team = {
 type ClassifiedPullRequests = {
   needsAttention: PullRequest[]
   relatedToYou: PullRequest[]
+  teamSignalsUnavailable: boolean
 }
 
 const STORAGE_KEYS: Record<'token' | 'org' | 'viewed', string> = {
@@ -72,14 +73,22 @@ async function fetchAndClassifyPullRequests(
   viewedMap: Record<string, number>,
 ): Promise<ClassifiedPullRequests> {
   const query = encodeURIComponent(`is:pr is:open archived:false org:${org}`)
-  const [me, teams, search] = await Promise.all([
+  const [me, search] = await Promise.all([
     apiFetch<GitHubUser>('https://api.github.com/user', token),
-    apiFetch<Team[]>('https://api.github.com/user/teams?per_page=100', token),
     apiFetch<SearchIssuesResponse>(
       `https://api.github.com/search/issues?q=${query}&sort=updated&order=desc&per_page=50`,
       token,
     ),
   ])
+
+  let teams: Team[] = []
+  let teamSignalsUnavailable = false
+
+  try {
+    teams = await apiFetch<Team[]>('https://api.github.com/user/teams?per_page=100', token)
+  } catch {
+    teamSignalsUnavailable = true
+  }
 
   const myTeamSlugs = new Set(
     teams
@@ -128,6 +137,7 @@ async function fetchAndClassifyPullRequests(
   return {
     needsAttention: sortByUpdatedDesc(needsAttention),
     relatedToYou: sortByUpdatedDesc(relatedToYou),
+    teamSignalsUnavailable,
   }
 }
 
@@ -178,6 +188,7 @@ function App() {
   const [viewedMap, setViewedMap] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState(false)
   const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([])
   const [relatedToYou, setRelatedToYou] = useState<PullRequest[]>([])
 
@@ -205,6 +216,7 @@ function App() {
     if (!token || !org) {
       setNeedsAttention([])
       setRelatedToYou([])
+      setTeamSignalsUnavailable(false)
       return
     }
 
@@ -219,6 +231,7 @@ function App() {
         if (!ignore) {
           setNeedsAttention(classified.needsAttention)
           setRelatedToYou(classified.relatedToYou)
+          setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
         }
       } catch (loadError) {
         if (!ignore) {
@@ -227,6 +240,7 @@ function App() {
           setError(message)
           setNeedsAttention([])
           setRelatedToYou([])
+          setTeamSignalsUnavailable(false)
         }
       } finally {
         if (!ignore) {
@@ -298,9 +312,15 @@ function App() {
           <button type="submit">Save and refresh</button>
         </form>
         <p className="helper-copy">
-          PAT is stored in local storage for this browser profile. Required scopes: `repo`
-          and `read:org`.
+          PAT is stored in local storage for this browser profile. Fine-grained permissions:
+          Pull requests (Read) required, Members (Read) optional for team-based signals.
         </p>
+        {teamSignalsUnavailable ? (
+          <p className="helper-copy warning-copy">
+            Team permissions are unavailable for this token. Showing direct-review and
+            activity-based signals only.
+          </p>
+        ) : null}
       </section>
 
       <section className="section-card">

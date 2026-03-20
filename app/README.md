@@ -20,11 +20,14 @@ npm run dev
 - GitHub organization (single org scope)
 - Personal access token (PAT)
 
-## PAT scopes
+## Fine-grained PAT permissions
 
-Use a token with:
-- `repo` (read pull requests across private/public repos you can access)
-- `read:org` (read your team memberships)
+Use a fine-grained token with:
+- Pull requests: **Read** (required)
+- Members: **Read** (optional, enables team-assigned PR signals)
+
+If Members read is missing, the app still works and shows direct-reviewer and
+activity-based signals; only team-assigned signals are skipped.
 
 ## Classification behavior
 
