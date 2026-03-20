@@ -13,7 +13,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 ## Locked Decisions
 
 - Frontend stack: React + Vite.
-- Auth approach: GitHub OAuth App preferred; PAT allowed for first iteration if it speeds up delivery.
+- Auth approach: PAT-based local access for now.
 - Scope: single GitHub organization.
 - Team-related PRs: include PRs requested from teams the user belongs to.
 
@@ -43,7 +43,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 
 2. Auth + configuration
    - First iteration: allow PAT for local speed.
-   - Add OAuth App flow after core logic is stable.
+   - OAuth App flow intentionally deferred.
    - Add org selector/config (single-org constrained).
 
 3. Data ingestion (GitHub API)
@@ -73,9 +73,9 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - [x] GitHub data layer implemented.
 - [x] Classification engine implemented.
 - [x] UI section rendering implemented.
-- [x] OAuth flow implemented.
+- [ ] OAuth flow implemented.
 - [x] Tests and docs completed.
 
 ## Next Step
 
-Harden OAuth and API usage: add pagination and rate-limit handling, then reduce per-PR API calls with batched GraphQL where possible.
+Harden API usage: add pagination and rate-limit handling, then reduce per-PR API calls with batched GraphQL where possible.
