@@ -16,6 +16,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - Auth approach: PAT-based local access for now (fine-grained: Pull requests read; Members read optional).
 - Scope: single GitHub organization.
 - Team-related PRs: include PRs requested from teams the user belongs to.
+- Data fetch scope: candidate PRs should be user-scoped within the org (not all org PRs).
 
 ## PR Classification Rules
 
@@ -48,7 +49,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
    - Add org selector/config (single-org constrained).
 
 3. Data ingestion (GitHub API)
-   - Fetch open PRs for the org repos in scope.
+   - Fetch user-scoped candidate PRs for the org (direct reviewer, reviewed-by, team-requested when available, locally viewed).
    - Fetch review requests (users + teams), reviews, and latest commit/update markers.
    - Resolve team membership for current user.
 
@@ -79,4 +80,4 @@ Build a small webapp that shows which pull requests need your attention, inspire
 
 ## Next Step
 
-Harden API usage: add pagination and rate-limit handling, then reduce per-PR API calls with batched GraphQL where possible.
+Harden API usage: improve rate-limit handling and reduce per-PR API calls with batched GraphQL where possible.

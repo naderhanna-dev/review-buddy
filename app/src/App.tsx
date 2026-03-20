@@ -37,6 +37,9 @@ type ClassifiedPullRequests = {
   teamSignalsUnavailable: boolean
 }
 
+const SEARCH_PAGE_SIZE = 100
+const SEARCH_MAX_PAGES = 10
+
 const STORAGE_KEYS: Record<'token' | 'org' | 'viewed', string> = {
   token: 'review-radar.pat',
   org: 'review-radar.org',
@@ -72,14 +75,31 @@ async function fetchAndClassifyPullRequests(
   token: string,
   viewedMap: Record<string, number>,
 ): Promise<ClassifiedPullRequests> {
-  const query = encodeURIComponent(`is:pr is:open archived:false org:${org}`)
-  const [me, search] = await Promise.all([
-    apiFetch<GitHubUser>('https://api.github.com/user', token),
-    apiFetch<SearchIssuesResponse>(
-      `https://api.github.com/search/issues?q=${query}&sort=updated&order=desc&per_page=50`,
-      token,
-    ),
-  ])
+  const me = await apiFetch<GitHubUser>('https://api.github.com/user', token)
+
+  async function searchPullRequestUrls(query: string): Promise<Set<string>> {
+    const urls = new Set<string>()
+
+    for (let page = 1; page <= SEARCH_MAX_PAGES; page += 1) {
+      const encodedQuery = encodeURIComponent(query)
+      const response = await apiFetch<SearchIssuesResponse>(
+        `https://api.github.com/search/issues?q=${encodedQuery}&sort=updated&order=desc&per_page=${SEARCH_PAGE_SIZE}&page=${page}`,
+        token,
+      )
+
+      for (const item of response.items) {
+        if (item.pull_request?.url) {
+          urls.add(item.pull_request.url)
+        }
+      }
+
+      if (response.items.length < SEARCH_PAGE_SIZE) {
+        break
+      }
+    }
+
+    return urls
+  }
 
   let teams: Team[] = []
   let teamSignalsUnavailable = false
@@ -96,12 +116,43 @@ async function fetchAndClassifyPullRequests(
       .map((team) => team.slug),
   )
 
-  const pullUrls = search.items
-    .map((item) => item.pull_request?.url)
-    .filter((url): url is string => Boolean(url))
+  const candidateQueries = [
+    `is:pr is:open archived:false org:${org} review-requested:${me.login}`,
+    `is:pr is:open archived:false org:${org} reviewed-by:${me.login}`,
+  ]
+
+  for (const teamSlug of myTeamSlugs) {
+    candidateQueries.push(
+      `is:pr is:open archived:false org:${org} team-review-requested:${org}/${teamSlug}`,
+    )
+  }
+
+  const candidateUrlSets = await Promise.all(
+    candidateQueries.map((query) => searchPullRequestUrls(query)),
+  )
+
+  const pullUrls = new Set<string>()
+  for (const urlSet of candidateUrlSets) {
+    for (const url of urlSet) {
+      pullUrls.add(url)
+    }
+  }
+
+  for (const key of Object.keys(viewedMap)) {
+    const [repository, number] = key.split('#')
+    if (!repository || !number) {
+      continue
+    }
+
+    if (!repository.toLowerCase().startsWith(`${org.toLowerCase()}/`)) {
+      continue
+    }
+
+    pullUrls.add(`https://api.github.com/repos/${repository}/pulls/${number}`)
+  }
 
   const pullsWithReviews = await Promise.all(
-    pullUrls.map(async (pullUrl) => {
+    Array.from(pullUrls).map(async (pullUrl) => {
       const [pull, reviews] = await Promise.all([
         apiFetch<PullDetails>(pullUrl, token),
         apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token),

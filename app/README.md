@@ -1,6 +1,7 @@
 # ReviewRadar App
 
 ReviewRadar is a small React + Vite webapp that helps you triage pull requests by attention level.
+It fetches PRs scoped to you in the selected org (not all org PRs).
 
 ## Local setup
 
@@ -28,6 +29,14 @@ Use a fine-grained token with:
 
 If Members read is missing, the app still works and shows direct-reviewer and
 activity-based signals; only team-assigned signals are skipped.
+
+## Candidate PR scope
+
+The app builds candidates from open PRs in your org where at least one is true:
+- You are directly requested as reviewer.
+- You have already reviewed the PR.
+- One of your teams is requested (when Members read is available).
+- You previously opened the PR from ReviewRadar (local viewed tracker).
 
 ## Classification behavior
 
