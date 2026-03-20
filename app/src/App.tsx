@@ -36,11 +36,16 @@ type ClassifiedPullRequests = {
   relatedToYou: PullRequest[]
 }
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8787'
+const OAUTH_CLIENT_ID = import.meta.env.VITE_GITHUB_OAUTH_CLIENT_ID ?? ''
+
 const STORAGE_KEYS: Record<'token' | 'org' | 'viewed', string> = {
   token: 'review-radar.pat',
   org: 'review-radar.org',
   viewed: 'review-radar.viewed',
 }
+const OAUTH_STATE_KEY = 'review-radar.oauth.state'
 
 async function apiFetch<T>(url: string, token: string): Promise<T> {
   const response = await fetch(url, {
@@ -177,6 +182,7 @@ function App() {
   const [org, setOrg] = useState('')
   const [viewedMap, setViewedMap] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(false)
+  const [isExchangingCode, setIsExchangingCode] = useState(false)
   const [error, setError] = useState('')
   const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([])
   const [relatedToYou, setRelatedToYou] = useState<PullRequest[]>([])
@@ -199,6 +205,84 @@ function App() {
     setOrg(storedOrg)
     setOrgInput(storedOrg)
     setViewedMap(parsedViewed)
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const oauthError = params.get('error')
+    const oauthCode = params.get('code')
+    const returnedState = params.get('state')
+
+    if (!oauthError && !oauthCode) {
+      return
+    }
+
+    const storedState = localStorage.getItem(OAUTH_STATE_KEY)
+    const clearOAuthParams = () => {
+      const cleanUrl = `${window.location.origin}${window.location.pathname}`
+      window.history.replaceState({}, '', cleanUrl)
+      localStorage.removeItem(OAUTH_STATE_KEY)
+    }
+
+    if (oauthError) {
+      setError(`OAuth error: ${oauthError}`)
+      clearOAuthParams()
+      return
+    }
+
+    if (!oauthCode) {
+      setError('OAuth callback is missing authorization code.')
+      clearOAuthParams()
+      return
+    }
+
+    if (!returnedState || !storedState || returnedState !== storedState) {
+      setError('OAuth state mismatch. Please retry sign-in.')
+      clearOAuthParams()
+      return
+    }
+
+    async function exchangeCodeForToken(): Promise<void> {
+      setIsExchangingCode(true)
+      setError('')
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/github/exchange`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            code: oauthCode,
+            redirectUri: `${window.location.origin}/`,
+          }),
+        })
+
+        const payload = (await response.json()) as {
+          accessToken?: string
+          error?: string
+        }
+
+        if (!response.ok || !payload.accessToken) {
+          throw new Error(payload.error ?? 'OAuth token exchange failed.')
+        }
+
+        localStorage.setItem(STORAGE_KEYS.token, payload.accessToken)
+        setToken(payload.accessToken)
+        setTokenInput(payload.accessToken)
+      } catch (exchangeError) {
+        const message =
+          exchangeError instanceof Error
+            ? exchangeError.message
+            : 'OAuth token exchange failed.'
+        setError(message)
+      } finally {
+        setIsExchangingCode(false)
+        clearOAuthParams()
+      }
+    }
+
+    void exchangeCodeForToken()
   }, [])
 
   useEffect(() => {
@@ -263,6 +347,31 @@ function App() {
     })
   }
 
+  function startOAuthSignIn(): void {
+    if (!OAUTH_CLIENT_ID) {
+      setError(
+        'Missing VITE_GITHUB_OAUTH_CLIENT_ID. Configure it before using OAuth sign-in.',
+      )
+      return
+    }
+
+    const state =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+    localStorage.setItem(OAUTH_STATE_KEY, state)
+
+    const query = new URLSearchParams({
+      client_id: OAUTH_CLIENT_ID,
+      redirect_uri: `${window.location.origin}/`,
+      scope: 'repo read:org',
+      state,
+    })
+
+    window.location.href = `https://github.com/login/oauth/authorize?${query.toString()}`
+  }
+
   return (
     <main className="app-shell">
       <header className="page-header">
@@ -297,6 +406,15 @@ function App() {
           </label>
           <button type="submit">Save and refresh</button>
         </form>
+        <div className="oauth-row">
+          <button type="button" onClick={startOAuthSignIn} disabled={isExchangingCode}>
+            {isExchangingCode ? 'Completing OAuth...' : 'Sign in with GitHub OAuth'}
+          </button>
+          <p>
+            OAuth is now supported via a local exchange server. PAT remains available as
+            fallback.
+          </p>
+        </div>
         <p className="helper-copy">
           PAT is stored in local storage for this browser profile. Recommended scopes: `repo`
           and `read:org`.

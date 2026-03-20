@@ -66,6 +66,33 @@
   font-size: 0.82rem;
 }
 
+.oauth-row {
+  padding: 0 1rem 1rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.oauth-row button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 0.375rem;
+  padding: 0.45rem 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.oauth-row button:hover {
+  background: var(--subtle);
+}
+
+.oauth-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .section-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -197,6 +224,11 @@
 
   .config-form {
     grid-template-columns: 1fr;
+  }
+
+  .oauth-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .pr-row {

@@ -10,21 +10,31 @@ ReviewRadar is a small React + Vite webapp that helps you triage pull requests b
 npm install
 ```
 
-2. Start development server:
+2. Copy `.env.example` to `.env` and fill OAuth values.
+
+3. Start backend OAuth exchange server:
+
+```bash
+npm run dev:server
+```
+
+4. In another terminal, start frontend:
 
 ```bash
 npm run dev
 ```
 
-3. Open the app, then configure:
+5. Open the app, then configure:
 - GitHub organization (single org scope)
-- Personal access token (PAT)
+- Use **Sign in with GitHub OAuth** (preferred) or PAT fallback
 
 ## PAT scopes
 
-For the current PAT-based iteration, use a token with:
+For PAT fallback, use a token with:
 - `repo` (read pull requests across private/public repos you can access)
 - `read:org` (read your team memberships)
+
+For OAuth app setup, grant the same scopes: `repo` and `read:org`.
 
 ## Classification behavior
 
@@ -45,6 +55,7 @@ For the current PAT-based iteration, use a token with:
 ## Commands
 
 - `npm run dev` - start dev server
+- `npm run dev:server` - start OAuth code exchange server
 - `npm run build` - type-check and build production bundle
 - `npm run lint` - run ESLint
 - `npm run test` - run unit tests (Vitest)

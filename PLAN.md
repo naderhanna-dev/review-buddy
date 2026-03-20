@@ -73,9 +73,9 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - [x] GitHub data layer implemented.
 - [x] Classification engine implemented.
 - [x] UI section rendering implemented.
-- [ ] OAuth flow implemented.
+- [x] OAuth flow implemented.
 - [x] Tests and docs completed.
 
 ## Next Step
 
-Implement OAuth app flow so PAT is no longer needed in normal usage.
+Harden OAuth and API usage: add pagination and rate-limit handling, then reduce per-PR API calls with batched GraphQL where possible.
