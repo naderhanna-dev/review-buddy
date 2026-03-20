@@ -70,7 +70,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - [x] Problem framing and core rules defined.
 - [x] Initial technical decisions locked.
 - [x] Vite + React scaffold created.
-- [ ] GitHub data layer implemented.
+- [x] GitHub data layer implemented.
 - [ ] Classification engine implemented.
 - [x] UI section rendering implemented.
 - [ ] OAuth flow implemented.
@@ -78,4 +78,4 @@ Build a small webapp that shows which pull requests need your attention, inspire
 
 ## Next Step
 
-Implement auth + configuration for first iteration with PAT, then wire GitHub API reads for open pull requests in a single org.
+Implement the classification engine using GitHub review requests + reviews + update timestamps to split PRs into "Needs your attention" and "Related to you".
