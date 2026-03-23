@@ -1,3 +1,5 @@
+import { type EtagCache } from './etag-cache'
+
 export type SearchIssueItem = {
   pull_request?: {
     url: string
@@ -23,14 +25,29 @@ export type CombinedStatusResponse = {
   state: string
 }
 
-export async function apiFetch<T>(url: string, token: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-  })
+export async function apiFetch<T>(url: string, token: string, cache?: EtagCache): Promise<T> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${token}`,
+    'X-GitHub-Api-Version': '2022-11-28',
+  }
+
+  if (cache?.has(url)) {
+    const etag = cache.getEtag(url)
+    if (etag) {
+      headers['If-None-Match'] = etag
+    }
+  }
+
+  const response = await fetch(url, { headers })
+
+  // 304 must be checked before !response.ok — fetch treats 304 as not-ok
+  if (response.status === 304) {
+    const cached = cache?.get(url)
+    if (cached) {
+      return cached.data as T
+    }
+  }
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -53,5 +70,12 @@ export async function apiFetch<T>(url: string, token: string): Promise<T> {
     throw new Error(`GitHub request failed (${response.status}).`)
   }
 
-  return (await response.json()) as T
+  const data = (await response.json()) as T
+
+  const etag = response.headers.get('etag')
+  if (etag && cache) {
+    cache.set(url, etag, data)
+  }
+
+  return data
 }

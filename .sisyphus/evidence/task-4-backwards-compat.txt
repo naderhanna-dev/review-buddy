@@ -1,0 +1,43 @@
+> vitest run --reporter=verbose
+[1m[46m RUN [49m[22m [36mv4.1.0 [39m[90m/Users/mb1/Repositories/ReviewRadar/app[39m
+ [32m✓[39m src/lib/classification.test.ts[2m > [22mclassifyPullRequest[2m > [22mroutes authored PRs to yourPrs before urgent buckets[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/classification.test.ts[2m > [22mclassifyPullRequest[2m > [22mroutes assigned PRs to yourPrs before urgent buckets[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/classification.test.ts[2m > [22mclassifyPullRequest[2m > [22mmarks PR as needs attention when user is requested reviewer[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/classification.test.ts[2m > [22mclassifyPullRequest[2m > [22mmarks PR as needs attention when updated since user review[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/classification.test.ts[2m > [22mclassifyPullRequest[2m > [22mmarks PR as related when requested team matches user team[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/classification.test.ts[2m > [22mclassifyPullRequest[2m > [22mmaps author and reviewer profile metadata for UI links[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/classification.test.ts[2m > [22mclassifyPullRequest[2m > [22mskips team signal when user has no readable team membership[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/classification.test.ts[2m > [22mclassifyPullRequest[2m > [22mmarks PR as related when viewed without review and updated since[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/notifications.test.ts[2m > [22mfilterPrNotifications[2m > [22mwith PullRequest notifications[2m > [22mshould return only items where subject.type === "PullRequest" AND repository.full_name starts with org/[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/notifications.test.ts[2m > [22mfilterPrNotifications[2m > [22mwith PullRequest notifications[2m > [22mshould return empty array when no PR notifications match (all are Issues)[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/notifications.test.ts[2m > [22mfilterPrNotifications[2m > [22mwith PullRequest notifications[2m > [22mshould return empty array for empty input[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/notifications.test.ts[2m > [22mfilterPrNotifications[2m > [22mwith PullRequest notifications[2m > [22mshould handle mixed notification types correctly (Issue, PullRequest, Release in same array)[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/notifications.test.ts[2m > [22mfilterPrNotifications[2m > [22mwith PullRequest notifications[2m > [22mshould match org case-insensitively: "MaintainX" org matches "maintainx/repo" full_name[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/notifications.test.ts[2m > [22mfilterPrNotifications[2m > [22mwith different org[2m > [22mshould not match PRs from different org[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/notifications.test.ts[2m > [22mhasRelevantPrChanges[2m > [22mshould return true when there are matching PR notifications[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/notifications.test.ts[2m > [22mhasRelevantPrChanges[2m > [22mshould return false when no matching notifications[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/etag-cache.test.ts[2m > [22mEtagCache[2m > [22mset and get[2m > [22mshould store entry and return it via get[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/etag-cache.test.ts[2m > [22mEtagCache[2m > [22mgetEtag[2m > [22mshould return just the ETag string for a cached URL[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/etag-cache.test.ts[2m > [22mEtagCache[2m > [22mgetEtag[2m > [22mshould return undefined for uncached URL[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/etag-cache.test.ts[2m > [22mEtagCache[2m > [22mhas[2m > [22mshould return true for cached URL[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/etag-cache.test.ts[2m > [22mEtagCache[2m > [22mhas[2m > [22mshould return false for uncached URL[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/etag-cache.test.ts[2m > [22mEtagCache[2m > [22mclear[2m > [22mshould empty the cache and set size to 0[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/etag-cache.test.ts[2m > [22mEtagCache[2m > [22mget on uncached URL[2m > [22mshould return undefined[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/etag-cache.test.ts[2m > [22mEtagCache[2m > [22mLRU eviction[2m > [22mshould evict oldest entry when cache reaches MAX_ENTRIES[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/etag-cache.test.ts[2m > [22mEtagCache[2m > [22mLRU touch on get[2m > [22mshould update accessedAt when get is called, protecting from eviction[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/etag-cache.test.ts[2m > [22metagCache singleton[2m > [22mshould export a singleton instance[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mshould send correct GitHub API headers[32m 19[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mshould return parsed JSON on 200 response[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mshould throw "Invalid token..." on 401 response[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mshould throw "Access forbidden or rate limit..." on 403 response[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mshould throw "GitHub request failed..." on other non-ok status[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mwith ETag cache[2m > [22mshould send If-None-Match header when cache has entry for URL[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mwith ETag cache[2m > [22mshould return cached data on 304 response[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mwith ETag cache[2m > [22mshould store ETag in cache on 200 response with ETag header[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mwith ETag cache[2m > [22mshould not send If-None-Match header when URL is not cached[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mwith ETag cache[2m > [22mshould return data on 200 without ETag header and not cache[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/github.test.ts[2m > [22mapiFetch[2m > [22mwith ETag cache[2m > [22mshould work without cache argument (backwards compatible)[32m 0[2mms[22m[39m
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m37 passed[39m[22m[90m (37)[39m
+[2m   Start at [22m 13:50:10
+[2m   Duration [22m 363ms[2m (transform 188ms, setup 0ms, import 230ms, tests 35ms, environment 0ms)[22m
