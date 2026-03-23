@@ -20,6 +20,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - Theme: system-default theming with manual dark/light override.
 - Theme control UI: floating moon/sun quick toggle in corner.
 - Connection UX: settings live in a hamburger-toggled sidebar; auto-close after save.
+- PR row details: show author/reviewer avatars with profile links and repository link.
 
 ## PR Classification Rules
 

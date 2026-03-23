@@ -239,6 +239,16 @@ function PullRequestRow({
   return (
     <article className="pr-row">
       <div className="title-group">
+        <a
+          href={pr.authorProfileUrl}
+          className="avatar-link"
+          target="_blank"
+          rel="noreferrer"
+          title={pr.author}
+          aria-label={`Open ${pr.author} profile`}
+        >
+          <img src={pr.authorAvatarUrl} className="avatar" alt={`${pr.author} avatar`} />
+        </a>
         <div>
           <a
             href={pr.url}
@@ -251,8 +261,46 @@ function PullRequestRow({
             {pr.title}
           </a>
           <p className="pr-meta">
-            #{pr.number} opened by {pr.author} in {pr.repository}
+            #{pr.number} opened by{' '}
+            <a
+              href={pr.authorProfileUrl}
+              className="meta-link"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {pr.author}
+            </a>{' '}
+            in{' '}
+            <a
+              href={pr.repositoryUrl}
+              className="meta-link"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {pr.repository}
+            </a>
           </p>
+          {pr.requestedReviewers.length > 0 ? (
+            <div className="reviewer-list" aria-label="Requested reviewers">
+              {pr.requestedReviewers.map((reviewer) => (
+                <a
+                  key={reviewer.login}
+                  href={reviewer.profileUrl}
+                  className="avatar-link reviewer-avatar-link"
+                  target="_blank"
+                  rel="noreferrer"
+                  title={reviewer.login}
+                  aria-label={`Open ${reviewer.login} profile`}
+                >
+                  <img
+                    src={reviewer.avatarUrl}
+                    className="avatar reviewer-avatar"
+                    alt={`${reviewer.login} avatar`}
+                  />
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
       <div className="status-group">

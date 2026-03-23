@@ -3,7 +3,15 @@ export type PullRequest = {
   number: number
   title: string
   repository: string
+  repositoryUrl: string
   author: string
+  authorAvatarUrl: string
+  authorProfileUrl: string
+  requestedReviewers: Array<{
+    login: string
+    avatarUrl: string
+    profileUrl: string
+  }>
   updatedAt: string
   updatedAtIso: string
   url: string
@@ -22,9 +30,13 @@ export type PullDetails = {
   draft?: boolean
   user: {
     login: string
+    avatar_url: string
+    html_url: string
   }
   requested_reviewers: Array<{
     login: string
+    avatar_url: string
+    html_url: string
   }>
   requested_teams: Array<{
     slug: string
@@ -32,6 +44,7 @@ export type PullDetails = {
   base: {
     repo: {
       full_name: string
+      html_url: string
     }
   }
 }
@@ -117,7 +130,15 @@ export function classifyPullRequest(
     number: pull.number,
     title: pull.title,
     repository: pull.base.repo.full_name,
+    repositoryUrl: pull.base.repo.html_url,
     author: pull.user.login,
+    authorAvatarUrl: pull.user.avatar_url,
+    authorProfileUrl: pull.user.html_url,
+    requestedReviewers: pull.requested_reviewers.map((reviewer) => ({
+      login: reviewer.login,
+      avatarUrl: reviewer.avatar_url,
+      profileUrl: reviewer.html_url,
+    })),
     updatedAt: formatRelativeTime(pull.updated_at),
     updatedAtIso: pull.updated_at,
     url: pull.html_url,

@@ -13,10 +13,19 @@ function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
     title: 'feat: improve review signal quality',
     html_url: 'https://github.com/acme/review-radar/pull/123',
     updated_at: '2026-03-20T11:00:00Z',
-    user: { login: 'author' },
+    user: {
+      login: 'author',
+      avatar_url: 'https://avatars.githubusercontent.com/u/100?v=4',
+      html_url: 'https://github.com/author',
+    },
     requested_reviewers: [],
     requested_teams: [],
-    base: { repo: { full_name: 'acme/review-radar' } },
+    base: {
+      repo: {
+        full_name: 'acme/review-radar',
+        html_url: 'https://github.com/acme/review-radar',
+      },
+    },
     ...overrides,
   }
 }
@@ -24,7 +33,13 @@ function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
 describe('classifyPullRequest', () => {
   it('marks PR as needs attention when user is requested reviewer', () => {
     const pull = createPull({
-      requested_reviewers: [{ login: 'me' }],
+      requested_reviewers: [
+        {
+          login: 'me',
+          avatar_url: 'https://avatars.githubusercontent.com/u/300?v=4',
+          html_url: 'https://github.com/me',
+        },
+      ],
     })
 
     const result = classifyPullRequest(pull, [], 'me', new Set())
@@ -61,6 +76,27 @@ describe('classifyPullRequest', () => {
 
     expect(result.relatedToYou?.stateClass).toBe('team-review')
     expect(result.needsAttention).toBeUndefined()
+  })
+
+  it('maps author and reviewer profile metadata for UI links', () => {
+    const pull = createPull({
+      requested_teams: [{ slug: 'reviewers-platform' }],
+      requested_reviewers: [
+        {
+          login: 'reviewer-1',
+          avatar_url: 'https://avatars.githubusercontent.com/u/201?v=4',
+          html_url: 'https://github.com/reviewer-1',
+        },
+      ],
+    })
+
+    const result = classifyPullRequest(pull, [], 'me', new Set(['reviewers-platform']))
+
+    expect(result.relatedToYou?.authorProfileUrl).toBe('https://github.com/author')
+    expect(result.relatedToYou?.repositoryUrl).toBe('https://github.com/acme/review-radar')
+    expect(result.relatedToYou?.requestedReviewers[0]?.profileUrl).toBe(
+      'https://github.com/reviewer-1',
+    )
   })
 
   it('skips team signal when user has no readable team membership', () => {
