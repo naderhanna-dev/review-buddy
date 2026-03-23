@@ -46,6 +46,11 @@ The app builds candidates from open PRs in your org where at least one is true:
 - PRs where you are requested as reviewer.
 - PRs you reviewed that have updates since your last review.
 
+Each PR row also shows a GitHub-style checks icon:
+- Green check = checks passing
+- Orange dot = checks pending/unknown
+- Red X = checks failing
+
 ### Related to you
 - PRs requested from teams you belong to.
 - PRs you looked at without leaving a review, then received updates.

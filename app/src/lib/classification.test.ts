@@ -26,6 +26,9 @@ function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
         html_url: 'https://github.com/acme/review-radar',
       },
     },
+    head: {
+      sha: 'abc123def456',
+    },
     ...overrides,
   }
 }

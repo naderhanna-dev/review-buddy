@@ -31,6 +31,10 @@ type Team = {
   }
 }
 
+type CombinedStatusResponse = {
+  state: string
+}
+
 type ClassifiedPullRequests = {
   needsAttention: PullRequest[]
   relatedToYou: PullRequest[]
@@ -191,14 +195,34 @@ async function fetchAndClassifyPullRequests(
         apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token),
       ])
 
-      return { pull, reviews }
+      let checkState: PullRequest['checkState'] = 'pending'
+
+      try {
+        const combinedStatus = await apiFetch<CombinedStatusResponse>(
+          `https://api.github.com/repos/${pull.base.repo.full_name}/commits/${pull.head.sha}/status`,
+          token,
+        )
+
+        if (combinedStatus.state === 'success') {
+          checkState = 'success'
+        } else if (
+          combinedStatus.state === 'failure' ||
+          combinedStatus.state === 'error'
+        ) {
+          checkState = 'failure'
+        }
+      } catch {
+        checkState = 'pending'
+      }
+
+      return { pull, reviews, checkState }
     }),
   )
 
   const needsAttention: PullRequest[] = []
   const relatedToYou: PullRequest[] = []
 
-  for (const { pull, reviews } of pullsWithReviews) {
+  for (const { pull, reviews, checkState } of pullsWithReviews) {
     const viewKey = prViewKey(pull.base.repo.full_name, pull.number)
     const classification = classifyPullRequest(
       pull,
@@ -209,12 +233,12 @@ async function fetchAndClassifyPullRequests(
     )
 
     if (classification.needsAttention) {
-      needsAttention.push(classification.needsAttention)
+      needsAttention.push({ ...classification.needsAttention, checkState })
       continue
     }
 
     if (classification.relatedToYou) {
-      relatedToYou.push(classification.relatedToYou)
+      relatedToYou.push({ ...classification.relatedToYou, checkState })
     }
   }
 
@@ -232,6 +256,13 @@ function PullRequestRow({
   pr: PullRequest
   onViewed: (repository: string, number: number) => void
 }) {
+  const checkTitle =
+    pr.checkState === 'success'
+      ? 'Checks passed'
+      : pr.checkState === 'failure'
+        ? 'Checks failing'
+        : 'Checks pending'
+
   function handleViewed(): void {
     onViewed(pr.repository, pr.number)
   }
@@ -250,16 +281,37 @@ function PullRequestRow({
           <img src={pr.authorAvatarUrl} className="avatar" alt={`${pr.author} avatar`} />
         </a>
         <div>
-          <a
-            href={pr.url}
-            className="pr-title"
-            target="_blank"
-            rel="noreferrer"
-            onClick={handleViewed}
-          >
-            {pr.isDraft ? '[Draft] ' : ''}
-            {pr.title}
-          </a>
+          <div className="pr-title-line">
+            <span
+              className={`check-indicator ${pr.checkState}`}
+              title={checkTitle}
+              aria-label={checkTitle}
+            >
+              {pr.checkState === 'success' ? (
+                <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+                  <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-6.5 6.5a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l2.47 2.47 5.97-5.97a.75.75 0 0 1 1.06 0Z" />
+                </svg>
+              ) : pr.checkState === 'failure' ? (
+                <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+                  <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 1 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+                  <circle cx="8" cy="8" r="3.5" />
+                </svg>
+              )}
+            </span>
+            <a
+              href={pr.url}
+              className="pr-title"
+              target="_blank"
+              rel="noreferrer"
+              onClick={handleViewed}
+            >
+              {pr.isDraft ? '[Draft] ' : ''}
+              {pr.title}
+            </a>
+          </div>
           <p className="pr-meta">
             #{pr.number} opened by{' '}
             <a

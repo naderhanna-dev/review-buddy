@@ -22,6 +22,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - Connection UX: settings live in a hamburger-toggled sidebar; auto-close after save.
 - PR row details: show author/reviewer avatars with profile links and repository link.
 - PR row polish: reason on rich status-pill hover tooltip and single-line truncated titles.
+- PR checks signal: GitHub-style pass/pending/fail icon on each row.
 
 ## PR Classification Rules
 

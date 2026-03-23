@@ -15,6 +15,7 @@ export type PullRequest = {
   updatedAt: string
   updatedAtIso: string
   url: string
+  checkState: 'success' | 'pending' | 'failure'
   stateLabel: string
   stateClass: string
   reason: string
@@ -46,6 +47,9 @@ export type PullDetails = {
       full_name: string
       html_url: string
     }
+  }
+  head: {
+    sha: string
   }
 }
 
@@ -142,6 +146,7 @@ export function classifyPullRequest(
     updatedAt: formatRelativeTime(pull.updated_at),
     updatedAtIso: pull.updated_at,
     url: pull.html_url,
+    checkState: 'pending',
     isDraft: pull.draft,
   }
 

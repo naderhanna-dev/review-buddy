@@ -25,6 +25,9 @@
   --status-note-bg: #fbefff;
   --status-note-border: #bf87ff;
   --status-note-fg: #8250df;
+  --check-success: #1a7f37;
+  --check-pending: #9a6700;
+  --check-failure: #cf222e;
   --tooltip-bg: #24292f;
   --tooltip-border: #444d56;
   --tooltip-fg: #f6f8fa;
@@ -68,6 +71,9 @@
   --status-note-bg: #2b1548;
   --status-note-border: #8250df;
   --status-note-fg: #d2a8ff;
+  --check-success: #3fb950;
+  --check-pending: #d29922;
+  --check-failure: #f85149;
   --tooltip-bg: #f6f8fa;
   --tooltip-border: #30363d;
   --tooltip-fg: #0d1117;
