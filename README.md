@@ -62,12 +62,24 @@ Locally tracked PR keys that are no longer returned in the open candidate set ar
 - PRs authored by you.
 - PRs assigned to you.
 
+Pill priority (since last viewed in ReviewRadar):
+1. `New reviews`
+2. `New comments`
+
+If there is no new review/comment since last viewed, no pill is shown.
+
 Priority rule: if a PR is authored/assigned to you, it always appears in `Your PRs`
 and never in `Needs your attention`.
 
 ### Needs your attention
-- PRs where you are requested as reviewer.
-- PRs you reviewed that have updates since your last review.
+- PRs where you are directly requested and have not reviewed yet.
+- PRs you reviewed that have new commits since your last review.
+- PRs you reviewed that have new PR comments since your last review.
+
+Pill priority:
+1. `New updates`
+2. `New comments`
+3. `Review requested`
 
 Each PR row also shows a GitHub-style checks icon:
 - Green check = checks passing
