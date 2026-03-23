@@ -441,84 +441,84 @@ function PullRequestRow({
           </span>
         </span>
         <span className="updated-at">{pr.updatedAt}</span>
-        <div className="row-menu-wrap">
-          <button
-            type="button"
-            className="row-menu-toggle"
-            aria-label="Open row actions"
-            aria-expanded={isMenuOpen}
-            onClick={(event) => {
-              event.stopPropagation()
-              onToggleMenu(menuKey)
-            }}
-          >
-            <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
-              <path d="M8 3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 6.5A1.5 1.5 0 1 1 8 6.5a1.5 1.5 0 0 1 0 3Zm0 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
-            </svg>
-          </button>
+      </div>
+      <div className="row-menu-wrap">
+        <button
+          type="button"
+          className="row-menu-toggle"
+          aria-label="Open row actions"
+          aria-expanded={isMenuOpen}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggleMenu(menuKey)
+          }}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+            <path d="M8 3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 6.5A1.5 1.5 0 1 1 8 6.5a1.5 1.5 0 0 1 0 3Zm0 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
+          </svg>
+        </button>
 
-          {isMenuOpen ? (
-            <div className="row-menu" onClick={(event) => event.stopPropagation()}>
-              {sectionKind === 'stale' ? (
-                <>
-                  <span className="row-menu-hint">
-                    {pr.staleState === 'manual' ? 'Manually stale' : 'Auto stale (30d+)'}
-                  </span>
-                  <button
-                    type="button"
-                    className="row-menu-item"
-                    onClick={() => {
-                      onMarkActive(pr.repository, pr.number)
-                      onCloseMenu()
-                    }}
-                  >
-                    Not stale
-                  </button>
-                </>
-              ) : stalePreference === 'active' ? (
+        {isMenuOpen ? (
+          <div className="row-menu" onClick={(event) => event.stopPropagation()}>
+            {sectionKind === 'stale' ? (
+              <>
+                <span className="row-menu-hint">
+                  {pr.staleState === 'manual' ? 'Manually stale' : 'Auto stale (30d+)'}
+                </span>
                 <button
                   type="button"
                   className="row-menu-item"
                   onClick={() => {
-                    onClearStalePreference(pr.repository, pr.number)
+                    onMarkActive(pr.repository, pr.number)
                     onCloseMenu()
                   }}
                 >
-                  Use auto rule
+                  Not stale
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  className="row-menu-item danger-item"
-                  onClick={() => {
-                    onMarkStale(pr.repository, pr.number)
-                    onCloseMenu()
-                  }}
-                >
-                  Mark stale
-                </button>
-              )}
-              <a
-                href={pr.url}
+              </>
+            ) : stalePreference === 'active' ? (
+              <button
+                type="button"
                 className="row-menu-item"
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => onCloseMenu()}
+                onClick={() => {
+                  onClearStalePreference(pr.repository, pr.number)
+                  onCloseMenu()
+                }}
               >
-                Open PR
-              </a>
-              <a
-                href={pr.repositoryUrl}
-                className="row-menu-item"
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => onCloseMenu()}
+                Use auto rule
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="row-menu-item danger-item"
+                onClick={() => {
+                  onMarkStale(pr.repository, pr.number)
+                  onCloseMenu()
+                }}
               >
-                Open repo
-              </a>
-            </div>
-          ) : null}
-        </div>
+                Mark stale
+              </button>
+            )}
+            <a
+              href={pr.url}
+              className="row-menu-item"
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => onCloseMenu()}
+            >
+              Open PR
+            </a>
+            <a
+              href={pr.repositoryUrl}
+              className="row-menu-item"
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => onCloseMenu()}
+            >
+              Open repo
+            </a>
+          </div>
+        ) : null}
       </div>
     </article>
   )
