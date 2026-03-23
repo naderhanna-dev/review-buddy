@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 
 import { EtagCache, etagCache } from './etag-cache'
 
@@ -96,24 +96,29 @@ describe('EtagCache', () => {
   })
 
   describe('LRU touch on get', () => {
-    it('should update accessedAt when get is called, protecting from eviction', async () => {
-      // Fill cache to MAX_ENTRIES
-      for (let i = 0; i < 200; i++) {
-        cache.set(`https://url${i}`, `"etag${i}"`, { id: i })
+    it('should update accessedAt when get is called, protecting from eviction', () => {
+      // Use a deterministic time mock so each set/get gets a unique timestamp
+      let mockTime = 0
+      vi.spyOn(Date, 'now').mockImplementation(() => ++mockTime)
+
+      try {
+        // Fill cache to MAX_ENTRIES — url0 gets accessedAt=1, url1=2, ..., url199=200
+        for (let i = 0; i < 200; i++) {
+          cache.set(`https://url${i}`, `"etag${i}"`, { id: i })
+        }
+
+        // Touch url0 — its accessedAt becomes 201 (next mock tick)
+        cache.get('https://url0')
+
+        // Add url200 — evicts url1 (accessedAt=2, oldest), NOT url0 (accessedAt=201)
+        cache.set('https://url200', '"etag200"', { id: 200 })
+
+        expect(cache.has('https://url0')).toBe(true)   // protected by touch
+        expect(cache.has('https://url1')).toBe(false)  // evicted (oldest)
+        expect(cache.has('https://url200')).toBe(true) // newly added
+      } finally {
+        vi.restoreAllMocks()
       }
-
-      // Small delay to ensure time difference
-      await new Promise(resolve => setTimeout(resolve, 1))
-
-      // Touch url0 (access it) — this updates its accessedAt
-      cache.get('https://url0')
-
-      // Add new entry — should evict url1 (oldest), not url0
-      cache.set('https://url200', '"etag200"', { id: 200 })
-
-      expect(cache.has('https://url0')).toBe(true)
-      expect(cache.has('https://url1')).toBe(false)
-      expect(cache.has('https://url200')).toBe(true)
     })
   })
 })
