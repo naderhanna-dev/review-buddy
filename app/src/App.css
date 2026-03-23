@@ -513,17 +513,23 @@
   color: #cf222e;
 }
 
-.required-review,
-.required-and-updated {
+.review-requested {
   background: var(--status-danger-bg);
   border-color: var(--status-danger-border);
   color: var(--status-danger-fg);
 }
 
-.updated-since-review {
+.new-updates {
   background: var(--status-warn-bg);
   border-color: var(--status-warn-border);
   color: var(--status-warn-fg);
+}
+
+.new-comments,
+.your-pr-new-comments {
+  background: var(--status-note-bg);
+  border-color: var(--status-note-border);
+  color: var(--status-note-fg);
 }
 
 .team-review {
@@ -538,7 +544,8 @@
   color: var(--status-note-fg);
 }
 
-.your-pr {
+.your-pr,
+.your-pr-new-reviews {
   background: var(--status-own-bg);
   border-color: var(--status-own-border);
   color: var(--status-own-fg);

@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  type ActivitySignals,
   classifyPullRequest,
   type PullDetails,
   type Review,
 } from './classification'
+
+const noActivity: ActivitySignals = {
+  hasNewCommitsSinceMyReview: false,
+  hasNewCommentsSinceMyReview: false,
+  hasNewReviewsSinceViewed: false,
+  hasNewCommentsSinceViewed: false,
+}
 
 function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
   return {
@@ -53,9 +61,10 @@ describe('classifyPullRequest', () => {
       ],
     })
 
-    const result = classifyPullRequest(pull, [], 'me', new Set())
+    const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
 
-    expect(result.yourPrs?.stateClass).toBe('your-pr')
+    expect(result.yourPrs?.stateClass).toBe('your-pr-no-activity')
+    expect(result.yourPrs?.stateLabel).toBe('')
     expect(result.needsAttention).toBeUndefined()
   })
 
@@ -77,13 +86,54 @@ describe('classifyPullRequest', () => {
       ],
     })
 
-    const result = classifyPullRequest(pull, [], 'me', new Set())
+    const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
 
-    expect(result.yourPrs?.stateClass).toBe('your-pr')
+    expect(result.yourPrs?.stateClass).toBe('your-pr-no-activity')
     expect(result.needsAttention).toBeUndefined()
   })
 
-  it('marks PR as needs attention when user is requested reviewer', () => {
+  it('shows New reviews on your PRs before other statuses', () => {
+    const pull = createPull({ user: { login: 'me', avatar_url: 'x', html_url: 'y' } })
+
+    const result = classifyPullRequest(
+      pull,
+      [],
+      'me',
+      new Set(),
+      new Date('2026-03-20T10:00:00Z').getTime(),
+      {
+        ...noActivity,
+        hasNewReviewsSinceViewed: true,
+        hasNewCommentsSinceViewed: true,
+      },
+    )
+
+    expect(result.yourPrs?.stateLabel).toBe('New reviews')
+    expect(result.yourPrs?.stateClass).toBe('your-pr-new-reviews')
+  })
+
+  it('shows New comments on your PRs when no new reviews exist', () => {
+    const pull = createPull({
+      assignees: [{ login: 'me', avatar_url: 'x', html_url: 'y' }],
+    })
+
+    const result = classifyPullRequest(
+      pull,
+      [],
+      'me',
+      new Set(),
+      new Date('2026-03-20T10:00:00Z').getTime(),
+      {
+        ...noActivity,
+        hasNewCommentsSinceViewed: true,
+      },
+    )
+
+    expect(result.yourPrs?.stateLabel).toBe('New comments')
+    expect(result.yourPrs?.stateClass).toBe('your-pr-new-comments')
+  })
+
+  it('marks PR as needs attention when user is requested reviewer and unreviewed', () => {
     const pull = createPull({
       requested_reviewers: [
         {
@@ -94,14 +144,35 @@ describe('classifyPullRequest', () => {
       ],
     })
 
-    const result = classifyPullRequest(pull, [], 'me', new Set())
+    const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
 
-    expect(result.needsAttention?.stateClass).toBe('required-review')
+    expect(result.needsAttention?.stateClass).toBe('review-requested')
     expect(result.relatedToYou).toBeUndefined()
   })
 
-  it('marks PR as needs attention when updated since user review', () => {
-    const pull = createPull({ updated_at: '2026-03-20T12:00:00Z' })
+  it('marks PR as needs attention with New updates for commit changes', () => {
+    const pull = createPull()
+    const reviews: Review[] = [
+      {
+        state: 'APPROVED',
+        commit_id: 'abc123def456',
+        submitted_at: '2026-03-20T10:00:00Z',
+        user: { login: 'me' },
+      },
+    ]
+
+    const result = classifyPullRequest(pull, reviews, 'me', new Set(), undefined, {
+      ...noActivity,
+      hasNewCommitsSinceMyReview: true,
+    })
+
+    expect(result.needsAttention?.stateClass).toBe('new-updates')
+    expect(result.needsAttention?.stateLabel).toBe('New updates')
+    expect(result.relatedToYou).toBeUndefined()
+  })
+
+  it('marks PR as needs attention with New comments when only comments changed', () => {
+    const pull = createPull()
     const reviews: Review[] = [
       {
         state: 'APPROVED',
@@ -110,9 +181,13 @@ describe('classifyPullRequest', () => {
       },
     ]
 
-    const result = classifyPullRequest(pull, reviews, 'me', new Set())
+    const result = classifyPullRequest(pull, reviews, 'me', new Set(), undefined, {
+      ...noActivity,
+      hasNewCommentsSinceMyReview: true,
+    })
 
-    expect(result.needsAttention?.stateClass).toBe('updated-since-review')
+    expect(result.needsAttention?.stateClass).toBe('new-comments')
+    expect(result.needsAttention?.stateLabel).toBe('New comments')
     expect(result.relatedToYou).toBeUndefined()
   })
 
@@ -142,7 +217,14 @@ describe('classifyPullRequest', () => {
       ],
     })
 
-    const result = classifyPullRequest(pull, [], 'me', new Set(['reviewers-platform']))
+    const result = classifyPullRequest(
+      pull,
+      [],
+      'me',
+      new Set(['reviewers-platform']),
+      undefined,
+      noActivity,
+    )
 
     expect(result.relatedToYou?.authorProfileUrl).toBe('https://github.com/author')
     expect(result.relatedToYou?.repositoryUrl).toBe('https://github.com/acme/review-radar')
@@ -154,7 +236,7 @@ describe('classifyPullRequest', () => {
   it('skips team signal when user has no readable team membership', () => {
     const pull = createPull({ requested_teams: [{ slug: 'reviewers-platform' }] })
 
-    const result = classifyPullRequest(pull, [], 'me', new Set())
+    const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
 
     expect(result.relatedToYou).toBeUndefined()
     expect(result.needsAttention).toBeUndefined()
@@ -163,13 +245,7 @@ describe('classifyPullRequest', () => {
   it('marks PR as related when viewed without review and updated since', () => {
     const pull = createPull({ updated_at: '2026-03-20T12:00:00Z' })
 
-    const result = classifyPullRequest(
-      pull,
-      [],
-      'me',
-      new Set(),
-      new Date('2026-03-20T11:00:00Z').getTime(),
-    )
+    const result = classifyPullRequest(pull, [], 'me', new Set(), new Date('2026-03-20T11:00:00Z').getTime(), noActivity)
 
     expect(result.relatedToYou?.stateClass).toBe('viewed-updated')
     expect(result.needsAttention).toBeUndefined()

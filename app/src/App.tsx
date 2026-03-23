@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
+  type ActivitySignals,
   classifyPullRequest,
   prViewKey,
   sortByUpdatedDesc,
@@ -33,6 +34,13 @@ type Team = {
 
 type CombinedStatusResponse = {
   state: string
+}
+
+type PullComment = {
+  created_at: string
+  user?: {
+    login: string
+  }
 }
 
 type ClassifiedPullRequests = {
@@ -129,6 +137,20 @@ function formatRefreshAge(timestampMs: number, nowMs: number): string {
 
   const diffHours = Math.floor(diffMinutes / 60)
   return `${diffHours}h ago`
+}
+
+function sortByPriorityAndUpdated(
+  prs: PullRequest[],
+  priority: Record<string, number>,
+): PullRequest[] {
+  return [...prs].sort((a, b) => {
+    const priorityDiff = (priority[a.stateClass] ?? 99) - (priority[b.stateClass] ?? 99)
+    if (priorityDiff !== 0) {
+      return priorityDiff
+    }
+
+    return new Date(b.updatedAtIso).getTime() - new Date(a.updatedAtIso).getTime()
+  })
 }
 
 async function apiFetch<T>(url: string, token: string): Promise<T> {
@@ -259,9 +281,10 @@ async function fetchAndClassifyPullRequests(
 
   const pullsWithReviews = await Promise.all(
     Array.from(pullUrls).map(async (pullUrl) => {
-      const [pull, reviews] = await Promise.all([
+      const [pull, reviews, pullComments] = await Promise.all([
         apiFetch<PullDetails>(pullUrl, token),
         apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token),
+        apiFetch<PullComment[]>(`${pullUrl}/comments?per_page=100`, token),
       ])
 
       let checkState: PullRequest['checkState'] = 'pending'
@@ -284,7 +307,7 @@ async function fetchAndClassifyPullRequests(
         checkState = 'pending'
       }
 
-      return { pull, reviews, checkState }
+      return { pull, reviews, pullComments, checkState }
     }),
   )
 
@@ -294,15 +317,74 @@ async function fetchAndClassifyPullRequests(
   const stalePrs: PullRequest[] = []
   const nowMs = Date.now()
 
-  for (const { pull, reviews, checkState } of pullsWithReviews) {
+  for (const { pull, reviews, pullComments, checkState } of pullsWithReviews) {
     const viewKey = prViewKey(pull.base.repo.full_name, pull.number)
+    const viewedAtMs = viewedMap[viewKey]
+    const normalizedLogin = me.login.toLowerCase()
+
+    const myLatestReview = reviews
+      .filter(
+        (review) =>
+          review.user?.login?.toLowerCase() === normalizedLogin && Boolean(review.submitted_at),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.submitted_at ?? 0).getTime() - new Date(a.submitted_at ?? 0).getTime(),
+      )[0]
+
+    const lastReviewAtMs = myLatestReview?.submitted_at
+      ? new Date(myLatestReview.submitted_at).getTime()
+      : undefined
+    const hasNewCommitsSinceMyReview =
+      lastReviewAtMs !== undefined &&
+      Boolean(myLatestReview?.commit_id) &&
+      myLatestReview.commit_id !== pull.head.sha
+
+    const hasNewCommentsSinceMyReview =
+      lastReviewAtMs !== undefined &&
+      (reviews.some(
+        (review) =>
+          review.user?.login?.toLowerCase() !== normalizedLogin &&
+          Boolean(review.submitted_at) &&
+          new Date(review.submitted_at as string).getTime() > lastReviewAtMs,
+      ) ||
+        pullComments.some(
+          (comment) =>
+            comment.user?.login?.toLowerCase() !== normalizedLogin &&
+            new Date(comment.created_at).getTime() > lastReviewAtMs,
+        ))
+
+    const hasNewReviewsSinceViewed =
+      viewedAtMs !== undefined &&
+      reviews.some(
+        (review) =>
+          review.user?.login?.toLowerCase() !== normalizedLogin &&
+          Boolean(review.submitted_at) &&
+          new Date(review.submitted_at as string).getTime() > viewedAtMs,
+      )
+
+    const hasNewCommentsSinceViewed =
+      viewedAtMs !== undefined &&
+      pullComments.some(
+        (comment) =>
+          comment.user?.login?.toLowerCase() !== normalizedLogin &&
+          new Date(comment.created_at).getTime() > viewedAtMs,
+      )
+
+    const activitySignals: ActivitySignals = {
+      hasNewCommitsSinceMyReview,
+      hasNewCommentsSinceMyReview,
+      hasNewReviewsSinceViewed,
+      hasNewCommentsSinceViewed,
+    }
 
     const classification = classifyPullRequest(
       pull,
       reviews,
       me.login,
       myTeamSlugs,
-      viewedMap[viewKey],
+      viewedAtMs,
+      activitySignals,
     )
 
     const stalePreference = stalePreferences[viewKey]
@@ -342,8 +424,16 @@ async function fetchAndClassifyPullRequests(
   }
 
   return {
-    yourPrs: sortByUpdatedDesc(yourPrs),
-    needsAttention: sortByUpdatedDesc(needsAttention),
+    yourPrs: sortByPriorityAndUpdated(yourPrs, {
+      'your-pr-new-reviews': 0,
+      'your-pr-new-comments': 1,
+      'your-pr-no-activity': 2,
+    }),
+    needsAttention: sortByPriorityAndUpdated(needsAttention, {
+      'new-updates': 0,
+      'new-comments': 1,
+      'review-requested': 2,
+    }),
     relatedToYou: sortByUpdatedDesc(relatedToYou),
     stalePrs: sortByUpdatedDesc(stalePrs),
     teamSignalsUnavailable,
@@ -479,12 +569,14 @@ function PullRequestRow({
         </div>
       </div>
       <div className="status-group">
-        <span className="pill-wrap">
-          <span className={`pill ${pr.stateClass}`}>{pr.stateLabel}</span>
-          <span className="pill-tooltip" role="tooltip">
-            {pr.reason}
+        {pr.stateLabel ? (
+          <span className="pill-wrap">
+            <span className={`pill ${pr.stateClass}`}>{pr.stateLabel}</span>
+            <span className="pill-tooltip" role="tooltip">
+              {pr.reason}
+            </span>
           </span>
-        </span>
+        ) : null}
         <span className="updated-at">{pr.updatedAt}</span>
       </div>
       <div className="row-menu-wrap">
