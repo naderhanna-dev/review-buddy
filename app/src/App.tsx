@@ -35,7 +35,7 @@ const SEARCH_MAX_PAGES = 10
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000
 const FALLBACK_REFRESH_MS = 10 * 60 * 1000
 const NOTIFICATION_FALLBACK_MS = 2 * 60 * 1000
-const REFRESH_FOCUS_COOLDOWN_MS = 15 * 1000
+const REFRESH_FOCUS_COOLDOWN_MS = 5 * 60 * 1000
 
 const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'stalePreferences', string> = {
   token: 'review-radar.pat',

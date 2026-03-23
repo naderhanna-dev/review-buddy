@@ -265,7 +265,7 @@ The app uses smart polling to stay up to date:
 - **With a fine-grained PAT** (no notifications support): polls with ETag-enhanced
   requests every 2 minutes. Unchanged data returns HTTP 304 (cheap).
 - **Tab focus/visibility**: the app also refreshes when the tab or window becomes
-  active again (with a 15-second cooldown).
+  active again (with a 5-minute cooldown to avoid rate limit pressure).
 - All API requests use ETag conditional caching — subsequent fetches for unchanged
   data return 304 Not Modified with no response body, saving bandwidth and API quota.
 - Header shows a live "Last updated ..." freshness label.
