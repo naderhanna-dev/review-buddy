@@ -108,6 +108,132 @@ Each PR row also shows a GitHub-style checks icon:
 - `cd app && npm run lint` - run ESLint
 - `cd app && npm run test` - run unit tests (Vitest)
 
+## Running as a permanent service
+
+Build the production bundle once, then serve the static files with a lightweight
+server that starts automatically on login.
+
+### 1. Build and verify
+
+```bash
+cd app && npm run build
+npm run preview -- --port 4173
+# Open http://localhost:4173 to verify, then Ctrl-C
+```
+
+### 2. Install a static file server
+
+`vite preview` works but is intended for spot-checking builds, not long-running
+service use. [`serve`](https://github.com/vercel/serve) is a better fit:
+
+```bash
+npm install -g serve
+```
+
+### macOS (launchd)
+
+Create `~/Library/LaunchAgents/com.reviewradar.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.reviewradar</string>
+  <key>ProgramArguments</key>
+  <array>
+    <!-- Run `which serve` to find the real path.
+         See the fnm note below if you use fnm. -->
+    <string>/usr/local/bin/serve</string>
+    <string>-s</string>
+    <string>dist</string>
+    <string>-l</string>
+    <string>4173</string>
+    <!-- Optional: uncomment the next two lines to listen on all
+         interfaces so other devices on your network can reach the app
+         (e.g. http://192.168.1.x:4173). -->
+    <!-- <string>--host</string> -->
+    <!-- <string>0.0.0.0</string> -->
+  </array>
+  <key>WorkingDirectory</key>
+  <!-- Replace with the absolute path to your clone's app/ directory. -->
+  <string>/Users/YOU/path/to/ReviewRadar/app</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/reviewradar.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/reviewradar.log</string>
+</dict>
+</plist>
+```
+
+Load and start:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.reviewradar.plist
+```
+
+Management commands:
+
+```bash
+# Stop
+launchctl unload ~/Library/LaunchAgents/com.reviewradar.plist
+
+# Restart (unload then load)
+launchctl unload ~/Library/LaunchAgents/com.reviewradar.plist
+launchctl load ~/Library/LaunchAgents/com.reviewradar.plist
+
+# Check status
+launchctl list | grep reviewradar
+
+# View logs
+tail -f /tmp/reviewradar.log
+```
+
+The service starts automatically on login. To remove it permanently, unload and
+delete the plist file.
+
+### fnm users
+
+launchd does not source your shell profile, so `#!/usr/bin/env node` inside the
+`serve` script cannot find `node`. You need to replace the single `serve` path
+in the plist with the absolute `node` binary followed by the `serve` script:
+
+fnm maintains a `default` alias symlink that tracks whichever version you set
+with `fnm default`. Use it instead of a version-pinned path so upgrades just work:
+
+```bash
+# Verify the alias exists
+ls ~/.local/share/fnm/aliases/default/bin/node
+ls ~/.local/share/fnm/aliases/default/lib/node_modules/serve/build/main.js
+```
+
+Then replace the `<string>/usr/local/bin/serve</string>` line in the plist with:
+
+```xml
+    <string>/Users/YOU/.local/share/fnm/aliases/default/bin/node</string>
+    <string>/Users/YOU/.local/share/fnm/aliases/default/lib/node_modules/serve/build/main.js</string>
+```
+
+After upgrading node via fnm, just restart the service — no path changes needed
+as long as `serve` is installed globally on the new version.
+
+### Notes
+
+- By default the server binds to `localhost` only. To expose the app to other
+  devices on your network (e.g. `http://192.168.1.x:4173`), add `--host 0.0.0.0`
+  to the serve command in the service file.
+- Change the port in the service file if `4173` conflicts.
+- After pulling new code, rebuild (`cd app && npm run build`) and restart the
+  service to pick up changes.
+- The `-s` flag on `serve` enables SPA fallback (rewrites all routes to
+  `index.html`), which a client-side React app needs.
+
 ## Refresh behavior
 
 - The app polls for updates every 5 minutes while the tab is visible.
