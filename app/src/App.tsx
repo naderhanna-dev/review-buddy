@@ -49,6 +49,36 @@ const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme', string> = {
   theme: 'review-radar.theme',
 }
 
+function readStorageItem(key: string): string {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  return localStorage.getItem(key) ?? ''
+}
+
+function readViewedMap(): Record<string, number> {
+  const raw = readStorageItem(STORAGE_KEYS.viewed)
+  if (!raw) {
+    return {}
+  }
+
+  try {
+    return JSON.parse(raw) as Record<string, number>
+  } catch {
+    return {}
+  }
+}
+
+function readThemePreference(): ThemePreference {
+  const value = readStorageItem(STORAGE_KEYS.theme)
+  if (value === 'dark' || value === 'light' || value === 'system') {
+    return value
+  }
+
+  return 'system'
+}
+
 async function apiFetch<T>(url: string, token: string): Promise<T> {
   const response = await fetch(url, {
     headers: {
@@ -235,18 +265,24 @@ function PullRequestRow({
 }
 
 function App() {
-  const [tokenInput, setTokenInput] = useState('')
-  const [token, setToken] = useState('')
-  const [orgInput, setOrgInput] = useState('')
-  const [org, setOrg] = useState('')
-  const [viewedMap, setViewedMap] = useState<Record<string, number>>({})
+  const [tokenInput, setTokenInput] = useState(() => readStorageItem(STORAGE_KEYS.token))
+  const [token, setToken] = useState(() => readStorageItem(STORAGE_KEYS.token))
+  const [orgInput, setOrgInput] = useState(() => readStorageItem(STORAGE_KEYS.org))
+  const [org, setOrg] = useState(() => readStorageItem(STORAGE_KEYS.org))
+  const [viewedMap, setViewedMap] = useState<Record<string, number>>(() => readViewedMap())
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState(false)
   const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([])
   const [relatedToYou, setRelatedToYou] = useState<PullRequest[]>([])
-  const [themePreference, setThemePreference] = useState<ThemePreference>('system')
-  const [isConnectionPanelOpen, setIsConnectionPanelOpen] = useState(true)
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
+    readThemePreference(),
+  )
+  const [isConnectionPanelOpen, setIsConnectionPanelOpen] = useState(() => {
+    const savedToken = readStorageItem(STORAGE_KEYS.token)
+    const savedOrg = readStorageItem(STORAGE_KEYS.org)
+    return !(savedToken && savedOrg)
+  })
 
   function resolveTheme(preference: ThemePreference): 'dark' | 'light' {
     if (preference === 'dark') {
@@ -259,36 +295,6 @@ function App() {
 
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   }
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem(STORAGE_KEYS.token) ?? ''
-    const storedOrg = localStorage.getItem(STORAGE_KEYS.org) ?? ''
-    const storedViewed = localStorage.getItem(STORAGE_KEYS.viewed)
-    const storedTheme = localStorage.getItem(STORAGE_KEYS.theme)
-    let parsedViewed: Record<string, number> = {}
-    if (storedViewed) {
-      try {
-        parsedViewed = JSON.parse(storedViewed) as Record<string, number>
-      } catch {
-        parsedViewed = {}
-      }
-    }
-
-    setToken(storedToken)
-    setTokenInput(storedToken)
-    setOrg(storedOrg)
-    setOrgInput(storedOrg)
-    setViewedMap(parsedViewed)
-    setIsConnectionPanelOpen(!(storedToken && storedOrg))
-
-    if (
-      storedTheme === 'dark' ||
-      storedTheme === 'light' ||
-      storedTheme === 'system'
-    ) {
-      setThemePreference(storedTheme)
-    }
-  }, [])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
@@ -308,6 +314,23 @@ function App() {
       mediaQuery.removeEventListener('change', applyTheme)
     }
   }, [themePreference])
+
+  useEffect(() => {
+    if (!isConnectionPanelOpen) {
+      return
+    }
+
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        setIsConnectionPanelOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isConnectionPanelOpen])
 
   useEffect(() => {
     if (!token || !org) {
@@ -393,64 +416,21 @@ function App() {
 
   return (
     <main className="app-shell">
+      <button
+        type="button"
+        className="settings-toggle"
+        aria-label="Open settings"
+        onClick={() => setIsConnectionPanelOpen(true)}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
+          <path d="M4 6.5a1 1 0 1 1 0-2h16a1 1 0 1 1 0 2H4Zm0 7a1 1 0 1 1 0-2h16a1 1 0 1 1 0 2H4Zm0 7a1 1 0 1 1 0-2h16a1 1 0 1 1 0 2H4Z" />
+        </svg>
+      </button>
+
       <header className="page-header">
         <h1>ReviewRadar</h1>
         <p>Pull requests ranked by what needs your attention first.</p>
       </header>
-
-      <section className="section-card">
-        <div className="section-header">
-          <h2>Connection</h2>
-          <button
-            type="button"
-            className="section-action"
-            aria-expanded={isConnectionPanelOpen}
-            onClick={() => setIsConnectionPanelOpen((current) => !current)}
-          >
-            {isConnectionPanelOpen ? 'Hide settings' : 'Edit settings'}
-          </button>
-        </div>
-        {!isConnectionPanelOpen && hasSavedConnection ? (
-          <p className="connection-summary">Connected to {org} with saved PAT.</p>
-        ) : (
-          <>
-            <form className="config-form" onSubmit={handleSaveConfig}>
-              <label>
-                GitHub organization
-                <input
-                  type="text"
-                  value={orgInput}
-                  onChange={(event) => setOrgInput(event.target.value)}
-                  placeholder="your-org"
-                  autoComplete="organization"
-                />
-              </label>
-              <label>
-                Personal access token
-                <input
-                  type="password"
-                  value={tokenInput}
-                  onChange={(event) => setTokenInput(event.target.value)}
-                  placeholder="github_pat_..."
-                  autoComplete="off"
-                />
-              </label>
-              <button type="submit">Save and refresh</button>
-            </form>
-            <p className="helper-copy">
-              PAT is stored in local storage for this browser profile. Fine-grained
-              permissions: Pull requests (Read) required, Members (Read) optional for
-              team-based signals.
-            </p>
-            {teamSignalsUnavailable ? (
-              <p className="helper-copy warning-copy">
-                Team permissions are unavailable for this token. Showing direct-review and
-                activity-based signals only.
-              </p>
-            ) : null}
-          </>
-        )}
-      </section>
 
       <section className="section-card">
         <div className="section-header">
@@ -490,6 +470,66 @@ function App() {
           ))}
         </div>
       </section>
+
+      {isConnectionPanelOpen ? (
+        <>
+          <button
+            type="button"
+            className="settings-backdrop"
+            aria-label="Close settings"
+            onClick={() => setIsConnectionPanelOpen(false)}
+          />
+          <aside className="settings-drawer" aria-label="Connection settings">
+            <div className="settings-header">
+              <h2>Settings</h2>
+              <button
+                type="button"
+                className="settings-close"
+                onClick={() => setIsConnectionPanelOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            {hasSavedConnection ? (
+              <p className="connection-summary">Connected to {org} with saved PAT.</p>
+            ) : null}
+            <form className="config-form" onSubmit={handleSaveConfig}>
+              <label>
+                GitHub organization
+                <input
+                  type="text"
+                  value={orgInput}
+                  onChange={(event) => setOrgInput(event.target.value)}
+                  placeholder="your-org"
+                  autoComplete="organization"
+                />
+              </label>
+              <label>
+                Personal access token
+                <input
+                  type="password"
+                  value={tokenInput}
+                  onChange={(event) => setTokenInput(event.target.value)}
+                  placeholder="github_pat_..."
+                  autoComplete="off"
+                />
+              </label>
+              <button type="submit">Save and refresh</button>
+            </form>
+            <p className="helper-copy">
+              PAT is stored in local storage for this browser profile. Fine-grained
+              permissions: Pull requests (Read) required, Members (Read) optional for
+              team-based signals.
+            </p>
+            {teamSignalsUnavailable ? (
+              <p className="helper-copy warning-copy">
+                Team permissions are unavailable for this token. Showing direct-review and
+                activity-based signals only.
+              </p>
+            ) : null}
+          </aside>
+        </>
+      ) : null}
 
       <button
         type="button"

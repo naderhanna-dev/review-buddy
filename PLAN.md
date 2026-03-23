@@ -19,7 +19,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - Data fetch scope: candidate PRs should be user-scoped within the org (not all org PRs).
 - Theme: system-default theming with manual dark/light override.
 - Theme control UI: floating moon/sun quick toggle in corner.
-- Connection UX: auto-collapse settings panel when PAT/org are saved, with an explicit edit toggle.
+- Connection UX: settings live in a hamburger-toggled sidebar; auto-close after save.
 
 ## PR Classification Rules
 
