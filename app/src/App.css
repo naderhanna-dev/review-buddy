@@ -211,7 +211,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.25rem 1rem;
-  padding: 0.85rem 1rem;
+  padding: 0.85rem 2.6rem 0.85rem 1rem;
   border-bottom: 1px solid var(--border);
   position: relative;
 }
