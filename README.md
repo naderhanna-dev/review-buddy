@@ -194,22 +194,24 @@ launchd does not source your shell profile, so `#!/usr/bin/env node` inside the
 `serve` script cannot find `node`. You need to replace the single `serve` path
 in the plist with the absolute `node` binary followed by the `serve` script:
 
+fnm maintains a `default` alias symlink that tracks whichever version you set
+with `fnm default`. Use it instead of a version-pinned path so upgrades just work:
+
 ```bash
-# Find your paths (version will differ)
-fnm current           # e.g. v22.17.1
-FNM_NODE=~/.local/share/fnm/node-versions/$(fnm current)/installation
-ls "$FNM_NODE/bin/node"                              # node binary
-ls "$FNM_NODE/lib/node_modules/serve/build/main.js"  # serve script
+# Verify the alias exists
+ls ~/.local/share/fnm/aliases/default/bin/node
+ls ~/.local/share/fnm/aliases/default/lib/node_modules/serve/build/main.js
 ```
 
 Then replace the `<string>/usr/local/bin/serve</string>` line in the plist with:
 
 ```xml
-    <string>/Users/YOU/.local/share/fnm/node-versions/v22.17.1/installation/bin/node</string>
-    <string>/Users/YOU/.local/share/fnm/node-versions/v22.17.1/installation/lib/node_modules/serve/build/main.js</string>
+    <string>/Users/YOU/.local/share/fnm/aliases/default/bin/node</string>
+    <string>/Users/YOU/.local/share/fnm/aliases/default/lib/node_modules/serve/build/main.js</string>
 ```
 
-If you upgrade node via fnm later, update both paths and restart the service.
+After upgrading node via fnm, just restart the service — no path changes needed
+as long as `serve` is installed globally on the new version.
 
 ### Notes
 
