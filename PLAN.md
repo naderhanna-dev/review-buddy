@@ -13,7 +13,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 ## Locked Decisions
 
 - Frontend stack: React + Vite.
-- Auth approach: PAT-based local access for now (fine-grained: Pull requests read; Members read optional).
+- Auth approach: PAT-based local access for now (fine-grained: Pull requests read; Administration read optional).
 - Scope: single GitHub organization.
 - Team-related PRs: include PRs requested from teams the user belongs to.
 - Data fetch scope: candidate PRs should be user-scoped within the org (not all org PRs).
@@ -58,7 +58,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 2. Auth + configuration
    - First iteration: allow PAT for local speed.
    - OAuth App flow intentionally deferred.
-   - Gracefully degrade when Members permission is missing (skip team signals only).
+   - Gracefully degrade when Administration permission is missing (skip team signals only).
    - Add org selector/config (single-org constrained).
 
 3. Data ingestion (GitHub API)
