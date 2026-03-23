@@ -304,10 +304,14 @@ function PullRequestRow({
         </div>
       </div>
       <div className="status-group">
-        <span className={`pill ${pr.stateClass}`}>{pr.stateLabel}</span>
+        <span className="pill-wrap">
+          <span className={`pill ${pr.stateClass}`}>{pr.stateLabel}</span>
+          <span className="pill-tooltip" role="tooltip">
+            {pr.reason}
+          </span>
+        </span>
         <span className="updated-at">{pr.updatedAt}</span>
       </div>
-      <p className="reason">{pr.reason}</p>
     </article>
   )
 }

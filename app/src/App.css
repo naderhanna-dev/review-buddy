@@ -188,8 +188,8 @@
 
 .pr-row {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.35rem 1rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem 1rem;
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--border);
 }
@@ -199,6 +199,11 @@
 }
 
 .pr-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text);
   text-decoration: none;
   font-weight: 600;
@@ -208,6 +213,11 @@
   display: flex;
   gap: 0.6rem;
   align-items: flex-start;
+  min-width: 0;
+}
+
+.title-group > div {
+  min-width: 0;
 }
 
 .avatar-link {
@@ -264,7 +274,6 @@
 }
 
 .pr-meta,
-.reason,
 .updated-at {
   margin: 0;
   font-size: 0.85rem;
@@ -275,17 +284,60 @@
   justify-self: end;
   text-align: right;
   display: grid;
-  gap: 0.3rem;
+  gap: 0.25rem;
+  align-self: start;
+  justify-items: end;
+  position: relative;
 }
 
 .pill {
   border-radius: 999px;
   border: 1px solid;
-  padding: 0.14rem 0.5rem;
+  padding: 0.18rem 0.5rem;
   font-size: 0.72rem;
   font-weight: 600;
-  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pill-wrap {
+  position: relative;
+  display: inline-flex;
   justify-self: end;
+  cursor: default;
+}
+
+.pill-tooltip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.45rem);
+  width: min(300px, 70vw);
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--tooltip-border);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-fg);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 28%);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: left;
+  z-index: 6;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 140ms ease;
+  pointer-events: none;
+}
+
+.pill-wrap:hover .pill-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .changes-requested {
@@ -317,10 +369,6 @@
   background: var(--status-note-bg);
   border-color: var(--status-note-border);
   color: var(--status-note-fg);
-}
-
-.reason {
-  grid-column: 1 / -1;
 }
 
 .empty-state {
@@ -378,10 +426,17 @@
   .status-group {
     justify-self: start;
     text-align: left;
+    justify-items: start;
   }
 
-  .pill {
+  .pill-wrap {
     justify-self: start;
+  }
+
+  .pill-tooltip {
+    left: 0;
+    right: auto;
+    width: min(280px, 92vw);
   }
 
   .theme-fab {

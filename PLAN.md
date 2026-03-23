@@ -21,6 +21,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - Theme control UI: floating moon/sun quick toggle in corner.
 - Connection UX: settings live in a hamburger-toggled sidebar; auto-close after save.
 - PR row details: show author/reviewer avatars with profile links and repository link.
+- PR row polish: reason on rich status-pill hover tooltip and single-line truncated titles.
 
 ## PR Classification Rules
 
