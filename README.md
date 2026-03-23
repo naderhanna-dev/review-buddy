@@ -25,9 +25,19 @@ cd app && npm run dev
 
 ## Fine-grained PAT permissions
 
-Use a fine-grained token with:
+[Create a fine-grained token](https://github.com/settings/personal-access-tokens/new) and
+set **Resource owner** to **MaintainX** (not your personal account). The Resource owner
+cannot be changed after creation — if your existing token uses your personal account,
+you must regenerate it.
+
+Then select **All repositories** and grant the permissions listed below.
+
+![Token setup — Resource owner set to MaintainX](docs/token-setup.png)
+
+**Repository permissions**:
 - Pull requests: **Read** (required)
 - Commit statuses: **Read** (required for PR check status icons)
+- Metadata: **Read** (auto-granted when any other repo permission is set)
 - Administration: **Read** (optional, enables team-assigned PR signals)
 
 If Administration read is missing, the app still works and shows direct-reviewer and
