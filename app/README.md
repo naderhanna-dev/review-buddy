@@ -54,6 +54,12 @@ The app builds candidates from open PRs in your org where at least one is true:
 - Storage key: `review-radar.viewed` in browser local storage.
 - This is device/browser-local and not synced to GitHub.
 
+## Theme
+
+- Theme selector supports `System`, `Dark`, and `Light`.
+- Default is `System`, following your OS/browser preference.
+- Preference is stored in local storage under `review-radar.theme`.
+
 ## Commands
 
 - `npm run dev` - start dev server

@@ -17,6 +17,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - Scope: single GitHub organization.
 - Team-related PRs: include PRs requested from teams the user belongs to.
 - Data fetch scope: candidate PRs should be user-scoped within the org (not all org PRs).
+- Theme: system-default theming with manual dark/light override.
 
 ## PR Classification Rules
 

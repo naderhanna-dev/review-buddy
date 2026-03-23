@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import {
   classifyPullRequest,
   prViewKey,
@@ -37,13 +37,16 @@ type ClassifiedPullRequests = {
   teamSignalsUnavailable: boolean
 }
 
+type ThemePreference = 'system' | 'dark' | 'light'
+
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_MAX_PAGES = 10
 
-const STORAGE_KEYS: Record<'token' | 'org' | 'viewed', string> = {
+const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme', string> = {
   token: 'review-radar.pat',
   org: 'review-radar.org',
   viewed: 'review-radar.viewed',
+  theme: 'review-radar.theme',
 }
 
 async function apiFetch<T>(url: string, token: string): Promise<T> {
@@ -242,11 +245,25 @@ function App() {
   const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState(false)
   const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([])
   const [relatedToYou, setRelatedToYou] = useState<PullRequest[]>([])
+  const [themePreference, setThemePreference] = useState<ThemePreference>('system')
+
+  function resolveTheme(preference: ThemePreference): 'dark' | 'light' {
+    if (preference === 'dark') {
+      return 'dark'
+    }
+
+    if (preference === 'light') {
+      return 'light'
+    }
+
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  }
 
   useEffect(() => {
     const storedToken = localStorage.getItem(STORAGE_KEYS.token) ?? ''
     const storedOrg = localStorage.getItem(STORAGE_KEYS.org) ?? ''
     const storedViewed = localStorage.getItem(STORAGE_KEYS.viewed)
+    const storedTheme = localStorage.getItem(STORAGE_KEYS.theme)
     let parsedViewed: Record<string, number> = {}
     if (storedViewed) {
       try {
@@ -261,7 +278,34 @@ function App() {
     setOrg(storedOrg)
     setOrgInput(storedOrg)
     setViewedMap(parsedViewed)
+
+    if (
+      storedTheme === 'dark' ||
+      storedTheme === 'light' ||
+      storedTheme === 'system'
+    ) {
+      setThemePreference(storedTheme)
+    }
   }, [])
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+
+    function applyTheme(): void {
+      document.documentElement.dataset.theme = resolveTheme(themePreference)
+    }
+
+    applyTheme()
+
+    if (themePreference !== 'system') {
+      return
+    }
+
+    mediaQuery.addEventListener('change', applyTheme)
+    return () => {
+      mediaQuery.removeEventListener('change', applyTheme)
+    }
+  }, [themePreference])
 
   useEffect(() => {
     if (!token || !org) {
@@ -328,6 +372,12 @@ function App() {
     })
   }
 
+  function handleThemeChange(event: ChangeEvent<HTMLSelectElement>): void {
+    const preference = event.currentTarget.value as ThemePreference
+    setThemePreference(preference)
+    localStorage.setItem(STORAGE_KEYS.theme, preference)
+  }
+
   return (
     <main className="app-shell">
       <header className="page-header">
@@ -359,6 +409,14 @@ function App() {
               placeholder="github_pat_..."
               autoComplete="off"
             />
+          </label>
+          <label>
+            Theme
+            <select value={themePreference} onChange={handleThemeChange}>
+              <option value="system">System</option>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
           </label>
           <button type="submit">Save and refresh</button>
         </form>
