@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ChangeEvent, FormEvent } from 'react'
+import type { FormEvent } from 'react'
 import {
   classifyPullRequest,
   prViewKey,
@@ -372,11 +372,14 @@ function App() {
     })
   }
 
-  function handleThemeChange(event: ChangeEvent<HTMLSelectElement>): void {
-    const preference = event.currentTarget.value as ThemePreference
-    setThemePreference(preference)
-    localStorage.setItem(STORAGE_KEYS.theme, preference)
+  function toggleTheme(): void {
+    const activeTheme = resolveTheme(themePreference)
+    const nextPreference: ThemePreference = activeTheme === 'dark' ? 'light' : 'dark'
+    setThemePreference(nextPreference)
+    localStorage.setItem(STORAGE_KEYS.theme, nextPreference)
   }
+
+  const activeTheme = resolveTheme(themePreference)
 
   return (
     <main className="app-shell">
@@ -409,14 +412,6 @@ function App() {
               placeholder="github_pat_..."
               autoComplete="off"
             />
-          </label>
-          <label>
-            Theme
-            <select value={themePreference} onChange={handleThemeChange}>
-              <option value="system">System</option>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
           </label>
           <button type="submit">Save and refresh</button>
         </form>
@@ -470,6 +465,24 @@ function App() {
           ))}
         </div>
       </section>
+
+      <button
+        type="button"
+        className="theme-fab"
+        onClick={toggleTheme}
+        title={`Switch to ${activeTheme === 'dark' ? 'light' : 'dark'} mode`}
+        aria-label={`Switch to ${activeTheme === 'dark' ? 'light' : 'dark'} mode`}
+      >
+        {activeTheme === 'dark' ? (
+          <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
+            <path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12Zm0-14a1 1 0 0 0 1-1V2a1 1 0 1 0-2 0v1a1 1 0 0 0 1 1Zm0 17a1 1 0 0 0-1 1v1a1 1 0 1 0 2 0v-1a1 1 0 0 0-1-1Zm8-8a1 1 0 0 0 1-1 1 1 0 1 0 0-2h-1a1 1 0 1 0 0 2h1ZM4 12a1 1 0 1 0 0-2H3a1 1 0 1 0 0 2h1Zm12.95 6.536a1 1 0 0 0 1.414 0l.707-.707a1 1 0 1 0-1.414-1.414l-.707.707a1 1 0 0 0 0 1.414ZM6.343 7.929a1 1 0 0 0 1.414 0l.707-.707A1 1 0 1 0 7.05 5.808l-.707.707a1 1 0 0 0 0 1.414Zm11.314 0a1 1 0 0 0 0-1.414l-.707-.707a1 1 0 1 0-1.414 1.414l.707.707a1 1 0 0 0 1.414 0ZM7.757 18.536a1 1 0 0 0 0-1.414l-.707-.707a1 1 0 0 0-1.414 1.414l.707.707a1 1 0 0 0 1.414 0Z" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
+            <path d="M20.742 14.045A8 8 0 0 1 9.955 3.258a1 1 0 0 0-1.17-1.17A10 10 0 1 0 21.912 15.215a1 1 0 0 0-1.17-1.17Z" />
+          </svg>
+        )}
+      </button>
     </main>
   )
 }

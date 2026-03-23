@@ -56,8 +56,8 @@ The app builds candidates from open PRs in your org where at least one is true:
 
 ## Theme
 
-- Theme selector supports `System`, `Dark`, and `Light`.
 - Default is `System`, following your OS/browser preference.
+- Floating moon/sun button in the bottom-right toggles between dark and light.
 - Preference is stored in local storage under `review-radar.theme`.
 
 ## Commands
