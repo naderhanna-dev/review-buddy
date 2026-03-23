@@ -226,6 +226,10 @@
   border-bottom: 0;
 }
 
+.pr-row.viewed {
+  opacity: 0.76;
+}
+
 .pr-title {
   display: block;
   max-width: 100%;

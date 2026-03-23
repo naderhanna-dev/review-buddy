@@ -332,6 +332,7 @@ async function fetchAndClassifyPullRequests(
 
 function PullRequestRow({
   pr,
+  isViewed,
   onViewed,
   stalePreference,
   sectionKind,
@@ -343,6 +344,7 @@ function PullRequestRow({
   onClearStalePreference,
 }: {
   pr: PullRequest
+  isViewed: boolean
   onViewed: (repository: string, number: number) => void
   stalePreference?: StalePreference
   sectionKind: 'active' | 'stale'
@@ -368,7 +370,7 @@ function PullRequestRow({
   }
 
   return (
-    <article className="pr-row">
+    <article className={`pr-row${isViewed ? ' viewed' : ''}`}>
       <div className="title-group">
         <a
           href={pr.authorProfileUrl}
@@ -576,6 +578,7 @@ function App() {
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const isLoadingRef = useRef(false)
+  const viewedMapRef = useRef<Record<string, number>>(viewedMap)
   const lastVisibilityRefreshAtRef = useRef(0)
 
   function resolveTheme(preference: ThemePreference): 'dark' | 'light' {
@@ -612,6 +615,10 @@ function App() {
   useEffect(() => {
     isLoadingRef.current = isLoading
   }, [isLoading])
+
+  useEffect(() => {
+    viewedMapRef.current = viewedMap
+  }, [viewedMap])
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -749,7 +756,7 @@ function App() {
         const classified = await fetchAndClassifyPullRequests(
           org,
           token,
-          viewedMap,
+          viewedMapRef.current,
           stalePreferences,
         )
         if (!ignore) {
@@ -783,7 +790,7 @@ function App() {
     return () => {
       ignore = true
     }
-  }, [org, refreshTick, stalePreferences, token, viewedMap])
+  }, [org, refreshTick, stalePreferences, token])
 
   function handleSaveConfig(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault()
@@ -898,6 +905,7 @@ function App() {
             <PullRequestRow
               key={pr.id}
               pr={pr}
+              isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
               onViewed={handleViewed}
               sectionKind="active"
               openMenuKey={openRowMenuKey}
@@ -929,6 +937,7 @@ function App() {
             <PullRequestRow
               key={pr.id}
               pr={pr}
+              isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
               onViewed={handleViewed}
               sectionKind="active"
               openMenuKey={openRowMenuKey}
@@ -961,6 +970,7 @@ function App() {
             <PullRequestRow
               key={pr.id}
               pr={pr}
+              isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
               onViewed={handleViewed}
               sectionKind="active"
               openMenuKey={openRowMenuKey}
@@ -1002,6 +1012,7 @@ function App() {
               <PullRequestRow
                 key={pr.id}
                 pr={pr}
+                isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
                 onViewed={handleViewed}
                 sectionKind="stale"
                 openMenuKey={openRowMenuKey}

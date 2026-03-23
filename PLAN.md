@@ -29,6 +29,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - Documentation location: project README is in repo root.
 - Data freshness: poll every 5 minutes while visible and refresh on tab focus/visibility return.
 - Header displays live last-refresh age.
+- Viewed PRs remain in section and are indicated visually (row opacity), without immediate reclassification fetch.
 
 ## PR Classification Rules
 

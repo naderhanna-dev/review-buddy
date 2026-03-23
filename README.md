@@ -78,6 +78,7 @@ Each PR row also shows a GitHub-style checks icon:
 - When you click a PR title in ReviewRadar, the app stores a local "viewed" timestamp.
 - Storage key: `review-radar.viewed` in browser local storage.
 - This is device/browser-local and not synced to GitHub.
+- Viewed PRs stay in their section and are shown with reduced row opacity as a visual cue.
 
 ## Local stale preferences
 
