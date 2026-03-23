@@ -27,10 +27,13 @@ npm run dev
 
 Use a fine-grained token with:
 - Pull requests: **Read** (required)
+- Commit statuses: **Read** (required for PR check status icons)
 - Members: **Read** (optional, enables team-assigned PR signals)
 
 If Members read is missing, the app still works and shows direct-reviewer and
 activity-based signals; only team-assigned signals are skipped.
+
+If Commit statuses read is missing, PR check icons fall back to pending.
 
 ## Candidate PR scope
 
@@ -41,6 +44,13 @@ The app builds candidates from open PRs in your org where at least one is true:
 - You previously opened the PR from ReviewRadar (local viewed tracker).
 
 ## Classification behavior
+
+### Your PRs
+- PRs authored by you.
+- PRs assigned to you.
+
+Priority rule: if a PR is authored/assigned to you, it always appears in `Your PRs`
+and never in `Needs your attention`.
 
 ### Needs your attention
 - PRs where you are requested as reviewer.

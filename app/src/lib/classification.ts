@@ -34,6 +34,11 @@ export type PullDetails = {
     avatar_url: string
     html_url: string
   }
+  assignees: Array<{
+    login: string
+    avatar_url: string
+    html_url: string
+  }>
   requested_reviewers: Array<{
     login: string
     avatar_url: string
@@ -62,6 +67,7 @@ export type Review = {
 }
 
 export type ClassifiedPullRequest = {
+  yourPrs?: PullRequest
   needsAttention?: PullRequest
   relatedToYou?: PullRequest
 }
@@ -120,8 +126,11 @@ export function classifyPullRequest(
   const requestedReviewerLogins = pull.requested_reviewers.map((reviewer) =>
     reviewer.login.toLowerCase(),
   )
+  const assigneeLogins = pull.assignees.map((assignee) => assignee.login.toLowerCase())
   const requestedTeamSlugs = pull.requested_teams.map((team) => team.slug)
 
+  const isAuthoredByMe = pull.user.login.toLowerCase() === normalizedLogin
+  const isAssignedToMe = assigneeLogins.includes(normalizedLogin)
   const isRequiredReviewer = requestedReviewerLogins.includes(normalizedLogin)
   const hasUpdateSinceMyReview =
     lastReviewAtMs !== undefined && pullUpdatedAtMs > lastReviewAtMs
@@ -148,6 +157,39 @@ export function classifyPullRequest(
     url: pull.html_url,
     checkState: 'pending',
     isDraft: pull.draft,
+  }
+
+  if (isAuthoredByMe || isAssignedToMe) {
+    if (isAuthoredByMe && isAssignedToMe) {
+      return {
+        yourPrs: {
+          ...basePr,
+          stateLabel: 'Authored + assigned',
+          stateClass: 'your-pr',
+          reason: 'This PR is authored by you and assigned to you.',
+        },
+      }
+    }
+
+    if (isAuthoredByMe) {
+      return {
+        yourPrs: {
+          ...basePr,
+          stateLabel: 'Authored by you',
+          stateClass: 'your-pr',
+          reason: 'This PR is authored by you.',
+        },
+      }
+    }
+
+    return {
+      yourPrs: {
+        ...basePr,
+        stateLabel: 'Assigned to you',
+        stateClass: 'your-pr',
+        reason: 'This PR is assigned to you.',
+      },
+    }
   }
 
   if (isRequiredReviewer || hasUpdateSinceMyReview) {

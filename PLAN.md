@@ -23,6 +23,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - PR row details: show author/reviewer avatars with profile links and repository link.
 - PR row polish: reason on rich status-pill hover tooltip and single-line truncated titles.
 - PR checks signal: GitHub-style pass/pending/fail icon on each row.
+- Section precedence: authored/assigned PRs always go to "Your PRs" and never to "Needs your attention".
 
 ## PR Classification Rules
 
@@ -65,7 +66,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
    - Persist "looked but not reviewed" locally (first pass) and evolve if needed.
 
 5. UI sections
-   - Render two main sections: "Needs your attention" and "Related to you".
+   - Render three main sections: "Needs your attention", "Your PRs", and "Related to you".
    - Add counts, sorting by urgency/recency, and direct PR links.
 
 6. Quality + polish

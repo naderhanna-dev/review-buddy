@@ -405,6 +405,12 @@
   color: var(--status-note-fg);
 }
 
+.your-pr {
+  background: var(--status-own-bg);
+  border-color: var(--status-own-border);
+  color: var(--status-own-fg);
+}
+
 .empty-state {
   margin: 0;
   padding: 0.9rem 1rem;

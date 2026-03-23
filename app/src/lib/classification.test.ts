@@ -18,6 +18,7 @@ function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
       avatar_url: 'https://avatars.githubusercontent.com/u/100?v=4',
       html_url: 'https://github.com/author',
     },
+    assignees: [],
     requested_reviewers: [],
     requested_teams: [],
     base: {
@@ -34,6 +35,52 @@ function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
 }
 
 describe('classifyPullRequest', () => {
+  it('routes authored PRs to yourPrs before urgent buckets', () => {
+    const pull = createPull({
+      user: {
+        login: 'me',
+        avatar_url: 'https://avatars.githubusercontent.com/u/300?v=4',
+        html_url: 'https://github.com/me',
+      },
+      requested_reviewers: [
+        {
+          login: 'me',
+          avatar_url: 'https://avatars.githubusercontent.com/u/300?v=4',
+          html_url: 'https://github.com/me',
+        },
+      ],
+    })
+
+    const result = classifyPullRequest(pull, [], 'me', new Set())
+
+    expect(result.yourPrs?.stateClass).toBe('your-pr')
+    expect(result.needsAttention).toBeUndefined()
+  })
+
+  it('routes assigned PRs to yourPrs before urgent buckets', () => {
+    const pull = createPull({
+      assignees: [
+        {
+          login: 'me',
+          avatar_url: 'https://avatars.githubusercontent.com/u/300?v=4',
+          html_url: 'https://github.com/me',
+        },
+      ],
+      requested_reviewers: [
+        {
+          login: 'me',
+          avatar_url: 'https://avatars.githubusercontent.com/u/300?v=4',
+          html_url: 'https://github.com/me',
+        },
+      ],
+    })
+
+    const result = classifyPullRequest(pull, [], 'me', new Set())
+
+    expect(result.yourPrs?.stateClass).toBe('your-pr')
+    expect(result.needsAttention).toBeUndefined()
+  })
+
   it('marks PR as needs attention when user is requested reviewer', () => {
     const pull = createPull({
       requested_reviewers: [

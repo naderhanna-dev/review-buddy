@@ -25,6 +25,9 @@
   --status-note-bg: #fbefff;
   --status-note-border: #bf87ff;
   --status-note-fg: #8250df;
+  --status-own-bg: #eaf5ff;
+  --status-own-border: #91c8ff;
+  --status-own-fg: #0b69c7;
   --check-success: #1a7f37;
   --check-pending: #9a6700;
   --check-failure: #cf222e;
@@ -71,6 +74,9 @@
   --status-note-bg: #2b1548;
   --status-note-border: #8250df;
   --status-note-fg: #d2a8ff;
+  --status-own-bg: #11253a;
+  --status-own-border: #1f6feb;
+  --status-own-fg: #79c0ff;
   --check-success: #3fb950;
   --check-pending: #d29922;
   --check-failure: #f85149;

@@ -36,6 +36,7 @@ type CombinedStatusResponse = {
 }
 
 type ClassifiedPullRequests = {
+  yourPrs: PullRequest[]
   needsAttention: PullRequest[]
   relatedToYou: PullRequest[]
   teamSignalsUnavailable: boolean
@@ -156,6 +157,8 @@ async function fetchAndClassifyPullRequests(
   const candidateQueries = [
     `is:pr is:open archived:false org:${org} review-requested:${me.login}`,
     `is:pr is:open archived:false org:${org} reviewed-by:${me.login}`,
+    `is:pr is:open archived:false org:${org} author:${me.login}`,
+    `is:pr is:open archived:false org:${org} assignee:${me.login}`,
   ]
 
   for (const teamSlug of myTeamSlugs) {
@@ -219,6 +222,7 @@ async function fetchAndClassifyPullRequests(
     }),
   )
 
+  const yourPrs: PullRequest[] = []
   const needsAttention: PullRequest[] = []
   const relatedToYou: PullRequest[] = []
 
@@ -232,6 +236,11 @@ async function fetchAndClassifyPullRequests(
       viewedMap[viewKey],
     )
 
+    if (classification.yourPrs) {
+      yourPrs.push({ ...classification.yourPrs, checkState })
+      continue
+    }
+
     if (classification.needsAttention) {
       needsAttention.push({ ...classification.needsAttention, checkState })
       continue
@@ -243,6 +252,7 @@ async function fetchAndClassifyPullRequests(
   }
 
   return {
+    yourPrs: sortByUpdatedDesc(yourPrs),
     needsAttention: sortByUpdatedDesc(needsAttention),
     relatedToYou: sortByUpdatedDesc(relatedToYou),
     teamSignalsUnavailable,
@@ -377,6 +387,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState(false)
+  const [yourPrs, setYourPrs] = useState<PullRequest[]>([])
   const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([])
   const [relatedToYou, setRelatedToYou] = useState<PullRequest[]>([])
   const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
@@ -444,6 +455,7 @@ function App() {
 
   useEffect(() => {
     if (!token || !org) {
+      setYourPrs([])
       setNeedsAttention([])
       setRelatedToYou([])
       setTeamSignalsUnavailable(false)
@@ -459,6 +471,7 @@ function App() {
       try {
         const classified = await fetchAndClassifyPullRequests(org, token, viewedMap)
         if (!ignore) {
+          setYourPrs(classified.yourPrs)
           setNeedsAttention(classified.needsAttention)
           setRelatedToYou(classified.relatedToYou)
           setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
@@ -468,6 +481,7 @@ function App() {
           const message =
             loadError instanceof Error ? loadError.message : 'Failed to load pull requests.'
           setError(message)
+          setYourPrs([])
           setNeedsAttention([])
           setRelatedToYou([])
           setTeamSignalsUnavailable(false)
@@ -550,6 +564,25 @@ function App() {
             <p className="empty-state">Add org + PAT above to classify pull requests.</p>
           ) : null}
           {needsAttention.map((pr) => (
+            <PullRequestRow key={pr.id} pr={pr} onViewed={handleViewed} />
+          ))}
+        </div>
+      </section>
+
+      <section className="section-card">
+        <div className="section-header">
+          <h2>Your PRs</h2>
+          <span>{yourPrs.length}</span>
+        </div>
+        <div>
+          {isLoading ? <p className="empty-state">Loading your assigned/authored PRs...</p> : null}
+          {!isLoading && !error && token && org && yourPrs.length === 0 ? (
+            <p className="empty-state">No assigned or authored pull requests right now.</p>
+          ) : null}
+          {!isLoading && !error && (!token || !org) ? (
+            <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
+          ) : null}
+          {yourPrs.map((pr) => (
             <PullRequestRow key={pr.id} pr={pr} onViewed={handleViewed} />
           ))}
         </div>
