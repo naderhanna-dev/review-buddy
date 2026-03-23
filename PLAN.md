@@ -32,6 +32,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - Viewed PRs remain in section and are indicated visually (row opacity), without immediate reclassification fetch.
 - Only open PRs are shown; merged/closed PRs are excluded and cleaned from local tracked lists.
 - Delivery workflow: changes should go through feature branches and PRs instead of direct commits to main.
+- Open-only source of truth comes from GitHub search candidate results; local tracked keys not in that open set are auto-cleaned.
 
 ## PR Classification Rules
 

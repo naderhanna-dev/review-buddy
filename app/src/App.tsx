@@ -226,7 +226,13 @@ async function fetchAndClassifyPullRequests(
     }
   }
 
-  for (const key of Object.keys(viewedMap)) {
+  const trackedKeys = new Set<string>([
+    ...Object.keys(viewedMap),
+    ...Object.keys(stalePreferences),
+  ])
+  const cleanupKeys: string[] = []
+
+  for (const key of trackedKeys) {
     const [repository, number] = key.split('#')
     if (!repository || !number) {
       continue
@@ -236,7 +242,10 @@ async function fetchAndClassifyPullRequests(
       continue
     }
 
-    pullUrls.add(`https://api.github.com/repos/${repository}/pulls/${number}`)
+    const pullUrl = `https://api.github.com/repos/${repository}/pulls/${number}`
+    if (!pullUrls.has(pullUrl)) {
+      cleanupKeys.push(key)
+    }
   }
 
   const pullsWithReviews = await Promise.all(
@@ -274,16 +283,10 @@ async function fetchAndClassifyPullRequests(
   const needsAttention: PullRequest[] = []
   const relatedToYou: PullRequest[] = []
   const stalePrs: PullRequest[] = []
-  const cleanupKeys: string[] = []
   const nowMs = Date.now()
 
   for (const { pull, reviews, checkState } of pullsWithReviews) {
     const viewKey = prViewKey(pull.base.repo.full_name, pull.number)
-
-    if (pull.state !== 'open') {
-      cleanupKeys.push(viewKey)
-      continue
-    }
 
     const classification = classifyPullRequest(
       pull,
