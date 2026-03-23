@@ -8,32 +8,14 @@ import {
   type PullRequest,
   type Review,
 } from './lib/classification'
+import {
+  apiFetch,
+  type CombinedStatusResponse,
+  type GitHubUser,
+  type SearchIssuesResponse,
+  type Team,
+} from './lib/github'
 import './App.css'
-
-type SearchIssueItem = {
-  pull_request?: {
-    url: string
-  }
-}
-
-type SearchIssuesResponse = {
-  items: SearchIssueItem[]
-}
-
-type GitHubUser = {
-  login: string
-}
-
-type Team = {
-  slug: string
-  organization: {
-    login: string
-  }
-}
-
-type CombinedStatusResponse = {
-  state: string
-}
 
 type ClassifiedPullRequests = {
   yourPrs: PullRequest[]
@@ -131,38 +113,7 @@ function formatRefreshAge(timestampMs: number, nowMs: number): string {
   return `${diffHours}h ago`
 }
 
-async function apiFetch<T>(url: string, token: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-  })
 
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid token. Check PAT scope and retry.')
-    }
-
-    if (response.status === 403) {
-      throw new Error('Access forbidden or rate limit hit. Retry in a few minutes.')
-    }
-
-    if (response.status === 422) {
-      throw new Error(
-        'Token not authorized for this org. ' +
-          'The Resource owner cannot be changed on an existing token — ' +
-          'regenerate it at github.com/settings/personal-access-tokens/new ' +
-          'and set Resource owner to the org you configured in ReviewRadar.',
-      )
-    }
-
-    throw new Error(`GitHub request failed (${response.status}).`)
-  }
-
-  return (await response.json()) as T
-}
 
 async function fetchAndClassifyPullRequests(
   org: string,
