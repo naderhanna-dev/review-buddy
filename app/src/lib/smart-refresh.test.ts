@@ -71,7 +71,8 @@ describe('SmartRefreshController', () => {
     expect(onRefresh).not.toHaveBeenCalled()
   })
 
-  it('should switch to degraded interval when notifications are unavailable', async () => {
+  it('should switch to degraded interval when notifications are unavailable and trigger refresh', async () => {
+    const onRefresh = vi.fn()
     vi.mocked(checkForNotificationChanges).mockResolvedValue({
       hasChanges: false,
       pollIntervalSeconds: 60,
@@ -81,17 +82,26 @@ describe('SmartRefreshController', () => {
     const controller = new SmartRefreshController({
       token: 'token',
       org: 'acme',
-      onRefresh: vi.fn(),
+      onRefresh,
       degradedIntervalMs: 5_000,
+      debounceMs: 1_000,
     })
 
     controller.start()
+    // First poll at 60s
     await vi.advanceTimersByTimeAsync(60_000)
+    // Debounce fires after 1s
+    await vi.advanceTimersByTimeAsync(1_000)
 
+    expect(onRefresh).toHaveBeenCalledOnce()
     expect(checkForNotificationChanges).toHaveBeenCalledTimes(1)
 
+    // Degraded poll at 5s
     await vi.advanceTimersByTimeAsync(5_000)
+    // Debounce fires after 1s
+    await vi.advanceTimersByTimeAsync(1_000)
 
+    expect(onRefresh).toHaveBeenCalledTimes(2)
     expect(checkForNotificationChanges).toHaveBeenCalledTimes(2)
   })
 

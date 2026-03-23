@@ -82,6 +82,7 @@ export class SmartRefreshController {
     }
 
     if (result.notificationsUnavailable) {
+      this.triggerRefresh()
       this.scheduleNotificationPoll(this.config.degradedIntervalMs / 1000)
       return
     }

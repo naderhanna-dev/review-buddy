@@ -1064,6 +1064,15 @@ function App() {
                 <li>Commit statuses: Read (required for PR check status icons)</li>
                 <li>Administration: Read (optional, enables team-assigned PR signals)</li>
               </ul>
+              <p>
+                For <strong>live refresh</strong> (~60s), use a{' '}
+                <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer">
+                  classic token
+                </a>
+                {' '}with <strong>repo</strong> and <strong>notifications</strong> scopes, then
+                authorize it for <strong>MaintainX SSO</strong>. Fine-grained tokens use
+                2-minute polling instead (still efficient via ETag caching).
+              </p>
             </div>
             {teamSignalsUnavailable ? (
               <p className="helper-copy warning-copy">
