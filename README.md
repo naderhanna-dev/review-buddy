@@ -1,4 +1,4 @@
-# ReviewRadar App
+# ReviewRadar
 
 ReviewRadar is a small React + Vite webapp that helps you triage pull requests by attention level.
 It fetches PRs scoped to you in the selected org (not all org PRs).
@@ -8,13 +8,13 @@ It fetches PRs scoped to you in the selected org (not all org PRs).
 1. Install dependencies:
 
 ```bash
-npm install
+cd app && npm install
 ```
 
 2. Start development server:
 
 ```bash
-npm run dev
+cd app && npm run dev
 ```
 
 3. Open the app, then configure:
@@ -92,7 +92,7 @@ Each PR row also shows a GitHub-style checks icon:
 
 ## Commands
 
-- `npm run dev` - start dev server
-- `npm run build` - type-check and build production bundle
-- `npm run lint` - run ESLint
-- `npm run test` - run unit tests (Vitest)
+- `cd app && npm run dev` - start dev server
+- `cd app && npm run build` - type-check and build production bundle
+- `cd app && npm run lint` - run ESLint
+- `cd app && npm run test` - run unit tests (Vitest)
