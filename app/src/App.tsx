@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   classifyPullRequest,
@@ -49,6 +49,8 @@ type StalePreference = 'stale' | 'active'
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_MAX_PAGES = 10
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000
+const REFRESH_POLL_MS = 5 * 60 * 1000
+const REFRESH_FOCUS_COOLDOWN_MS = 15 * 1000
 
 const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'stalePreferences', string> = {
   token: 'review-radar.pat',
@@ -106,6 +108,26 @@ function readStalePreferences(): Record<string, StalePreference> {
   } catch {
     return {}
   }
+}
+
+function formatRefreshAge(timestampMs: number, nowMs: number): string {
+  const diffSeconds = Math.max(0, Math.floor((nowMs - timestampMs) / 1000))
+
+  if (diffSeconds < 5) {
+    return 'just now'
+  }
+
+  if (diffSeconds < 60) {
+    return `${diffSeconds}s ago`
+  }
+
+  const diffMinutes = Math.floor(diffSeconds / 60)
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60)
+  return `${diffHours}h ago`
 }
 
 async function apiFetch<T>(url: string, token: string): Promise<T> {
@@ -550,6 +572,11 @@ function App() {
   })
   const [isStaleSectionOpen, setIsStaleSectionOpen] = useState(false)
   const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null)
+  const [refreshTick, setRefreshTick] = useState(0)
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const isLoadingRef = useRef(false)
+  const lastVisibilityRefreshAtRef = useRef(0)
 
   function resolveTheme(preference: ThemePreference): 'dark' | 'light' {
     if (preference === 'dark') {
@@ -583,6 +610,20 @@ function App() {
   }, [themePreference])
 
   useEffect(() => {
+    isLoadingRef.current = isLoading
+  }, [isLoading])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now())
+    }, 30 * 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!isConnectionPanelOpen) {
       return
     }
@@ -598,6 +639,60 @@ function App() {
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [isConnectionPanelOpen])
+
+  useEffect(() => {
+    if (!token || !org) {
+      return
+    }
+
+    function triggerRefreshIfReady(): void {
+      if (document.visibilityState !== 'visible' || isLoadingRef.current) {
+        return
+      }
+
+      setRefreshTick((current) => current + 1)
+    }
+
+    const intervalId = window.setInterval(triggerRefreshIfReady, REFRESH_POLL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [org, token])
+
+  useEffect(() => {
+    if (!token || !org) {
+      return
+    }
+
+    function triggerFocusRefresh(): void {
+      if (document.visibilityState !== 'visible' || isLoadingRef.current) {
+        return
+      }
+
+      const now = Date.now()
+      if (now - lastVisibilityRefreshAtRef.current < REFRESH_FOCUS_COOLDOWN_MS) {
+        return
+      }
+
+      lastVisibilityRefreshAtRef.current = now
+      setRefreshTick((current) => current + 1)
+    }
+
+    function handleVisibilityChange(): void {
+      if (document.visibilityState === 'visible') {
+        triggerFocusRefresh()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', triggerFocusRefresh)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', triggerFocusRefresh)
+    }
+  }, [org, token])
 
   useEffect(() => {
     function handleGlobalClick(event: MouseEvent): void {
@@ -663,6 +758,7 @@ function App() {
           setNeedsAttention(classified.needsAttention)
           setRelatedToYou(classified.relatedToYou)
           setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
+          setLastRefreshedAt(Date.now())
         }
       } catch (loadError) {
         if (!ignore) {
@@ -687,7 +783,7 @@ function App() {
     return () => {
       ignore = true
     }
-  }, [org, stalePreferences, token, viewedMap])
+  }, [org, refreshTick, stalePreferences, token, viewedMap])
 
   function handleSaveConfig(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault()
@@ -760,6 +856,11 @@ function App() {
 
   const activeTheme = resolveTheme(themePreference)
   const hasSavedConnection = Boolean(token && org)
+  const refreshLabel = isLoading
+    ? 'Refreshing...'
+    : lastRefreshedAt
+      ? `Last updated ${formatRefreshAge(lastRefreshedAt, nowMs)}`
+      : 'Not refreshed yet'
 
   return (
     <main className="app-shell">
@@ -777,6 +878,7 @@ function App() {
       <header className="page-header">
         <h1>ReviewRadar</h1>
         <p>Pull requests ranked by what needs your attention first.</p>
+        <p className="refresh-meta">{refreshLabel}</p>
       </header>
 
       <section className="section-card">

@@ -49,6 +49,12 @@
   color: var(--muted);
 }
 
+.refresh-meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .config-form {
   padding: 1rem;
   display: grid;

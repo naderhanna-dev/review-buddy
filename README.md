@@ -96,3 +96,9 @@ Each PR row also shows a GitHub-style checks icon:
 - `cd app && npm run build` - type-check and build production bundle
 - `cd app && npm run lint` - run ESLint
 - `cd app && npm run test` - run unit tests (Vitest)
+
+## Refresh behavior
+
+- The app polls for updates every 5 minutes while the tab is visible.
+- The app also refreshes when the tab/window becomes active again.
+- Header shows a live "Last updated ..." freshness label.

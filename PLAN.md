@@ -27,6 +27,8 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - Stale utility: auto-stale by last update (30d), manual stale/"Not stale" overrides, persisted locally.
 - Row safety UX: stale actions are in a 3-dots overflow menu to prevent accidental clicks.
 - Documentation location: project README is in repo root.
+- Data freshness: poll every 5 minutes while visible and refresh on tab focus/visibility return.
+- Header displays live last-refresh age.
 
 ## PR Classification Rules
 
