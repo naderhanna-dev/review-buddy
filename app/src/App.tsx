@@ -148,6 +148,15 @@ async function apiFetch<T>(url: string, token: string): Promise<T> {
       throw new Error('Access forbidden or rate limit hit. Retry in a few minutes.')
     }
 
+    if (response.status === 422) {
+      throw new Error(
+        'Token not authorized for this org. ' +
+          'The Resource owner cannot be changed on an existing token — ' +
+          'regenerate it at github.com/settings/personal-access-tokens/new ' +
+          'and set Resource owner to the org you configured in ReviewRadar.',
+      )
+    }
+
     throw new Error(`GitHub request failed (${response.status}).`)
   }
 
@@ -558,7 +567,7 @@ function App() {
     () => readStalePreferences(),
   )
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<React.ReactNode>('')
   const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState(false)
   const [stalePrs, setStalePrs] = useState<PullRequest[]>([])
   const [yourPrs, setYourPrs] = useState<PullRequest[]>([])
@@ -771,7 +780,25 @@ function App() {
         if (!ignore) {
           const message =
             loadError instanceof Error ? loadError.message : 'Failed to load pull requests.'
-          setError(message)
+
+          if (message.startsWith('Token not authorized for this org')) {
+            setError(
+              <>
+                Token not authorized for this org. The Resource owner cannot be changed on an
+                existing token &mdash;{' '}
+                <a
+                  href="https://github.com/settings/personal-access-tokens/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  regenerate it
+                </a>{' '}
+                and set Resource owner to the org you configured in ReviewRadar.
+              </>,
+            )
+          } else {
+            setError(message)
+          }
           setStalePrs([])
           setYourPrs([])
           setNeedsAttention([])
@@ -1077,12 +1104,16 @@ function App() {
             </form>
             <div className="helper-copy">
               <p>
-                PAT is stored in local storage for this browser profile.{' '}
-                <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer">
+                PAT is stored in local storage for this browser profile.
+              </p>
+              <p>
+                <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">
                   Create a fine-grained PAT
                 </a>
-                , switch the Resource Owner to match the organization, and grant these
-                permissions:
+                {' '}and set <strong>Resource owner</strong> to <strong>MaintainX</strong> (the
+                Resource owner cannot be changed after creation — if your existing token uses
+                your personal account, you need to generate a new one). Then select{' '}
+                <strong>All repositories</strong> and grant these permissions:
               </p>
               <ul>
                 <li>Pull requests: Read (required)</li>
