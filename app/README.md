@@ -20,6 +20,7 @@ npm run dev
 3. Open the app, then configure:
 - GitHub organization (single org scope)
 - Personal access token (PAT)
+- After saving, the connection panel auto-collapses; use `Edit settings` to update.
 
 ## Fine-grained PAT permissions
 

@@ -246,6 +246,7 @@ function App() {
   const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([])
   const [relatedToYou, setRelatedToYou] = useState<PullRequest[]>([])
   const [themePreference, setThemePreference] = useState<ThemePreference>('system')
+  const [isConnectionPanelOpen, setIsConnectionPanelOpen] = useState(true)
 
   function resolveTheme(preference: ThemePreference): 'dark' | 'light' {
     if (preference === 'dark') {
@@ -278,6 +279,7 @@ function App() {
     setOrg(storedOrg)
     setOrgInput(storedOrg)
     setViewedMap(parsedViewed)
+    setIsConnectionPanelOpen(!(storedToken && storedOrg))
 
     if (
       storedTheme === 'dark' ||
@@ -306,6 +308,12 @@ function App() {
       mediaQuery.removeEventListener('change', applyTheme)
     }
   }, [themePreference])
+
+  useEffect(() => {
+    if (!token || !org) {
+      setIsConnectionPanelOpen(true)
+    }
+  }, [org, token])
 
   useEffect(() => {
     if (!token || !org) {
@@ -360,6 +368,7 @@ function App() {
     localStorage.setItem(STORAGE_KEYS.org, nextOrg)
     setToken(nextToken)
     setOrg(nextOrg)
+    setIsConnectionPanelOpen(false)
   }
 
   function handleViewed(repository: string, number: number): void {
@@ -380,6 +389,7 @@ function App() {
   }
 
   const activeTheme = resolveTheme(themePreference)
+  const hasSavedConnection = Boolean(token && org)
 
   return (
     <main className="app-shell">
@@ -391,40 +401,55 @@ function App() {
       <section className="section-card">
         <div className="section-header">
           <h2>Connection</h2>
+          <button
+            type="button"
+            className="section-action"
+            aria-expanded={isConnectionPanelOpen}
+            onClick={() => setIsConnectionPanelOpen((current) => !current)}
+          >
+            {isConnectionPanelOpen ? 'Hide settings' : 'Edit settings'}
+          </button>
         </div>
-        <form className="config-form" onSubmit={handleSaveConfig}>
-          <label>
-            GitHub organization
-            <input
-              type="text"
-              value={orgInput}
-              onChange={(event) => setOrgInput(event.target.value)}
-              placeholder="your-org"
-              autoComplete="organization"
-            />
-          </label>
-          <label>
-            Personal access token
-            <input
-              type="password"
-              value={tokenInput}
-              onChange={(event) => setTokenInput(event.target.value)}
-              placeholder="github_pat_..."
-              autoComplete="off"
-            />
-          </label>
-          <button type="submit">Save and refresh</button>
-        </form>
-        <p className="helper-copy">
-          PAT is stored in local storage for this browser profile. Fine-grained permissions:
-          Pull requests (Read) required, Members (Read) optional for team-based signals.
-        </p>
-        {teamSignalsUnavailable ? (
-          <p className="helper-copy warning-copy">
-            Team permissions are unavailable for this token. Showing direct-review and
-            activity-based signals only.
-          </p>
-        ) : null}
+        {!isConnectionPanelOpen && hasSavedConnection ? (
+          <p className="connection-summary">Connected to {org} with saved PAT.</p>
+        ) : (
+          <>
+            <form className="config-form" onSubmit={handleSaveConfig}>
+              <label>
+                GitHub organization
+                <input
+                  type="text"
+                  value={orgInput}
+                  onChange={(event) => setOrgInput(event.target.value)}
+                  placeholder="your-org"
+                  autoComplete="organization"
+                />
+              </label>
+              <label>
+                Personal access token
+                <input
+                  type="password"
+                  value={tokenInput}
+                  onChange={(event) => setTokenInput(event.target.value)}
+                  placeholder="github_pat_..."
+                  autoComplete="off"
+                />
+              </label>
+              <button type="submit">Save and refresh</button>
+            </form>
+            <p className="helper-copy">
+              PAT is stored in local storage for this browser profile. Fine-grained
+              permissions: Pull requests (Read) required, Members (Read) optional for
+              team-based signals.
+            </p>
+            {teamSignalsUnavailable ? (
+              <p className="helper-copy warning-copy">
+                Team permissions are unavailable for this token. Showing direct-review and
+                activity-based signals only.
+              </p>
+            ) : null}
+          </>
+        )}
       </section>
 
       <section className="section-card">
