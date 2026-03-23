@@ -50,8 +50,11 @@ If Commit statuses read is missing, PR check icons fall back to pending.
 The app builds candidates from open PRs in your org where at least one is true:
 - You are directly requested as reviewer.
 - You have already reviewed the PR.
-- One of your teams is requested (when Administration read is available).
+- One of your teams is requested (when Members read is available).
 - You previously opened the PR from ReviewRadar (local viewed tracker).
+
+Only open PRs are displayed in sections; merged and closed PRs are excluded automatically.
+Locally tracked PR keys that are no longer returned in the open candidate set are cleaned up.
 
 ## Classification behavior
 

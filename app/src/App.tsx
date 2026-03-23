@@ -41,6 +41,7 @@ type ClassifiedPullRequests = {
   relatedToYou: PullRequest[]
   stalePrs: PullRequest[]
   teamSignalsUnavailable: boolean
+  cleanupKeys: string[]
 }
 
 type ThemePreference = 'system' | 'dark' | 'light'
@@ -234,7 +235,13 @@ async function fetchAndClassifyPullRequests(
     }
   }
 
-  for (const key of Object.keys(viewedMap)) {
+  const trackedKeys = new Set<string>([
+    ...Object.keys(viewedMap),
+    ...Object.keys(stalePreferences),
+  ])
+  const cleanupKeys: string[] = []
+
+  for (const key of trackedKeys) {
     const [repository, number] = key.split('#')
     if (!repository || !number) {
       continue
@@ -244,7 +251,10 @@ async function fetchAndClassifyPullRequests(
       continue
     }
 
-    pullUrls.add(`https://api.github.com/repos/${repository}/pulls/${number}`)
+    const pullUrl = `https://api.github.com/repos/${repository}/pulls/${number}`
+    if (!pullUrls.has(pullUrl)) {
+      cleanupKeys.push(key)
+    }
   }
 
   const pullsWithReviews = await Promise.all(
@@ -286,6 +296,7 @@ async function fetchAndClassifyPullRequests(
 
   for (const { pull, reviews, checkState } of pullsWithReviews) {
     const viewKey = prViewKey(pull.base.repo.full_name, pull.number)
+
     const classification = classifyPullRequest(
       pull,
       reviews,
@@ -336,6 +347,7 @@ async function fetchAndClassifyPullRequests(
     relatedToYou: sortByUpdatedDesc(relatedToYou),
     stalePrs: sortByUpdatedDesc(stalePrs),
     teamSignalsUnavailable,
+    cleanupKeys,
   }
 }
 
@@ -775,6 +787,27 @@ function App() {
           setRelatedToYou(classified.relatedToYou)
           setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
           setLastRefreshedAt(Date.now())
+
+          if (classified.cleanupKeys.length > 0) {
+            setViewedMap((current) => {
+              const next = { ...current }
+              for (const key of classified.cleanupKeys) {
+                delete next[key]
+              }
+              localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next))
+              viewedMapRef.current = next
+              return next
+            })
+
+            setStalePreferences((current) => {
+              const next = { ...current }
+              for (const key of classified.cleanupKeys) {
+                delete next[key]
+              }
+              localStorage.setItem(STORAGE_KEYS.stalePreferences, JSON.stringify(next))
+              return next
+            })
+          }
         }
       } catch (loadError) {
         if (!ignore) {
