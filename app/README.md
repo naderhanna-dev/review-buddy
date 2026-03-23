@@ -65,11 +65,24 @@ Each PR row also shows a GitHub-style checks icon:
 - PRs requested from teams you belong to.
 - PRs you looked at without leaving a review, then received updates.
 
+### Stale PRs
+- Auto-stale when `updated_at` is older than 30 days.
+- Manual controls on each row:
+  - `Mark stale` hides immediately into `Stale PRs`.
+  - `Not stale` force-shows a stale PR back in active sections.
+  - `Use auto rule` removes a manual force-show override.
+- `Stale PRs` section is collapsed by default at the bottom.
+
 ## Local "viewed" tracking
 
 - When you click a PR title in ReviewRadar, the app stores a local "viewed" timestamp.
 - Storage key: `review-radar.viewed` in browser local storage.
 - This is device/browser-local and not synced to GitHub.
+
+## Local stale preferences
+
+- Storage key: `review-radar.stalePreferences` in browser local storage.
+- Values are per PR key (`owner/repo#number`) with `stale` or `active` override.
 
 ## Theme
 

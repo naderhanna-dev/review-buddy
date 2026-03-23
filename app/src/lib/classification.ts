@@ -16,6 +16,7 @@ export type PullRequest = {
   updatedAtIso: string
   url: string
   checkState: 'success' | 'pending' | 'failure'
+  staleState?: 'auto' | 'manual'
   stateLabel: string
   stateClass: string
   reason: string

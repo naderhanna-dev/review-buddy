@@ -39,19 +39,23 @@ type ClassifiedPullRequests = {
   yourPrs: PullRequest[]
   needsAttention: PullRequest[]
   relatedToYou: PullRequest[]
+  stalePrs: PullRequest[]
   teamSignalsUnavailable: boolean
 }
 
 type ThemePreference = 'system' | 'dark' | 'light'
+type StalePreference = 'stale' | 'active'
 
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_MAX_PAGES = 10
+const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000
 
-const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme', string> = {
+const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'stalePreferences', string> = {
   token: 'review-radar.pat',
   org: 'review-radar.org',
   viewed: 'review-radar.viewed',
   theme: 'review-radar.theme',
+  stalePreferences: 'review-radar.stalePreferences',
 }
 
 function readStorageItem(key: string): string {
@@ -84,6 +88,26 @@ function readThemePreference(): ThemePreference {
   return 'system'
 }
 
+function readStalePreferences(): Record<string, StalePreference> {
+  const raw = readStorageItem(STORAGE_KEYS.stalePreferences)
+  if (!raw) {
+    return {}
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string>
+    const next: Record<string, StalePreference> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      if (value === 'stale' || value === 'active') {
+        next[key] = value
+      }
+    }
+    return next
+  } catch {
+    return {}
+  }
+}
+
 async function apiFetch<T>(url: string, token: string): Promise<T> {
   const response = await fetch(url, {
     headers: {
@@ -112,6 +136,7 @@ async function fetchAndClassifyPullRequests(
   org: string,
   token: string,
   viewedMap: Record<string, number>,
+  stalePreferences: Record<string, StalePreference>,
 ): Promise<ClassifiedPullRequests> {
   const me = await apiFetch<GitHubUser>('https://api.github.com/user', token)
 
@@ -225,6 +250,8 @@ async function fetchAndClassifyPullRequests(
   const yourPrs: PullRequest[] = []
   const needsAttention: PullRequest[] = []
   const relatedToYou: PullRequest[] = []
+  const stalePrs: PullRequest[] = []
+  const nowMs = Date.now()
 
   for (const { pull, reviews, checkState } of pullsWithReviews) {
     const viewKey = prViewKey(pull.base.repo.full_name, pull.number)
@@ -236,18 +263,39 @@ async function fetchAndClassifyPullRequests(
       viewedMap[viewKey],
     )
 
+    const stalePreference = stalePreferences[viewKey]
+    const isAutoStale = nowMs - new Date(pull.updated_at).getTime() >= STALE_AFTER_MS
+    const isStale =
+      stalePreference === 'stale' || (stalePreference !== 'active' && isAutoStale)
+    const staleState = stalePreference === 'stale' ? 'manual' : 'auto'
+
     if (classification.yourPrs) {
-      yourPrs.push({ ...classification.yourPrs, checkState })
+      const nextPr = { ...classification.yourPrs, checkState }
+      if (isStale) {
+        stalePrs.push({ ...nextPr, staleState })
+      } else {
+        yourPrs.push(nextPr)
+      }
       continue
     }
 
     if (classification.needsAttention) {
-      needsAttention.push({ ...classification.needsAttention, checkState })
+      const nextPr = { ...classification.needsAttention, checkState }
+      if (isStale) {
+        stalePrs.push({ ...nextPr, staleState })
+      } else {
+        needsAttention.push(nextPr)
+      }
       continue
     }
 
     if (classification.relatedToYou) {
-      relatedToYou.push({ ...classification.relatedToYou, checkState })
+      const nextPr = { ...classification.relatedToYou, checkState }
+      if (isStale) {
+        stalePrs.push({ ...nextPr, staleState })
+      } else {
+        relatedToYou.push(nextPr)
+      }
     }
   }
 
@@ -255,6 +303,7 @@ async function fetchAndClassifyPullRequests(
     yourPrs: sortByUpdatedDesc(yourPrs),
     needsAttention: sortByUpdatedDesc(needsAttention),
     relatedToYou: sortByUpdatedDesc(relatedToYou),
+    stalePrs: sortByUpdatedDesc(stalePrs),
     teamSignalsUnavailable,
   }
 }
@@ -262,9 +311,19 @@ async function fetchAndClassifyPullRequests(
 function PullRequestRow({
   pr,
   onViewed,
+  stalePreference,
+  sectionKind,
+  onMarkStale,
+  onMarkActive,
+  onClearStalePreference,
 }: {
   pr: PullRequest
   onViewed: (repository: string, number: number) => void
+  stalePreference?: StalePreference
+  sectionKind: 'active' | 'stale'
+  onMarkStale: (repository: string, number: number) => void
+  onMarkActive: (repository: string, number: number) => void
+  onClearStalePreference: (repository: string, number: number) => void
 }) {
   const checkTitle =
     pr.checkState === 'success'
@@ -373,6 +432,38 @@ function PullRequestRow({
           </span>
         </span>
         <span className="updated-at">{pr.updatedAt}</span>
+        <div className="row-actions">
+          {sectionKind === 'stale' ? (
+            <>
+              <span className="stale-hint">
+                {pr.staleState === 'manual' ? 'Manually stale' : 'Auto stale (30d+)'}
+              </span>
+              <button
+                type="button"
+                className="row-action"
+                onClick={() => onMarkActive(pr.repository, pr.number)}
+              >
+                Not stale
+              </button>
+            </>
+          ) : stalePreference === 'active' ? (
+            <button
+              type="button"
+              className="row-action"
+              onClick={() => onClearStalePreference(pr.repository, pr.number)}
+            >
+              Use auto rule
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="row-action"
+              onClick={() => onMarkStale(pr.repository, pr.number)}
+            >
+              Mark stale
+            </button>
+          )}
+        </div>
       </div>
     </article>
   )
@@ -384,9 +475,13 @@ function App() {
   const [orgInput, setOrgInput] = useState(() => readStorageItem(STORAGE_KEYS.org))
   const [org, setOrg] = useState(() => readStorageItem(STORAGE_KEYS.org))
   const [viewedMap, setViewedMap] = useState<Record<string, number>>(() => readViewedMap())
+  const [stalePreferences, setStalePreferences] = useState<Record<string, StalePreference>>(
+    () => readStalePreferences(),
+  )
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState(false)
+  const [stalePrs, setStalePrs] = useState<PullRequest[]>([])
   const [yourPrs, setYourPrs] = useState<PullRequest[]>([])
   const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([])
   const [relatedToYou, setRelatedToYou] = useState<PullRequest[]>([])
@@ -398,6 +493,7 @@ function App() {
     const savedOrg = readStorageItem(STORAGE_KEYS.org)
     return !(savedToken && savedOrg)
   })
+  const [isStaleSectionOpen, setIsStaleSectionOpen] = useState(false)
 
   function resolveTheme(preference: ThemePreference): 'dark' | 'light' {
     if (preference === 'dark') {
@@ -455,6 +551,7 @@ function App() {
 
   useEffect(() => {
     if (!token || !org) {
+      setStalePrs([])
       setYourPrs([])
       setNeedsAttention([])
       setRelatedToYou([])
@@ -469,8 +566,14 @@ function App() {
       setError('')
 
       try {
-        const classified = await fetchAndClassifyPullRequests(org, token, viewedMap)
+        const classified = await fetchAndClassifyPullRequests(
+          org,
+          token,
+          viewedMap,
+          stalePreferences,
+        )
         if (!ignore) {
+          setStalePrs(classified.stalePrs)
           setYourPrs(classified.yourPrs)
           setNeedsAttention(classified.needsAttention)
           setRelatedToYou(classified.relatedToYou)
@@ -481,6 +584,7 @@ function App() {
           const message =
             loadError instanceof Error ? loadError.message : 'Failed to load pull requests.'
           setError(message)
+          setStalePrs([])
           setYourPrs([])
           setNeedsAttention([])
           setRelatedToYou([])
@@ -498,7 +602,7 @@ function App() {
     return () => {
       ignore = true
     }
-  }, [org, token, viewedMap])
+  }, [org, stalePreferences, token, viewedMap])
 
   function handleSaveConfig(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault()
@@ -520,6 +624,38 @@ function App() {
       localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next))
       return next
     })
+  }
+
+  function updateStalePreference(
+    repository: string,
+    number: number,
+    nextValue?: StalePreference,
+  ): void {
+    const key = prViewKey(repository, number)
+
+    setStalePreferences((current) => {
+      const next = { ...current }
+      if (nextValue) {
+        next[key] = nextValue
+      } else {
+        delete next[key]
+      }
+
+      localStorage.setItem(STORAGE_KEYS.stalePreferences, JSON.stringify(next))
+      return next
+    })
+  }
+
+  function handleMarkStale(repository: string, number: number): void {
+    updateStalePreference(repository, number, 'stale')
+  }
+
+  function handleMarkActive(repository: string, number: number): void {
+    updateStalePreference(repository, number, 'active')
+  }
+
+  function handleClearStalePreference(repository: string, number: number): void {
+    updateStalePreference(repository, number)
   }
 
   function toggleTheme(): void {
@@ -564,7 +700,16 @@ function App() {
             <p className="empty-state">Add org + PAT above to classify pull requests.</p>
           ) : null}
           {needsAttention.map((pr) => (
-            <PullRequestRow key={pr.id} pr={pr} onViewed={handleViewed} />
+            <PullRequestRow
+              key={pr.id}
+              pr={pr}
+              onViewed={handleViewed}
+              sectionKind="active"
+              stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+              onMarkStale={handleMarkStale}
+              onMarkActive={handleMarkActive}
+              onClearStalePreference={handleClearStalePreference}
+            />
           ))}
         </div>
       </section>
@@ -583,7 +728,16 @@ function App() {
             <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
           ) : null}
           {yourPrs.map((pr) => (
-            <PullRequestRow key={pr.id} pr={pr} onViewed={handleViewed} />
+            <PullRequestRow
+              key={pr.id}
+              pr={pr}
+              onViewed={handleViewed}
+              sectionKind="active"
+              stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+              onMarkStale={handleMarkStale}
+              onMarkActive={handleMarkActive}
+              onClearStalePreference={handleClearStalePreference}
+            />
           ))}
         </div>
       </section>
@@ -603,9 +757,59 @@ function App() {
             <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
           ) : null}
           {relatedToYou.map((pr) => (
-            <PullRequestRow key={pr.id} pr={pr} onViewed={handleViewed} />
+            <PullRequestRow
+              key={pr.id}
+              pr={pr}
+              onViewed={handleViewed}
+              sectionKind="active"
+              stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+              onMarkStale={handleMarkStale}
+              onMarkActive={handleMarkActive}
+              onClearStalePreference={handleClearStalePreference}
+            />
           ))}
         </div>
+      </section>
+
+      <section className="section-card">
+        <div className="section-header">
+          <h2>Stale PRs</h2>
+          <div className="section-header-tools">
+            <span>{stalePrs.length}</span>
+            <button
+              type="button"
+              className="section-action"
+              onClick={() => setIsStaleSectionOpen((current) => !current)}
+            >
+              {isStaleSectionOpen ? 'Hide' : 'Show'}
+            </button>
+          </div>
+        </div>
+        {isStaleSectionOpen ? (
+          <div>
+            {isLoading ? <p className="empty-state">Loading stale pull requests...</p> : null}
+            {!isLoading && !error && token && org && stalePrs.length === 0 ? (
+              <p className="empty-state">No stale pull requests right now.</p>
+            ) : null}
+            {!isLoading && !error && (!token || !org) ? (
+              <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
+            ) : null}
+            {stalePrs.map((pr) => (
+              <PullRequestRow
+                key={pr.id}
+                pr={pr}
+                onViewed={handleViewed}
+                sectionKind="stale"
+                stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+                onMarkStale={handleMarkStale}
+                onMarkActive={handleMarkActive}
+                onClearStalePreference={handleClearStalePreference}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="collapsed-hint">Hidden by default to keep active triage focused.</p>
+        )}
       </section>
 
       {isConnectionPanelOpen ? (
