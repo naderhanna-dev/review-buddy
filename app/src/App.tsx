@@ -15,6 +15,8 @@ import {
   type SearchIssuesResponse,
   type Team,
 } from './lib/github'
+import { etagCache } from './lib/etag-cache'
+import { SmartRefreshController } from './lib/smart-refresh'
 import './App.css'
 
 type ClassifiedPullRequests = {
@@ -32,7 +34,8 @@ type StalePreference = 'stale' | 'active'
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_MAX_PAGES = 10
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000
-const REFRESH_POLL_MS = 5 * 60 * 1000
+const FALLBACK_REFRESH_MS = 10 * 60 * 1000
+const NOTIFICATION_FALLBACK_MS = 2 * 60 * 1000
 const REFRESH_FOCUS_COOLDOWN_MS = 15 * 1000
 
 const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'stalePreferences', string> = {
@@ -121,7 +124,7 @@ async function fetchAndClassifyPullRequests(
   viewedMap: Record<string, number>,
   stalePreferences: Record<string, StalePreference>,
 ): Promise<ClassifiedPullRequests> {
-  const me = await apiFetch<GitHubUser>('https://api.github.com/user', token)
+  const me = await apiFetch<GitHubUser>('https://api.github.com/user', token, etagCache)
 
   async function searchPullRequestUrls(query: string): Promise<Set<string>> {
     const urls = new Set<string>()
@@ -131,6 +134,7 @@ async function fetchAndClassifyPullRequests(
       const response = await apiFetch<SearchIssuesResponse>(
         `https://api.github.com/search/issues?q=${encodedQuery}&sort=updated&order=desc&per_page=${SEARCH_PAGE_SIZE}&page=${page}`,
         token,
+        etagCache,
       )
 
       for (const item of response.items) {
@@ -151,7 +155,7 @@ async function fetchAndClassifyPullRequests(
   let teamSignalsUnavailable = false
 
   try {
-    teams = await apiFetch<Team[]>('https://api.github.com/user/teams?per_page=100', token)
+    teams = await apiFetch<Team[]>('https://api.github.com/user/teams?per_page=100', token, etagCache)
   } catch {
     teamSignalsUnavailable = true
   }
@@ -211,8 +215,8 @@ async function fetchAndClassifyPullRequests(
   const pullsWithReviews = await Promise.all(
     Array.from(pullUrls).map(async (pullUrl) => {
       const [pull, reviews] = await Promise.all([
-        apiFetch<PullDetails>(pullUrl, token),
-        apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token),
+        apiFetch<PullDetails>(pullUrl, token, etagCache),
+        apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token, etagCache),
       ])
 
       let checkState: PullRequest['checkState'] = 'pending'
@@ -221,6 +225,7 @@ async function fetchAndClassifyPullRequests(
         const combinedStatus = await apiFetch<CombinedStatusResponse>(
           `https://api.github.com/repos/${pull.base.repo.full_name}/commits/${pull.head.sha}/status`,
           token,
+          etagCache,
         )
 
         if (combinedStatus.state === 'success') {
@@ -624,18 +629,24 @@ function App() {
       return
     }
 
-    function triggerRefreshIfReady(): void {
-      if (document.visibilityState !== 'visible' || isLoadingRef.current) {
-        return
-      }
+    const controller = new SmartRefreshController({
+      token,
+      org,
+      onRefresh: () => {
+        if (document.visibilityState !== 'visible' || isLoadingRef.current) {
+          return
+        }
 
-      setRefreshTick((current) => current + 1)
-    }
+        setRefreshTick((current) => current + 1)
+      },
+      fallbackIntervalMs: FALLBACK_REFRESH_MS,
+      degradedIntervalMs: NOTIFICATION_FALLBACK_MS,
+    })
 
-    const intervalId = window.setInterval(triggerRefreshIfReady, REFRESH_POLL_MS)
+    controller.start()
 
     return () => {
-      window.clearInterval(intervalId)
+      controller.stop()
     }
   }, [org, token])
 
