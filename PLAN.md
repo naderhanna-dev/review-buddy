@@ -25,6 +25,7 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - PR checks signal: GitHub-style pass/pending/fail icon on each row.
 - Section precedence: authored/assigned PRs always go to "Your PRs" and never to "Needs your attention".
 - Stale utility: auto-stale by last update (30d), manual stale/"Not stale" overrides, persisted locally.
+- Row safety UX: stale actions are in a 3-dots overflow menu to prevent accidental clicks.
 
 ## PR Classification Rules
 

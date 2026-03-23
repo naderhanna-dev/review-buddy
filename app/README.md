@@ -67,7 +67,7 @@ Each PR row also shows a GitHub-style checks icon:
 
 ### Stale PRs
 - Auto-stale when `updated_at` is older than 30 days.
-- Manual controls on each row:
+- Manual controls are available from the row 3-dots menu:
   - `Mark stale` hides immediately into `Stale PRs`.
   - `Not stale` force-shows a stale PR back in active sections.
   - `Use auto rule` removes a manual force-show override.

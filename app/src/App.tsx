@@ -313,6 +313,9 @@ function PullRequestRow({
   onViewed,
   stalePreference,
   sectionKind,
+  openMenuKey,
+  onToggleMenu,
+  onCloseMenu,
   onMarkStale,
   onMarkActive,
   onClearStalePreference,
@@ -321,6 +324,9 @@ function PullRequestRow({
   onViewed: (repository: string, number: number) => void
   stalePreference?: StalePreference
   sectionKind: 'active' | 'stale'
+  openMenuKey: string | null
+  onToggleMenu: (menuKey: string) => void
+  onCloseMenu: () => void
   onMarkStale: (repository: string, number: number) => void
   onMarkActive: (repository: string, number: number) => void
   onClearStalePreference: (repository: string, number: number) => void
@@ -331,6 +337,9 @@ function PullRequestRow({
       : pr.checkState === 'failure'
         ? 'Checks failing'
         : 'Checks pending'
+
+  const menuKey = prViewKey(pr.repository, pr.number)
+  const isMenuOpen = openMenuKey === menuKey
 
   function handleViewed(): void {
     onViewed(pr.repository, pr.number)
@@ -432,37 +441,83 @@ function PullRequestRow({
           </span>
         </span>
         <span className="updated-at">{pr.updatedAt}</span>
-        <div className="row-actions">
-          {sectionKind === 'stale' ? (
-            <>
-              <span className="stale-hint">
-                {pr.staleState === 'manual' ? 'Manually stale' : 'Auto stale (30d+)'}
-              </span>
-              <button
-                type="button"
-                className="row-action"
-                onClick={() => onMarkActive(pr.repository, pr.number)}
+        <div className="row-menu-wrap">
+          <button
+            type="button"
+            className="row-menu-toggle"
+            aria-label="Open row actions"
+            aria-expanded={isMenuOpen}
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggleMenu(menuKey)
+            }}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+              <path d="M8 3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 6.5A1.5 1.5 0 1 1 8 6.5a1.5 1.5 0 0 1 0 3Zm0 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
+            </svg>
+          </button>
+
+          {isMenuOpen ? (
+            <div className="row-menu" onClick={(event) => event.stopPropagation()}>
+              {sectionKind === 'stale' ? (
+                <>
+                  <span className="row-menu-hint">
+                    {pr.staleState === 'manual' ? 'Manually stale' : 'Auto stale (30d+)'}
+                  </span>
+                  <button
+                    type="button"
+                    className="row-menu-item"
+                    onClick={() => {
+                      onMarkActive(pr.repository, pr.number)
+                      onCloseMenu()
+                    }}
+                  >
+                    Not stale
+                  </button>
+                </>
+              ) : stalePreference === 'active' ? (
+                <button
+                  type="button"
+                  className="row-menu-item"
+                  onClick={() => {
+                    onClearStalePreference(pr.repository, pr.number)
+                    onCloseMenu()
+                  }}
+                >
+                  Use auto rule
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="row-menu-item danger-item"
+                  onClick={() => {
+                    onMarkStale(pr.repository, pr.number)
+                    onCloseMenu()
+                  }}
+                >
+                  Mark stale
+                </button>
+              )}
+              <a
+                href={pr.url}
+                className="row-menu-item"
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => onCloseMenu()}
               >
-                Not stale
-              </button>
-            </>
-          ) : stalePreference === 'active' ? (
-            <button
-              type="button"
-              className="row-action"
-              onClick={() => onClearStalePreference(pr.repository, pr.number)}
-            >
-              Use auto rule
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="row-action"
-              onClick={() => onMarkStale(pr.repository, pr.number)}
-            >
-              Mark stale
-            </button>
-          )}
+                Open PR
+              </a>
+              <a
+                href={pr.repositoryUrl}
+                className="row-menu-item"
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => onCloseMenu()}
+              >
+                Open repo
+              </a>
+            </div>
+          ) : null}
         </div>
       </div>
     </article>
@@ -494,6 +549,7 @@ function App() {
     return !(savedToken && savedOrg)
   })
   const [isStaleSectionOpen, setIsStaleSectionOpen] = useState(false)
+  const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null)
 
   function resolveTheme(preference: ThemePreference): 'dark' | 'light' {
     if (preference === 'dark') {
@@ -542,6 +598,35 @@ function App() {
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [isConnectionPanelOpen])
+
+  useEffect(() => {
+    function handleGlobalClick(event: MouseEvent): void {
+      const target = event.target as HTMLElement | null
+      if (!target) {
+        return
+      }
+
+      if (target.closest('.row-menu') || target.closest('.row-menu-toggle')) {
+        return
+      }
+
+      setOpenRowMenuKey(null)
+    }
+
+    function handleEscape(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        setOpenRowMenuKey(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handleGlobalClick)
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClick)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [])
 
   useEffect(() => {
     if (!token || !org) {
@@ -658,6 +743,14 @@ function App() {
     updateStalePreference(repository, number)
   }
 
+  function handleToggleRowMenu(menuKey: string): void {
+    setOpenRowMenuKey((current) => (current === menuKey ? null : menuKey))
+  }
+
+  function handleCloseRowMenu(): void {
+    setOpenRowMenuKey(null)
+  }
+
   function toggleTheme(): void {
     const activeTheme = resolveTheme(themePreference)
     const nextPreference: ThemePreference = activeTheme === 'dark' ? 'light' : 'dark'
@@ -705,6 +798,9 @@ function App() {
               pr={pr}
               onViewed={handleViewed}
               sectionKind="active"
+              openMenuKey={openRowMenuKey}
+              onToggleMenu={handleToggleRowMenu}
+              onCloseMenu={handleCloseRowMenu}
               stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
               onMarkStale={handleMarkStale}
               onMarkActive={handleMarkActive}
@@ -733,6 +829,9 @@ function App() {
               pr={pr}
               onViewed={handleViewed}
               sectionKind="active"
+              openMenuKey={openRowMenuKey}
+              onToggleMenu={handleToggleRowMenu}
+              onCloseMenu={handleCloseRowMenu}
               stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
               onMarkStale={handleMarkStale}
               onMarkActive={handleMarkActive}
@@ -762,6 +861,9 @@ function App() {
               pr={pr}
               onViewed={handleViewed}
               sectionKind="active"
+              openMenuKey={openRowMenuKey}
+              onToggleMenu={handleToggleRowMenu}
+              onCloseMenu={handleCloseRowMenu}
               stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
               onMarkStale={handleMarkStale}
               onMarkActive={handleMarkActive}
@@ -800,6 +902,9 @@ function App() {
                 pr={pr}
                 onViewed={handleViewed}
                 sectionKind="stale"
+                openMenuKey={openRowMenuKey}
+                onToggleMenu={handleToggleRowMenu}
+                onCloseMenu={handleCloseRowMenu}
                 stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
                 onMarkStale={handleMarkStale}
                 onMarkActive={handleMarkActive}
