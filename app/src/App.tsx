@@ -25,7 +25,6 @@ type ClassifiedPullRequests = {
   relatedToYou: PullRequest[]
   stalePrs: PullRequest[]
   teamSignalsUnavailable: boolean
-  cleanupKeys: string[]
 }
 
 type ThemePreference = 'system' | 'dark' | 'light'
@@ -190,13 +189,7 @@ async function fetchAndClassifyPullRequests(
     }
   }
 
-  const trackedKeys = new Set<string>([
-    ...Object.keys(viewedMap),
-    ...Object.keys(stalePreferences),
-  ])
-  const cleanupKeys: string[] = []
-
-  for (const key of trackedKeys) {
+  for (const key of Object.keys(viewedMap)) {
     const [repository, number] = key.split('#')
     if (!repository || !number) {
       continue
@@ -205,11 +198,7 @@ async function fetchAndClassifyPullRequests(
     if (!repository.toLowerCase().startsWith(`${org.toLowerCase()}/`)) {
       continue
     }
-
-    const pullUrl = `https://api.github.com/repos/${repository}/pulls/${number}`
-    if (!pullUrls.has(pullUrl)) {
-      cleanupKeys.push(key)
-    }
+    pullUrls.add(`https://api.github.com/repos/${repository}/pulls/${number}`)
   }
 
   const pullsWithReviews = await Promise.all(
@@ -303,7 +292,6 @@ async function fetchAndClassifyPullRequests(
     relatedToYou: sortByUpdatedDesc(relatedToYou),
     stalePrs: sortByUpdatedDesc(stalePrs),
     teamSignalsUnavailable,
-    cleanupKeys,
   }
 }
 
@@ -749,51 +737,12 @@ function App() {
           setRelatedToYou(classified.relatedToYou)
           setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
           setLastRefreshedAt(Date.now())
-
-          if (classified.cleanupKeys.length > 0) {
-            setViewedMap((current) => {
-              const next = { ...current }
-              for (const key of classified.cleanupKeys) {
-                delete next[key]
-              }
-              localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next))
-              viewedMapRef.current = next
-              return next
-            })
-
-            setStalePreferences((current) => {
-              const next = { ...current }
-              for (const key of classified.cleanupKeys) {
-                delete next[key]
-              }
-              localStorage.setItem(STORAGE_KEYS.stalePreferences, JSON.stringify(next))
-              return next
-            })
-          }
         }
       } catch (loadError) {
         if (!ignore) {
           const message =
             loadError instanceof Error ? loadError.message : 'Failed to load pull requests.'
-
-          if (message.startsWith('Token not authorized for this org')) {
-            setError(
-              <>
-                Token not authorized for this org. The Resource owner cannot be changed on an
-                existing token &mdash;{' '}
-                <a
-                  href="https://github.com/settings/personal-access-tokens/new"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  regenerate it
-                </a>{' '}
-                and set Resource owner to the org you configured in ReviewRadar.
-              </>,
-            )
-          } else {
-            setError(message)
-          }
+          setError(message)
           setStalePrs([])
           setYourPrs([])
           setNeedsAttention([])
