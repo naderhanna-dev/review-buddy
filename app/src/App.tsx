@@ -41,6 +41,7 @@ type ClassifiedPullRequests = {
   relatedToYou: PullRequest[]
   stalePrs: PullRequest[]
   teamSignalsUnavailable: boolean
+  cleanupKeys: string[]
 }
 
 type ThemePreference = 'system' | 'dark' | 'light'
@@ -273,10 +274,17 @@ async function fetchAndClassifyPullRequests(
   const needsAttention: PullRequest[] = []
   const relatedToYou: PullRequest[] = []
   const stalePrs: PullRequest[] = []
+  const cleanupKeys: string[] = []
   const nowMs = Date.now()
 
   for (const { pull, reviews, checkState } of pullsWithReviews) {
     const viewKey = prViewKey(pull.base.repo.full_name, pull.number)
+
+    if (pull.state !== 'open') {
+      cleanupKeys.push(viewKey)
+      continue
+    }
+
     const classification = classifyPullRequest(
       pull,
       reviews,
@@ -327,6 +335,7 @@ async function fetchAndClassifyPullRequests(
     relatedToYou: sortByUpdatedDesc(relatedToYou),
     stalePrs: sortByUpdatedDesc(stalePrs),
     teamSignalsUnavailable,
+    cleanupKeys,
   }
 }
 
@@ -766,6 +775,27 @@ function App() {
           setRelatedToYou(classified.relatedToYou)
           setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
           setLastRefreshedAt(Date.now())
+
+          if (classified.cleanupKeys.length > 0) {
+            setViewedMap((current) => {
+              const next = { ...current }
+              for (const key of classified.cleanupKeys) {
+                delete next[key]
+              }
+              localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next))
+              viewedMapRef.current = next
+              return next
+            })
+
+            setStalePreferences((current) => {
+              const next = { ...current }
+              for (const key of classified.cleanupKeys) {
+                delete next[key]
+              }
+              localStorage.setItem(STORAGE_KEYS.stalePreferences, JSON.stringify(next))
+              return next
+            })
+          }
         }
       } catch (loadError) {
         if (!ignore) {

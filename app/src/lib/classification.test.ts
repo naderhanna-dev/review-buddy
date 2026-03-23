@@ -13,6 +13,8 @@ function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
     title: 'feat: improve review signal quality',
     html_url: 'https://github.com/acme/review-radar/pull/123',
     updated_at: '2026-03-20T11:00:00Z',
+    state: 'open',
+    merged_at: null,
     user: {
       login: 'author',
       avatar_url: 'https://avatars.githubusercontent.com/u/100?v=4',

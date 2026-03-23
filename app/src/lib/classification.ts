@@ -29,6 +29,8 @@ export type PullDetails = {
   title: string
   html_url: string
   updated_at: string
+  state: 'open' | 'closed'
+  merged_at: string | null
   draft?: boolean
   user: {
     login: string
