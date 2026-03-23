@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest'
-import { filterPrNotifications, hasRelevantPrChanges, type GitHubNotification } from './notifications'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  checkForNotificationChanges,
+  filterPrNotifications,
+  hasRelevantPrChanges,
+  type GitHubNotification,
+} from './notifications'
+
+vi.stubGlobal('fetch', vi.fn())
 
 function createNotification(overrides: Partial<GitHubNotification> = {}): GitHubNotification {
   return {
@@ -136,5 +143,164 @@ describe('hasRelevantPrChanges', () => {
     ]
     const result = hasRelevantPrChanges(notifications, 'acme')
     expect(result).toBe(false)
+  })
+})
+
+describe('checkForNotificationChanges', () => {
+  beforeEach(() => {
+    vi.mocked(fetch).mockReset()
+  })
+
+  it('should call GET /notifications with correct auth headers', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'x-poll-interval': '60' },
+      }),
+    )
+
+    await checkForNotificationChanges('my-token', 'acme')
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.github.com/notifications?all=false&participating=true',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer my-token',
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        }),
+      }),
+    )
+  })
+
+  it('should send If-Modified-Since when lastModified provided', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'x-poll-interval': '60' },
+      }),
+    )
+
+    await checkForNotificationChanges('my-token', 'acme', 'Mon, 23 Mar 2026 10:00:00 GMT')
+
+    const calledHeaders = vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit | undefined
+    const headers = calledHeaders?.headers as Record<string, string> | undefined
+    expect(headers?.['If-Modified-Since']).toBe('Mon, 23 Mar 2026 10:00:00 GMT')
+  })
+
+  it('should return hasChanges: false on 304', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 304,
+      headers: new Headers({ 'x-poll-interval': '60' }),
+    } as Response)
+
+    const result = await checkForNotificationChanges('my-token', 'acme')
+
+    expect(result.hasChanges).toBe(false)
+    expect(result.pollIntervalSeconds).toBe(60)
+  })
+
+  it('should return hasChanges: true on 200 with PR notifications', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify([
+          createNotification({
+            id: '1',
+            subject: { type: 'PullRequest', url: 'https://api.github.com/repos/acme/repo/pulls/1', title: 'PR' },
+            repository: { full_name: 'acme/repo' },
+            reason: 'review_requested',
+          }),
+        ]),
+        { status: 200, headers: { 'x-poll-interval': '60' } },
+      ),
+    )
+
+    const result = await checkForNotificationChanges('my-token', 'acme')
+
+    expect(result.hasChanges).toBe(true)
+  })
+
+  it('should return hasChanges: false on 200 with no PR notifications (only Issues)', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify([
+          createNotification({
+            id: '1',
+            subject: { type: 'Issue', url: 'https://api.github.com/repos/acme/repo/issues/1', title: 'Bug' },
+            repository: { full_name: 'acme/repo' },
+          }),
+        ]),
+        { status: 200, headers: { 'x-poll-interval': '60' } },
+      ),
+    )
+
+    const result = await checkForNotificationChanges('my-token', 'acme')
+
+    expect(result.hasChanges).toBe(false)
+  })
+
+  it('should return notificationsUnavailable: true on 401', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      headers: new Headers(),
+    } as Response)
+
+    const result = await checkForNotificationChanges('my-token', 'acme')
+
+    expect(result.notificationsUnavailable).toBe(true)
+    expect(result.hasChanges).toBe(false)
+    expect(result.pollIntervalSeconds).toBe(120)
+  })
+
+  it('should return notificationsUnavailable: true on 403', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      headers: new Headers(),
+    } as Response)
+
+    const result = await checkForNotificationChanges('my-token', 'acme')
+
+    expect(result.notificationsUnavailable).toBe(true)
+    expect(result.hasChanges).toBe(false)
+    expect(result.pollIntervalSeconds).toBe(120)
+  })
+
+  it('should return backed-off pollIntervalSeconds on 429, NOT notificationsUnavailable', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'retry-after': '120' }),
+    } as Response)
+
+    const result = await checkForNotificationChanges('my-token', 'acme')
+
+    expect(result.pollIntervalSeconds).toBeGreaterThanOrEqual(120)
+    expect(result.notificationsUnavailable).toBeFalsy()
+  })
+
+  it('should parse X-Poll-Interval from response header', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'x-poll-interval': '90' },
+      }),
+    )
+
+    const result = await checkForNotificationChanges('my-token', 'acme')
+
+    expect(result.pollIntervalSeconds).toBe(90)
+  })
+
+  it('should default pollIntervalSeconds to 60 when X-Poll-Interval missing', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify([]), { status: 200 }),
+    )
+
+    const result = await checkForNotificationChanges('my-token', 'acme')
+
+    expect(result.pollIntervalSeconds).toBe(60)
   })
 })
