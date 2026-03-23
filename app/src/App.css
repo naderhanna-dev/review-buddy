@@ -100,6 +100,24 @@
   font-size: 0.82rem;
 }
 
+.helper-copy p {
+  margin: 0 0 0.4rem;
+}
+
+.helper-copy a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.helper-copy ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.helper-copy li {
+  margin-bottom: 0.15rem;
+}
+
 .warning-copy {
   color: var(--warning-fg);
   background: var(--warning-bg);

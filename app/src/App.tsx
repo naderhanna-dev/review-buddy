@@ -551,7 +551,7 @@ function PullRequestRow({
 function App() {
   const [tokenInput, setTokenInput] = useState(() => readStorageItem(STORAGE_KEYS.token))
   const [token, setToken] = useState(() => readStorageItem(STORAGE_KEYS.token))
-  const [orgInput, setOrgInput] = useState(() => readStorageItem(STORAGE_KEYS.org))
+  const [orgInput, setOrgInput] = useState(() => readStorageItem(STORAGE_KEYS.org) || 'MaintainX')
   const [org, setOrg] = useState(() => readStorageItem(STORAGE_KEYS.org))
   const [viewedMap, setViewedMap] = useState<Record<string, number>>(() => readViewedMap())
   const [stalePreferences, setStalePreferences] = useState<Record<string, StalePreference>>(
@@ -883,7 +883,7 @@ function App() {
       </button>
 
       <header className="page-header">
-        <h1>ReviewRadar</h1>
+        <h1>Review Radar</h1>
         <p>Pull requests ranked by what needs your attention first.</p>
         <p className="refresh-meta">{refreshLabel}</p>
       </header>
@@ -1075,11 +1075,21 @@ function App() {
               </label>
               <button type="submit">Save and refresh</button>
             </form>
-            <p className="helper-copy">
-              PAT is stored in local storage for this browser profile. Fine-grained
-              permissions: Pull requests (Read) required, Members (Read) optional for
-              team-based signals.
-            </p>
+            <div className="helper-copy">
+              <p>
+                PAT is stored in local storage for this browser profile.{' '}
+                <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener noreferrer">
+                  Create a fine-grained PAT
+                </a>
+                , switch the Resource Owner to match the organization, and grant these
+                permissions:
+              </p>
+              <ul>
+                <li>Pull requests: Read (required)</li>
+                <li>Commit statuses: Read (required for PR check status icons)</li>
+                <li>Administration: Read (optional, enables team-assigned PR signals)</li>
+              </ul>
+            </div>
             {teamSignalsUnavailable ? (
               <p className="helper-copy warning-copy">
                 Team permissions are unavailable for this token. Showing direct-review and

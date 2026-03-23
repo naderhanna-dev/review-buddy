@@ -28,9 +28,9 @@ cd app && npm run dev
 Use a fine-grained token with:
 - Pull requests: **Read** (required)
 - Commit statuses: **Read** (required for PR check status icons)
-- Members: **Read** (optional, enables team-assigned PR signals)
+- Administration: **Read** (optional, enables team-assigned PR signals)
 
-If Members read is missing, the app still works and shows direct-reviewer and
+If Administration read is missing, the app still works and shows direct-reviewer and
 activity-based signals; only team-assigned signals are skipped.
 
 If Commit statuses read is missing, PR check icons fall back to pending.
@@ -40,7 +40,7 @@ If Commit statuses read is missing, PR check icons fall back to pending.
 The app builds candidates from open PRs in your org where at least one is true:
 - You are directly requested as reviewer.
 - You have already reviewed the PR.
-- One of your teams is requested (when Members read is available).
+- One of your teams is requested (when Administration read is available).
 - You previously opened the PR from ReviewRadar (local viewed tracker).
 
 ## Classification behavior
