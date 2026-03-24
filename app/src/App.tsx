@@ -353,11 +353,24 @@ async function fetchAndClassifyPullRequests(
           new Date(comment.created_at).getTime() > viewedAtMs,
       )
 
+    const latestReviewVerdict = reviews
+      .filter(
+        (review) =>
+          review.user?.login?.toLowerCase() !== normalizedLogin &&
+          Boolean(review.submitted_at) &&
+          (review.state === 'APPROVED' || review.state === 'CHANGES_REQUESTED'),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.submitted_at ?? 0).getTime() - new Date(a.submitted_at ?? 0).getTime(),
+      )[0]?.state as 'APPROVED' | 'CHANGES_REQUESTED' | undefined ?? null
+
     const activitySignals: ActivitySignals = {
       hasNewCommitsSinceMyReview,
       hasNewCommentsSinceMyReview,
       hasNewReviewsSinceViewed,
       hasNewCommentsSinceViewed,
+      latestReviewVerdict: latestReviewVerdict ?? null,
     }
 
     const classification = classifyPullRequest(
@@ -410,7 +423,9 @@ async function fetchAndClassifyPullRequests(
       'your-pr-new-reviews': 0,
       'your-pr-new-comments': 1,
       'your-pr-unseen-reviews': 2,
-      'your-pr-no-activity': 3,
+      'your-pr-changes-requested': 3,
+      'your-pr-approved': 4,
+      'your-pr-no-activity': 5,
     }),
     needsAttention: sortByPriorityAndUpdated(needsAttention, {
       'new-updates': 0,

@@ -615,6 +615,18 @@
   color: var(--status-info-fg);
 }
 
+.your-pr-approved {
+  background: color-mix(in srgb, var(--check-success) 15%, transparent);
+  border-color: var(--check-success);
+  color: var(--check-success);
+}
+
+.your-pr-changes-requested {
+  background: var(--status-warn-bg);
+  border-color: var(--status-warn-border);
+  color: var(--status-warn-fg);
+}
+
 .empty-state {
   margin: 0;
   padding: 0.9rem 1rem;

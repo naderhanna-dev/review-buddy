@@ -72,11 +72,14 @@ export type Review = {
   }
 }
 
+export type ReviewVerdict = 'APPROVED' | 'CHANGES_REQUESTED' | null
+
 export type ActivitySignals = {
   hasNewCommitsSinceMyReview: boolean
   hasNewCommentsSinceMyReview: boolean
   hasNewReviewsSinceViewed: boolean
   hasNewCommentsSinceViewed: boolean
+  latestReviewVerdict: ReviewVerdict
 }
 
 export type ClassifiedPullRequest = {
@@ -210,12 +213,26 @@ export function classifyPullRequest(
       }
     }
 
+    const verdict = activitySignals?.latestReviewVerdict ?? null
+    const verdictLabel =
+      verdict === 'APPROVED'
+        ? 'Approved'
+        : verdict === 'CHANGES_REQUESTED'
+          ? 'Changes requested'
+          : ''
+    const verdictClass =
+      verdict === 'APPROVED'
+        ? 'your-pr-approved'
+        : verdict === 'CHANGES_REQUESTED'
+          ? 'your-pr-changes-requested'
+          : 'your-pr-no-activity'
+
     if (isAuthoredByMe && isAssignedToMe) {
       return {
         yourPrs: {
           ...basePr,
-          stateLabel: '',
-          stateClass: 'your-pr-no-activity',
+          stateLabel: verdictLabel,
+          stateClass: verdictClass,
           reason: 'This PR is authored by you and assigned to you.',
         },
       }
@@ -225,8 +242,8 @@ export function classifyPullRequest(
       return {
         yourPrs: {
           ...basePr,
-          stateLabel: '',
-          stateClass: 'your-pr-no-activity',
+          stateLabel: verdictLabel,
+          stateClass: verdictClass,
           reason: 'This PR is authored by you.',
         },
       }
@@ -235,8 +252,8 @@ export function classifyPullRequest(
     return {
       yourPrs: {
         ...basePr,
-        stateLabel: '',
-        stateClass: 'your-pr-no-activity',
+        stateLabel: verdictLabel,
+        stateClass: verdictClass,
         reason: 'This PR is assigned to you.',
       },
     }

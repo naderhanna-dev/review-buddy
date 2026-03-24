@@ -14,6 +14,7 @@ const noActivity: ActivitySignals = {
   hasNewCommentsSinceMyReview: false,
   hasNewReviewsSinceViewed: false,
   hasNewCommentsSinceViewed: false,
+  latestReviewVerdict: null,
 }
 
 function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
@@ -134,6 +135,60 @@ describe('classifyPullRequest', () => {
 
     expect(result.yourPrs?.stateLabel).toBe('New comments')
     expect(result.yourPrs?.stateClass).toBe('your-pr-new-comments')
+  })
+
+  it('shows Approved verdict on authored PR when latest non-self review is APPROVED', () => {
+    const pull = createPull({
+      user: { login: 'me', avatar_url: 'x', html_url: 'y' },
+    })
+
+    const result = classifyPullRequest(
+      pull,
+      [],
+      'me',
+      new Set(),
+      new Date('2026-03-20T10:00:00Z').getTime(),
+      { ...noActivity, latestReviewVerdict: 'APPROVED' },
+    )
+
+    expect(result.yourPrs?.stateLabel).toBe('Approved')
+    expect(result.yourPrs?.stateClass).toBe('your-pr-approved')
+  })
+
+  it('shows Changes requested verdict on authored PR', () => {
+    const pull = createPull({
+      user: { login: 'me', avatar_url: 'x', html_url: 'y' },
+    })
+
+    const result = classifyPullRequest(
+      pull,
+      [],
+      'me',
+      new Set(),
+      new Date('2026-03-20T10:00:00Z').getTime(),
+      { ...noActivity, latestReviewVerdict: 'CHANGES_REQUESTED' },
+    )
+
+    expect(result.yourPrs?.stateLabel).toBe('Changes requested')
+    expect(result.yourPrs?.stateClass).toBe('your-pr-changes-requested')
+  })
+
+  it('prioritizes New reviews over review verdict', () => {
+    const pull = createPull({
+      user: { login: 'me', avatar_url: 'x', html_url: 'y' },
+    })
+
+    const result = classifyPullRequest(
+      pull,
+      [],
+      'me',
+      new Set(),
+      new Date('2026-03-20T10:00:00Z').getTime(),
+      { ...noActivity, hasNewReviewsSinceViewed: true, latestReviewVerdict: 'APPROVED' },
+    )
+
+    expect(result.yourPrs?.stateLabel).toBe('New reviews')
+    expect(result.yourPrs?.stateClass).toBe('your-pr-new-reviews')
   })
 
   it('marks PR as needs attention when user is requested reviewer and unreviewed', () => {
