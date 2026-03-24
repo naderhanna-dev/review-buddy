@@ -9,39 +9,18 @@ import {
   type PullRequest,
   type Review,
 } from './lib/classification'
+import {
+  apiFetch,
+  type CombinedStatusResponse,
+  type GitHubUser,
+  type PullComment,
+  type SearchIssuesResponse,
+  type Team,
+} from './lib/github'
+import { etagCache } from './lib/etag-cache'
+import { SmartRefreshController } from './lib/smart-refresh'
 import './App.css'
 
-type SearchIssueItem = {
-  pull_request?: {
-    url: string
-  }
-}
-
-type SearchIssuesResponse = {
-  items: SearchIssueItem[]
-}
-
-type GitHubUser = {
-  login: string
-}
-
-type Team = {
-  slug: string
-  organization: {
-    login: string
-  }
-}
-
-type CombinedStatusResponse = {
-  state: string
-}
-
-type PullComment = {
-  created_at: string
-  user?: {
-    login: string
-  }
-}
 
 type ClassifiedPullRequests = {
   yourPrs: PullRequest[]
@@ -49,7 +28,6 @@ type ClassifiedPullRequests = {
   relatedToYou: PullRequest[]
   stalePrs: PullRequest[]
   teamSignalsUnavailable: boolean
-  cleanupKeys: string[]
 }
 
 type ThemePreference = 'system' | 'dark' | 'light'
@@ -58,8 +36,9 @@ type StalePreference = 'stale' | 'active'
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_MAX_PAGES = 10
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000
-const REFRESH_POLL_MS = 5 * 60 * 1000
-const REFRESH_FOCUS_COOLDOWN_MS = 15 * 1000
+const FALLBACK_REFRESH_MS = 10 * 60 * 1000
+const NOTIFICATION_FALLBACK_MS = 2 * 60 * 1000
+const REFRESH_FOCUS_COOLDOWN_MS = 5 * 60 * 1000
 
 const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'stalePreferences', string> = {
   token: 'review-radar.pat',
@@ -153,38 +132,6 @@ function sortByPriorityAndUpdated(
   })
 }
 
-async function apiFetch<T>(url: string, token: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-  })
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error('Invalid token. Check PAT scope and retry.')
-    }
-
-    if (response.status === 403) {
-      throw new Error('Access forbidden or rate limit hit. Retry in a few minutes.')
-    }
-
-    if (response.status === 422) {
-      throw new Error(
-        'Token not authorized for this org. ' +
-          'The Resource owner cannot be changed on an existing token — ' +
-          'regenerate it at github.com/settings/personal-access-tokens/new ' +
-          'and set Resource owner to the org you configured in ReviewRadar.',
-      )
-    }
-
-    throw new Error(`GitHub request failed (${response.status}).`)
-  }
-
-  return (await response.json()) as T
-}
 
 async function fetchAndClassifyPullRequests(
   org: string,
@@ -192,7 +139,7 @@ async function fetchAndClassifyPullRequests(
   viewedMap: Record<string, number>,
   stalePreferences: Record<string, StalePreference>,
 ): Promise<ClassifiedPullRequests> {
-  const me = await apiFetch<GitHubUser>('https://api.github.com/user', token)
+  const me = await apiFetch<GitHubUser>('https://api.github.com/user', token, etagCache)
 
   async function searchPullRequestUrls(query: string): Promise<Set<string>> {
     const urls = new Set<string>()
@@ -202,6 +149,7 @@ async function fetchAndClassifyPullRequests(
       const response = await apiFetch<SearchIssuesResponse>(
         `https://api.github.com/search/issues?q=${encodedQuery}&sort=updated&order=desc&per_page=${SEARCH_PAGE_SIZE}&page=${page}`,
         token,
+        etagCache,
       )
 
       for (const item of response.items) {
@@ -222,7 +170,7 @@ async function fetchAndClassifyPullRequests(
   let teamSignalsUnavailable = false
 
   try {
-    teams = await apiFetch<Team[]>('https://api.github.com/user/teams?per_page=100', token)
+    teams = await apiFetch<Team[]>('https://api.github.com/user/teams?per_page=100', token, etagCache)
   } catch {
     teamSignalsUnavailable = true
   }
@@ -257,13 +205,7 @@ async function fetchAndClassifyPullRequests(
     }
   }
 
-  const trackedKeys = new Set<string>([
-    ...Object.keys(viewedMap),
-    ...Object.keys(stalePreferences),
-  ])
-  const cleanupKeys: string[] = []
-
-  for (const key of trackedKeys) {
+  for (const key of Object.keys(viewedMap)) {
     const [repository, number] = key.split('#')
     if (!repository || !number) {
       continue
@@ -272,19 +214,15 @@ async function fetchAndClassifyPullRequests(
     if (!repository.toLowerCase().startsWith(`${org.toLowerCase()}/`)) {
       continue
     }
-
-    const pullUrl = `https://api.github.com/repos/${repository}/pulls/${number}`
-    if (!pullUrls.has(pullUrl)) {
-      cleanupKeys.push(key)
-    }
+    pullUrls.add(`https://api.github.com/repos/${repository}/pulls/${number}`)
   }
 
   const pullsWithReviews = await Promise.all(
     Array.from(pullUrls).map(async (pullUrl) => {
       const [pull, reviews, pullComments] = await Promise.all([
-        apiFetch<PullDetails>(pullUrl, token),
-        apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token),
-        apiFetch<PullComment[]>(`${pullUrl}/comments?per_page=100`, token),
+        apiFetch<PullDetails>(pullUrl, token, etagCache),
+        apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token, etagCache),
+        apiFetch<PullComment[]>(`${pullUrl}/comments?per_page=100`, token, etagCache),
       ])
 
       let checkState: PullRequest['checkState'] = 'pending'
@@ -293,6 +231,7 @@ async function fetchAndClassifyPullRequests(
         const combinedStatus = await apiFetch<CombinedStatusResponse>(
           `https://api.github.com/repos/${pull.base.repo.full_name}/commits/${pull.head.sha}/status`,
           token,
+          etagCache,
         )
 
         if (combinedStatus.state === 'success') {
@@ -437,7 +376,6 @@ async function fetchAndClassifyPullRequests(
     relatedToYou: sortByUpdatedDesc(relatedToYou),
     stalePrs: sortByUpdatedDesc(stalePrs),
     teamSignalsUnavailable,
-    cleanupKeys,
   }
 }
 
@@ -765,18 +703,24 @@ function App() {
       return
     }
 
-    function triggerRefreshIfReady(): void {
-      if (document.visibilityState !== 'visible' || isLoadingRef.current) {
-        return
-      }
+    const controller = new SmartRefreshController({
+      token,
+      org,
+      onRefresh: () => {
+        if (document.visibilityState !== 'visible' || isLoadingRef.current) {
+          return
+        }
 
-      setRefreshTick((current) => current + 1)
-    }
+        setRefreshTick((current) => current + 1)
+      },
+      fallbackIntervalMs: FALLBACK_REFRESH_MS,
+      degradedIntervalMs: NOTIFICATION_FALLBACK_MS,
+    })
 
-    const intervalId = window.setInterval(triggerRefreshIfReady, REFRESH_POLL_MS)
+    controller.start()
 
     return () => {
-      window.clearInterval(intervalId)
+      controller.stop()
     }
   }, [org, token])
 
@@ -879,51 +823,12 @@ function App() {
           setRelatedToYou(classified.relatedToYou)
           setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
           setLastRefreshedAt(Date.now())
-
-          if (classified.cleanupKeys.length > 0) {
-            setViewedMap((current) => {
-              const next = { ...current }
-              for (const key of classified.cleanupKeys) {
-                delete next[key]
-              }
-              localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next))
-              viewedMapRef.current = next
-              return next
-            })
-
-            setStalePreferences((current) => {
-              const next = { ...current }
-              for (const key of classified.cleanupKeys) {
-                delete next[key]
-              }
-              localStorage.setItem(STORAGE_KEYS.stalePreferences, JSON.stringify(next))
-              return next
-            })
-          }
         }
       } catch (loadError) {
         if (!ignore) {
           const message =
             loadError instanceof Error ? loadError.message : 'Failed to load pull requests.'
-
-          if (message.startsWith('Token not authorized for this org')) {
-            setError(
-              <>
-                Token not authorized for this org. The Resource owner cannot be changed on an
-                existing token &mdash;{' '}
-                <a
-                  href="https://github.com/settings/personal-access-tokens/new"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  regenerate it
-                </a>{' '}
-                and set Resource owner to the org you configured in ReviewRadar.
-              </>,
-            )
-          } else {
-            setError(message)
-          }
+          setError(message)
           setStalePrs([])
           setYourPrs([])
           setNeedsAttention([])
@@ -1245,6 +1150,15 @@ function App() {
                 <li>Commit statuses: Read (required for PR check status icons)</li>
                 <li>Administration: Read (optional, enables team-assigned PR signals)</li>
               </ul>
+              <p>
+                For <strong>live refresh</strong> (~60s), use a{' '}
+                <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer">
+                  classic token
+                </a>
+                {' '}with <strong>repo</strong> and <strong>notifications</strong> scopes, then
+                authorize it for <strong>MaintainX SSO</strong>. Fine-grained tokens use
+                2-minute polling instead (still efficient via ETag caching).
+              </p>
             </div>
             {teamSignalsUnavailable ? (
               <p className="helper-copy warning-copy">

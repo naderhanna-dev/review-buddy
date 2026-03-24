@@ -23,22 +23,40 @@ cd app && npm run dev
 - Settings live in a hamburger-toggled sidebar (top-right).
 - After saving, the sidebar auto-closes; reopen via the hamburger icon to update.
 
-## Fine-grained PAT permissions
+## Token setup
 
-[Create a fine-grained token](https://github.com/settings/personal-access-tokens/new) and
-set **Resource owner** to **MaintainX** (not your personal account). The Resource owner
-cannot be changed after creation — if your existing token uses your personal account,
-you must regenerate it.
+ReviewRadar supports two token types. Both require the **Resource owner** set to
+**MaintainX** (not your personal account) and **All repositories** selected.
 
-Then select **All repositories** and grant the permissions listed below.
+### Option A — Fine-grained PAT (recommended for most users)
 
-![Token setup — Resource owner set to MaintainX](docs/token-setup.png)
+[Create a fine-grained token](https://github.com/settings/personal-access-tokens/new).
 
 **Repository permissions**:
 - Pull requests: **Read** (required)
 - Commit statuses: **Read** (required for PR check status icons)
 - Metadata: **Read** (auto-granted when any other repo permission is set)
 - Administration: **Read** (optional, enables team-assigned PR signals)
+
+Fine-grained tokens do not support the GitHub Notifications API, so the app uses
+**ETag-enhanced polling every 2 minutes** to detect changes. This is efficient —
+unchanged data returns HTTP 304 and costs minimal API quota.
+
+### Option B — Classic PAT (enables live refresh)
+
+[Create a classic token](https://github.com/settings/tokens/new) with these scopes:
+- **repo** (covers pull requests, commit statuses, and administration)
+- **notifications** (enables the Notifications API for near-instant change detection)
+
+After creation, authorize the token for **MaintainX SSO** — click
+"Configure SSO" next to the token and authorize the MaintainX organization.
+
+With a classic token the app polls the Notifications API every ~60 seconds
+(respecting GitHub's `X-Poll-Interval` header). When a PR change is detected,
+a full refresh triggers immediately. A 10-minute safety-net refresh runs
+regardless as a fallback.
+
+### Permission notes
 
 If Administration read is missing, the app still works and shows direct-reviewer and
 activity-based signals; only team-assigned signals are skipped.
@@ -251,6 +269,15 @@ as long as `serve` is installed globally on the new version.
 
 ## Refresh behavior
 
-- The app polls for updates every 5 minutes while the tab is visible.
-- The app also refreshes when the tab/window becomes active again.
+The app uses smart polling to stay up to date:
+
+- **With a classic PAT** (`notifications` scope): polls the GitHub Notifications
+  API every ~60 seconds. When a PR change is detected, a full data refresh
+  triggers immediately. A 10-minute safety-net refresh runs as a fallback.
+- **With a fine-grained PAT** (no notifications support): polls with ETag-enhanced
+  requests every 2 minutes. Unchanged data returns HTTP 304 (cheap).
+- **Tab focus/visibility**: the app also refreshes when the tab or window becomes
+  active again (with a 5-minute cooldown to avoid rate limit pressure).
+- All API requests use ETag conditional caching — subsequent fetches for unchanged
+  data return 304 Not Modified with no response body, saving bandwidth and API quota.
 - Header shows a live "Last updated ..." freshness label.
