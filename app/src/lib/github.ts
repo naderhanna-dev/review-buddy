@@ -1,5 +1,12 @@
 import { type EtagCache } from './etag-cache'
 
+export class RateLimitError extends Error {
+  constructor(message = 'Rate limit hit. Data will refresh when the limit resets.') {
+    super(message)
+    this.name = 'RateLimitError'
+  }
+}
+
 export type SearchIssueItem = {
   pull_request?: {
     url: string
@@ -61,8 +68,8 @@ export async function apiFetch<T>(url: string, token: string, cache?: EtagCache)
       throw new Error('Invalid token. Check PAT scope and retry.')
     }
 
-    if (response.status === 403) {
-      throw new Error('Access forbidden or rate limit hit. Retry in a few minutes.')
+    if (response.status === 403 || response.status === 429) {
+      throw new RateLimitError()
     }
 
     if (response.status === 422) {

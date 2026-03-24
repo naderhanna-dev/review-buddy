@@ -15,6 +15,7 @@ import {
   type CombinedStatusResponse,
   type GitHubUser,
   type PullComment,
+  RateLimitError,
   type SearchIssuesResponse,
   type Team,
 } from './lib/github'
@@ -736,7 +737,8 @@ function App() {
     () => readStalePreferences(),
   )
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<React.ReactNode>('')
+  const [errorToast, setErrorToast] = useState<string | null>(null)
+  const [rateLimitWarning, setRateLimitWarning] = useState(false)
   const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState(false)
   const [stalePrs, setStalePrs] = useState<PullRequest[]>([])
   const [yourPrs, setYourPrs] = useState<PullRequest[]>([])
@@ -944,7 +946,7 @@ function App() {
 
     async function loadAndClassifyPulls(): Promise<void> {
       setIsLoading(true)
-      setError('')
+      setErrorToast(null)
 
       try {
         const classified = await fetchAndClassifyPullRequests(
@@ -960,17 +962,17 @@ function App() {
           setRelatedToYou(classified.relatedToYou)
           setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
           setLastRefreshedAt(Date.now())
+          setRateLimitWarning(false)
         }
       } catch (loadError) {
         if (!ignore) {
-          const message =
-            loadError instanceof Error ? loadError.message : 'Failed to load pull requests.'
-          setError(message)
-          setStalePrs([])
-          setYourPrs([])
-          setNeedsAttention([])
-          setRelatedToYou([])
-          setTeamSignalsUnavailable(false)
+          if (loadError instanceof RateLimitError) {
+            setRateLimitWarning(true)
+          } else {
+            const message =
+              loadError instanceof Error ? loadError.message : 'Failed to load pull requests.'
+            setErrorToast(message)
+          }
         }
       } finally {
         if (!ignore) {
@@ -1109,7 +1111,7 @@ function App() {
           sectionKey="needsAttention"
           count={displayNeedsAttention.length}
           updatedCount={needsAttentionUpdatedCount}
-          statusLabel={isLoading ? 'Classifying...' : undefined}
+          statusLabel={isLoading && !lastRefreshedAt ? 'Classifying...' : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.needsAttention}
           onToggleSectionMenu={handleToggleSectionMenu}
@@ -1126,10 +1128,10 @@ function App() {
         />
         {isNeedsAttentionOpen ? (
           <div>
-            {!isLoading && !error && token && org && displayNeedsAttention.length === 0 ? (
+            {!isLoading && token && org && displayNeedsAttention.length === 0 ? (
               <p className="empty-state">Nothing currently needs your immediate attention.</p>
             ) : null}
-            {!isLoading && !error && (!token || !org) ? (
+            {!isLoading && (!token || !org) ? (
               <p className="empty-state">Add org + PAT above to classify pull requests.</p>
             ) : null}
             {displayNeedsAttention.map((pr) => (
@@ -1160,7 +1162,7 @@ function App() {
           sectionKey="yourPrs"
           count={displayYourPrs.length}
           updatedCount={yourPrsUpdatedCount}
-          statusLabel={isLoading ? 'Loading...' : undefined}
+          statusLabel={isLoading && !lastRefreshedAt ? 'Loading...' : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.yourPrs}
           onToggleSectionMenu={handleToggleSectionMenu}
@@ -1177,10 +1179,10 @@ function App() {
         />
         {isYourPrsOpen ? (
           <div>
-            {!isLoading && !error && token && org && displayYourPrs.length === 0 ? (
+            {!isLoading && token && org && displayYourPrs.length === 0 ? (
               <p className="empty-state">No assigned or authored pull requests right now.</p>
             ) : null}
-            {!isLoading && !error && (!token || !org) ? (
+            {!isLoading && (!token || !org) ? (
               <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
             ) : null}
             {displayYourPrs.map((pr) => (
@@ -1211,7 +1213,7 @@ function App() {
           sectionKey="relatedToYou"
           count={displayRelatedToYou.length}
           updatedCount={relatedToYouUpdatedCount}
-          statusLabel={isLoading ? 'Loading...' : undefined}
+          statusLabel={isLoading && !lastRefreshedAt ? 'Loading...' : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.relatedToYou}
           onToggleSectionMenu={handleToggleSectionMenu}
@@ -1228,11 +1230,10 @@ function App() {
         />
         {isRelatedToYouOpen ? (
           <div>
-            {error ? <p className="empty-state error-state">{error}</p> : null}
-            {!isLoading && !error && token && org && displayRelatedToYou.length === 0 ? (
+            {!isLoading && token && org && displayRelatedToYou.length === 0 ? (
               <p className="empty-state">No non-urgent related pull requests right now.</p>
             ) : null}
-            {!isLoading && !error && (!token || !org) ? (
+            {!isLoading && (!token || !org) ? (
               <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
             ) : null}
             {displayRelatedToYou.map((pr) => (
@@ -1278,11 +1279,10 @@ function App() {
         />
         {isStaleSectionOpen ? (
           <div>
-            {isLoading ? <p className="empty-state">Loading stale pull requests...</p> : null}
-            {!isLoading && !error && token && org && displayStalePrs.length === 0 ? (
+            {!isLoading && token && org && displayStalePrs.length === 0 ? (
               <p className="empty-state">No stale pull requests right now.</p>
             ) : null}
-            {!isLoading && !error && (!token || !org) ? (
+            {!isLoading && (!token || !org) ? (
               <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
             ) : null}
             {displayStalePrs.map((pr) => (
@@ -1407,6 +1407,17 @@ function App() {
           </svg>
         )}
       </button>
+
+      {rateLimitWarning ? (
+        <div className="toast toast-warning" role="status">
+          ⚠ Rate limit hit — showing cached data. Will refresh automatically.
+        </div>
+      ) : null}
+      {errorToast ? (
+        <div className="toast toast-error" role="alert">
+          ⚠ {errorToast}
+        </div>
+      ) : null}
     </main>
   )
 }

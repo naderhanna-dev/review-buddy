@@ -623,10 +623,6 @@
   font-size: 0.9rem;
 }
 
-.error-state {
-  color: var(--error-fg);
-}
-
 .theme-fab {
   position: fixed;
   right: 1rem;
@@ -641,6 +637,30 @@
   place-items: center;
   cursor: pointer;
   box-shadow: 0 8px 20px rgb(0 0 0 / 20%);
+}
+
+.toast {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+}
+
+.toast-warning {
+  background: var(--status-warn-bg);
+  border: 1px solid var(--status-warn-border);
+  color: var(--status-warn-fg);
+}
+
+.toast-error {
+  background: var(--status-danger-bg);
+  border: 1px solid var(--status-danger-border);
+  color: var(--status-danger-fg);
 }
 
 .theme-fab:hover {
