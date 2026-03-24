@@ -15,6 +15,7 @@ import {
   type CombinedStatusResponse,
   type GitHubUser,
   type PullComment,
+  RateLimitError,
   type SearchIssuesResponse,
   type Team,
 } from './lib/github'
@@ -352,11 +353,24 @@ async function fetchAndClassifyPullRequests(
           new Date(comment.created_at).getTime() > viewedAtMs,
       )
 
+    const latestReviewVerdict = reviews
+      .filter(
+        (review) =>
+          review.user?.login?.toLowerCase() !== normalizedLogin &&
+          Boolean(review.submitted_at) &&
+          (review.state === 'APPROVED' || review.state === 'CHANGES_REQUESTED'),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.submitted_at ?? 0).getTime() - new Date(a.submitted_at ?? 0).getTime(),
+      )[0]?.state as 'APPROVED' | 'CHANGES_REQUESTED' | undefined ?? null
+
     const activitySignals: ActivitySignals = {
       hasNewCommitsSinceMyReview,
       hasNewCommentsSinceMyReview,
       hasNewReviewsSinceViewed,
       hasNewCommentsSinceViewed,
+      latestReviewVerdict: latestReviewVerdict ?? null,
     }
 
     const classification = classifyPullRequest(
@@ -408,7 +422,10 @@ async function fetchAndClassifyPullRequests(
     yourPrs: sortByPriorityAndUpdated(yourPrs, {
       'your-pr-new-reviews': 0,
       'your-pr-new-comments': 1,
-      'your-pr-no-activity': 2,
+      'your-pr-unseen-reviews': 2,
+      'your-pr-changes-requested': 3,
+      'your-pr-approved': 4,
+      'your-pr-no-activity': 5,
     }),
     needsAttention: sortByPriorityAndUpdated(needsAttention, {
       'new-updates': 0,
@@ -425,6 +442,8 @@ function SectionHeader({
   title,
   sectionKey,
   count,
+  updatedCount,
+  statusLabel,
   openSectionMenuKey,
   sortPreference,
   onToggleSectionMenu,
@@ -434,6 +453,8 @@ function SectionHeader({
   title: string
   sectionKey: SectionKey
   count: number
+  updatedCount?: number
+  statusLabel?: string
   openSectionMenuKey: SectionKey | null
   sortPreference: SortPreference
   onToggleSectionMenu: (key: SectionKey) => void
@@ -446,7 +467,13 @@ function SectionHeader({
     <div className="section-header">
       <h2>{title}</h2>
       <div className="section-header-tools">
-        <span>{count}</span>
+        <span>
+          {count}
+          {updatedCount != null && updatedCount > 0 ? (
+            <span className="section-count-detail"> · {updatedCount} updated</span>
+          ) : null}
+        </span>
+        {statusLabel ? <span className="section-status-label">{statusLabel}</span> : null}
         {extraTools}
         <div className="section-menu-wrap">
           <button
@@ -725,7 +752,8 @@ function App() {
     () => readStalePreferences(),
   )
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<React.ReactNode>('')
+  const [errorToast, setErrorToast] = useState<string | null>(null)
+  const [rateLimitWarning, setRateLimitWarning] = useState(false)
   const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState(false)
   const [stalePrs, setStalePrs] = useState<PullRequest[]>([])
   const [yourPrs, setYourPrs] = useState<PullRequest[]>([])
@@ -740,6 +768,9 @@ function App() {
     return !(savedToken && savedOrg)
   })
   const [isStaleSectionOpen, setIsStaleSectionOpen] = useState(false)
+  const [isNeedsAttentionOpen, setIsNeedsAttentionOpen] = useState(true)
+  const [isYourPrsOpen, setIsYourPrsOpen] = useState(true)
+  const [isRelatedToYouOpen, setIsRelatedToYouOpen] = useState(true)
   const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null)
   const [openSectionMenuKey, setOpenSectionMenuKey] = useState<SectionKey | null>(null)
   const [sectionSortPreferences, setSectionSortPreferences] = useState<Record<SectionKey, SortPreference>>(
@@ -930,7 +961,7 @@ function App() {
 
     async function loadAndClassifyPulls(): Promise<void> {
       setIsLoading(true)
-      setError('')
+      setErrorToast(null)
 
       try {
         const classified = await fetchAndClassifyPullRequests(
@@ -946,17 +977,17 @@ function App() {
           setRelatedToYou(classified.relatedToYou)
           setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
           setLastRefreshedAt(Date.now())
+          setRateLimitWarning(false)
         }
       } catch (loadError) {
         if (!ignore) {
-          const message =
-            loadError instanceof Error ? loadError.message : 'Failed to load pull requests.'
-          setError(message)
-          setStalePrs([])
-          setYourPrs([])
-          setNeedsAttention([])
-          setRelatedToYou([])
-          setTeamSignalsUnavailable(false)
+          if (loadError instanceof RateLimitError) {
+            setRateLimitWarning(true)
+          } else {
+            const message =
+              loadError instanceof Error ? loadError.message : 'Failed to load pull requests.'
+            setErrorToast(message)
+          }
         }
       } finally {
         if (!ignore) {
@@ -1059,6 +1090,10 @@ function App() {
   const displayNeedsAttention = applySectionSort(needsAttention, sectionSortPreferences.needsAttention)
   const displayYourPrs = applySectionSort(yourPrs, sectionSortPreferences.yourPrs)
   const displayRelatedToYou = applySectionSort(relatedToYou, sectionSortPreferences.relatedToYou)
+
+  const needsAttentionUpdatedCount = displayNeedsAttention.filter((pr) => pr.stateLabel).length
+  const yourPrsUpdatedCount = displayYourPrs.filter((pr) => pr.stateLabel).length
+  const relatedToYouUpdatedCount = displayRelatedToYou.filter((pr) => pr.stateLabel).length
   const displayStalePrs = applySectionSort(stalePrs, sectionSortPreferences.stalePrs)
 
   const refreshLabel = isLoading
@@ -1082,7 +1117,6 @@ function App() {
 
       <header className="page-header">
         <h1>Review Radar</h1>
-        <p>Pull requests ranked by what needs your attention first.</p>
         <p className="refresh-meta">{refreshLabel}</p>
       </header>
 
@@ -1091,36 +1125,50 @@ function App() {
           title="Needs your attention"
           sectionKey="needsAttention"
           count={displayNeedsAttention.length}
+          updatedCount={needsAttentionUpdatedCount}
+          statusLabel={isLoading && !lastRefreshedAt ? 'Classifying...' : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.needsAttention}
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
+          extraTools={
+            <button
+              type="button"
+              className="section-action"
+              onClick={() => setIsNeedsAttentionOpen((current) => !current)}
+            >
+              {isNeedsAttentionOpen ? 'Hide' : 'Show'}
+            </button>
+          }
         />
-        <div>
-          {isLoading ? <p className="empty-state">Classifying pull requests...</p> : null}
-          {!isLoading && !error && token && org && displayNeedsAttention.length === 0 ? (
-            <p className="empty-state">Nothing currently needs your immediate attention.</p>
-          ) : null}
-          {!isLoading && !error && (!token || !org) ? (
-            <p className="empty-state">Add org + PAT above to classify pull requests.</p>
-          ) : null}
-          {displayNeedsAttention.map((pr) => (
-            <PullRequestRow
-              key={pr.id}
-              pr={pr}
-              isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
-              onViewed={handleViewed}
-              sectionKind="active"
-              openMenuKey={openRowMenuKey}
-              onToggleMenu={handleToggleRowMenu}
-              onCloseMenu={handleCloseRowMenu}
-              stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
-              onMarkStale={handleMarkStale}
-              onMarkActive={handleMarkActive}
-              onClearStalePreference={handleClearStalePreference}
-            />
-          ))}
-        </div>
+        {isNeedsAttentionOpen ? (
+          <div>
+            {!isLoading && token && org && displayNeedsAttention.length === 0 ? (
+              <p className="empty-state">Nothing currently needs your immediate attention.</p>
+            ) : null}
+            {!isLoading && (!token || !org) ? (
+              <p className="empty-state">Add org + PAT above to classify pull requests.</p>
+            ) : null}
+            {displayNeedsAttention.map((pr) => (
+              <PullRequestRow
+                key={pr.id}
+                pr={pr}
+                isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
+                onViewed={handleViewed}
+                sectionKind="active"
+                openMenuKey={openRowMenuKey}
+                onToggleMenu={handleToggleRowMenu}
+                onCloseMenu={handleCloseRowMenu}
+                stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+                onMarkStale={handleMarkStale}
+                onMarkActive={handleMarkActive}
+                onClearStalePreference={handleClearStalePreference}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="collapsed-hint">Section collapsed. Click Show to expand.</p>
+        )}
       </section>
 
       <section className="section-card">
@@ -1128,36 +1176,50 @@ function App() {
           title="Your PRs"
           sectionKey="yourPrs"
           count={displayYourPrs.length}
+          updatedCount={yourPrsUpdatedCount}
+          statusLabel={isLoading && !lastRefreshedAt ? 'Loading...' : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.yourPrs}
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
+          extraTools={
+            <button
+              type="button"
+              className="section-action"
+              onClick={() => setIsYourPrsOpen((current) => !current)}
+            >
+              {isYourPrsOpen ? 'Hide' : 'Show'}
+            </button>
+          }
         />
-        <div>
-          {isLoading ? <p className="empty-state">Loading your assigned/authored PRs...</p> : null}
-          {!isLoading && !error && token && org && displayYourPrs.length === 0 ? (
-            <p className="empty-state">No assigned or authored pull requests right now.</p>
-          ) : null}
-          {!isLoading && !error && (!token || !org) ? (
-            <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
-          ) : null}
-          {displayYourPrs.map((pr) => (
-            <PullRequestRow
-              key={pr.id}
-              pr={pr}
-              isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
-              onViewed={handleViewed}
-              sectionKind="active"
-              openMenuKey={openRowMenuKey}
-              onToggleMenu={handleToggleRowMenu}
-              onCloseMenu={handleCloseRowMenu}
-              stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
-              onMarkStale={handleMarkStale}
-              onMarkActive={handleMarkActive}
-              onClearStalePreference={handleClearStalePreference}
-            />
-          ))}
-        </div>
+        {isYourPrsOpen ? (
+          <div>
+            {!isLoading && token && org && displayYourPrs.length === 0 ? (
+              <p className="empty-state">No assigned or authored pull requests right now.</p>
+            ) : null}
+            {!isLoading && (!token || !org) ? (
+              <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
+            ) : null}
+            {displayYourPrs.map((pr) => (
+              <PullRequestRow
+                key={pr.id}
+                pr={pr}
+                isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
+                onViewed={handleViewed}
+                sectionKind="active"
+                openMenuKey={openRowMenuKey}
+                onToggleMenu={handleToggleRowMenu}
+                onCloseMenu={handleCloseRowMenu}
+                stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+                onMarkStale={handleMarkStale}
+                onMarkActive={handleMarkActive}
+                onClearStalePreference={handleClearStalePreference}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="collapsed-hint">Section collapsed. Click Show to expand.</p>
+        )}
       </section>
 
       <section className="section-card">
@@ -1165,37 +1227,50 @@ function App() {
           title="Related to you"
           sectionKey="relatedToYou"
           count={displayRelatedToYou.length}
+          updatedCount={relatedToYouUpdatedCount}
+          statusLabel={isLoading && !lastRefreshedAt ? 'Loading...' : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.relatedToYou}
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
+          extraTools={
+            <button
+              type="button"
+              className="section-action"
+              onClick={() => setIsRelatedToYouOpen((current) => !current)}
+            >
+              {isRelatedToYouOpen ? 'Hide' : 'Show'}
+            </button>
+          }
         />
-        <div>
-          {isLoading ? <p className="empty-state">Loading open pull requests...</p> : null}
-          {error ? <p className="empty-state error-state">{error}</p> : null}
-          {!isLoading && !error && token && org && displayRelatedToYou.length === 0 ? (
-            <p className="empty-state">No non-urgent related pull requests right now.</p>
-          ) : null}
-          {!isLoading && !error && (!token || !org) ? (
-            <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
-          ) : null}
-          {displayRelatedToYou.map((pr) => (
-            <PullRequestRow
-              key={pr.id}
-              pr={pr}
-              isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
-              onViewed={handleViewed}
-              sectionKind="active"
-              openMenuKey={openRowMenuKey}
-              onToggleMenu={handleToggleRowMenu}
-              onCloseMenu={handleCloseRowMenu}
-              stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
-              onMarkStale={handleMarkStale}
-              onMarkActive={handleMarkActive}
-              onClearStalePreference={handleClearStalePreference}
-            />
-          ))}
-        </div>
+        {isRelatedToYouOpen ? (
+          <div>
+            {!isLoading && token && org && displayRelatedToYou.length === 0 ? (
+              <p className="empty-state">No non-urgent related pull requests right now.</p>
+            ) : null}
+            {!isLoading && (!token || !org) ? (
+              <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
+            ) : null}
+            {displayRelatedToYou.map((pr) => (
+              <PullRequestRow
+                key={pr.id}
+                pr={pr}
+                isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
+                onViewed={handleViewed}
+                sectionKind="active"
+                openMenuKey={openRowMenuKey}
+                onToggleMenu={handleToggleRowMenu}
+                onCloseMenu={handleCloseRowMenu}
+                stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+                onMarkStale={handleMarkStale}
+                onMarkActive={handleMarkActive}
+                onClearStalePreference={handleClearStalePreference}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="collapsed-hint">Section collapsed. Click Show to expand.</p>
+        )}
       </section>
 
       <section className="section-card">
@@ -1219,11 +1294,10 @@ function App() {
         />
         {isStaleSectionOpen ? (
           <div>
-            {isLoading ? <p className="empty-state">Loading stale pull requests...</p> : null}
-            {!isLoading && !error && token && org && displayStalePrs.length === 0 ? (
+            {!isLoading && token && org && displayStalePrs.length === 0 ? (
               <p className="empty-state">No stale pull requests right now.</p>
             ) : null}
-            {!isLoading && !error && (!token || !org) ? (
+            {!isLoading && (!token || !org) ? (
               <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
             ) : null}
             {displayStalePrs.map((pr) => (
@@ -1348,6 +1422,17 @@ function App() {
           </svg>
         )}
       </button>
+
+      {rateLimitWarning ? (
+        <div className="toast toast-warning" role="status">
+          ⚠ Rate limit hit — showing cached data. Will refresh automatically.
+        </div>
+      ) : null}
+      {errorToast ? (
+        <div className="toast toast-error" role="alert">
+          ⚠ {errorToast}
+        </div>
+      ) : null}
     </main>
   )
 }

@@ -33,24 +33,20 @@
 }
 
 .page-header {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  padding: 1rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.25rem 0;
 }
 
 .page-header h1 {
   margin: 0;
-  font-size: 1.5rem;
-}
-
-.page-header p {
-  margin: 0.25rem 0 0;
-  color: var(--muted);
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .refresh-meta {
-  margin: 0.35rem 0 0;
+  margin: 0;
   font-size: 0.78rem;
   color: var(--muted);
 }
@@ -129,6 +125,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
+  overflow: hidden;
 }
 
 .section-header {
@@ -279,9 +276,21 @@
   color: var(--muted);
 }
 
+.section-count-detail {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.section-status-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-style: italic;
+  white-space: nowrap;
+}
+
 .pr-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, auto);
   gap: 0.25rem 1rem;
   padding: 0.85rem 2.6rem 0.85rem 1rem;
   border-bottom: 1px solid var(--border);
@@ -600,16 +609,30 @@
   color: var(--status-own-fg);
 }
 
+.your-pr-unseen-reviews {
+  background: var(--status-info-bg);
+  border-color: var(--status-info-border);
+  color: var(--status-info-fg);
+}
+
+.your-pr-approved {
+  background: color-mix(in srgb, var(--check-success) 15%, transparent);
+  border-color: var(--check-success);
+  color: var(--check-success);
+}
+
+.your-pr-changes-requested {
+  background: var(--status-warn-bg);
+  border-color: var(--status-warn-border);
+  color: var(--status-warn-fg);
+}
+
 .empty-state {
   margin: 0;
   padding: 0.9rem 1rem;
   color: var(--muted);
   border-bottom: 1px solid var(--border);
   font-size: 0.9rem;
-}
-
-.error-state {
-  color: var(--error-fg);
 }
 
 .theme-fab {
@@ -626,6 +649,30 @@
   place-items: center;
   cursor: pointer;
   box-shadow: 0 8px 20px rgb(0 0 0 / 20%);
+}
+
+.toast {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+}
+
+.toast-warning {
+  background: var(--status-warn-bg);
+  border: 1px solid var(--status-warn-border);
+  color: var(--status-warn-fg);
+}
+
+.toast-error {
+  background: var(--status-danger-bg);
+  border: 1px solid var(--status-danger-border);
+  color: var(--status-danger-fg);
 }
 
 .theme-fab:hover {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { EtagCache } from './etag-cache'
-import { apiFetch } from './github'
+import { apiFetch, RateLimitError } from './github'
 
 vi.stubGlobal('fetch', vi.fn())
 
@@ -48,12 +48,20 @@ describe('apiFetch', () => {
     ).rejects.toThrow('Invalid token. Check PAT scope and retry.')
   })
 
-  it('should throw "Access forbidden or rate limit..." on 403 response', async () => {
+  it('should throw RateLimitError on 403 response', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 403 }))
 
     await expect(
       apiFetch('https://api.github.com/user', 'test-token')
-    ).rejects.toThrow('Access forbidden or rate limit hit. Retry in a few minutes.')
+    ).rejects.toThrow(RateLimitError)
+  })
+
+  it('should throw RateLimitError on 429 response', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 429 }))
+
+    await expect(
+      apiFetch('https://api.github.com/user', 'test-token')
+    ).rejects.toThrow(RateLimitError)
   })
 
   it('should throw "GitHub request failed..." on other non-ok status', async () => {
