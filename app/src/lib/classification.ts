@@ -14,6 +14,7 @@ export type PullRequest = {
   }>
   updatedAt: string
   updatedAtIso: string
+  createdAtIso: string
   url: string
   checkState: 'success' | 'pending' | 'failure'
   staleState?: 'auto' | 'manual'
@@ -29,6 +30,7 @@ export type PullDetails = {
   title: string
   html_url: string
   updated_at: string
+  created_at: string
   state: 'open' | 'closed'
   merged_at: string | null
   draft?: boolean
@@ -110,6 +112,14 @@ export function sortByUpdatedDesc(prs: PullRequest[]): PullRequest[] {
   )
 }
 
+export function sortByCreatedAt(prs: PullRequest[], direction: 'asc' | 'desc'): PullRequest[] {
+  return [...prs].sort((a, b) => {
+    const aTime = new Date(a.createdAtIso).getTime()
+    const bTime = new Date(b.createdAtIso).getTime()
+    return direction === 'asc' ? aTime - bTime : bTime - aTime
+  })
+}
+
 export function classifyPullRequest(
   pull: PullDetails,
   reviews: Review[],
@@ -171,6 +181,7 @@ export function classifyPullRequest(
     })),
     updatedAt: formatRelativeTime(pull.updated_at),
     updatedAtIso: pull.updated_at,
+    createdAtIso: pull.created_at,
     url: pull.html_url,
     checkState: 'pending',
     isDraft: pull.draft,

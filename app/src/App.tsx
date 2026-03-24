@@ -4,6 +4,7 @@ import {
   type ActivitySignals,
   classifyPullRequest,
   prViewKey,
+  sortByCreatedAt,
   sortByUpdatedDesc,
   type PullDetails,
   type PullRequest,
@@ -54,6 +55,8 @@ type ClassifiedPullRequests = {
 
 type ThemePreference = 'system' | 'dark' | 'light'
 type StalePreference = 'stale' | 'active'
+type SectionKey = 'needsAttention' | 'yourPrs' | 'relatedToYou' | 'stalePrs'
+type SortPreference = 'default' | 'oldest-first' | 'newest-first'
 
 const SEARCH_PAGE_SIZE = 100
 const SEARCH_MAX_PAGES = 10
@@ -61,12 +64,13 @@ const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000
 const REFRESH_POLL_MS = 5 * 60 * 1000
 const REFRESH_FOCUS_COOLDOWN_MS = 15 * 1000
 
-const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'stalePreferences', string> = {
+const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'stalePreferences' | 'sectionSort', string> = {
   token: 'review-radar.pat',
   org: 'review-radar.org',
   viewed: 'review-radar.viewed',
   theme: 'review-radar.theme',
   stalePreferences: 'review-radar.stalePreferences',
+  sectionSort: 'review-radar.sectionSort',
 }
 
 function readStorageItem(key: string): string {
@@ -117,6 +121,44 @@ function readStalePreferences(): Record<string, StalePreference> {
   } catch {
     return {}
   }
+}
+
+const DEFAULT_SECTION_SORT: Record<SectionKey, SortPreference> = {
+  needsAttention: 'default',
+  yourPrs: 'default',
+  relatedToYou: 'default',
+  stalePrs: 'default',
+}
+
+function readSectionSortPreferences(): Record<SectionKey, SortPreference> {
+  const raw = readStorageItem(STORAGE_KEYS.sectionSort)
+  if (!raw) {
+    return { ...DEFAULT_SECTION_SORT }
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string>
+    const result = { ...DEFAULT_SECTION_SORT }
+    for (const key of Object.keys(result) as SectionKey[]) {
+      const val = parsed[key]
+      if (val === 'oldest-first' || val === 'newest-first') {
+        result[key] = val
+      }
+    }
+    return result
+  } catch {
+    return { ...DEFAULT_SECTION_SORT }
+  }
+}
+
+function applySectionSort(prs: PullRequest[], preference: SortPreference): PullRequest[] {
+  if (preference === 'oldest-first') {
+    return sortByCreatedAt(prs, 'asc')
+  }
+  if (preference === 'newest-first') {
+    return sortByCreatedAt(prs, 'desc')
+  }
+  return prs
 }
 
 function formatRefreshAge(timestampMs: number, nowMs: number): string {
@@ -441,6 +483,80 @@ async function fetchAndClassifyPullRequests(
   }
 }
 
+function SectionHeader({
+  title,
+  sectionKey,
+  count,
+  openSectionMenuKey,
+  sortPreference,
+  onToggleSectionMenu,
+  onSetSort,
+  extraTools,
+}: {
+  title: string
+  sectionKey: SectionKey
+  count: number
+  openSectionMenuKey: SectionKey | null
+  sortPreference: SortPreference
+  onToggleSectionMenu: (key: SectionKey) => void
+  onSetSort: (key: SectionKey, sort: SortPreference) => void
+  extraTools?: React.ReactNode
+}) {
+  const isMenuOpen = openSectionMenuKey === sectionKey
+
+  return (
+    <div className="section-header">
+      <h2>{title}</h2>
+      <div className="section-header-tools">
+        <span>{count}</span>
+        {extraTools}
+        <div className="section-menu-wrap">
+          <button
+            type="button"
+            className="section-menu-toggle"
+            aria-label="Sort options"
+            aria-expanded={isMenuOpen}
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggleSectionMenu(sectionKey)
+            }}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+              <path d="M8 3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 6.5A1.5 1.5 0 1 1 8 6.5a1.5 1.5 0 0 1 0 3Zm0 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
+            </svg>
+          </button>
+          {isMenuOpen ? (
+            <div className="section-menu" onClick={(event) => event.stopPropagation()}>
+              <span className="row-menu-hint">Sort By</span>
+              <button
+                type="button"
+                className={`row-menu-item${sortPreference === 'oldest-first' ? ' active-sort' : ''}`}
+                onClick={() => onSetSort(sectionKey, 'oldest-first')}
+              >
+                {sortPreference === 'oldest-first' ? '\u2713 ' : ''}Oldest first
+              </button>
+              <button
+                type="button"
+                className={`row-menu-item${sortPreference === 'newest-first' ? ' active-sort' : ''}`}
+                onClick={() => onSetSort(sectionKey, 'newest-first')}
+              >
+                {sortPreference === 'newest-first' ? '\u2713 ' : ''}Newest first
+              </button>
+              <button
+                type="button"
+                className={`row-menu-item${sortPreference === 'default' ? ' active-sort' : ''}`}
+                onClick={() => onSetSort(sectionKey, 'default')}
+              >
+                {sortPreference === 'default' ? '\u2713 ' : ''}Last updated
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PullRequestRow({
   pr,
   isViewed,
@@ -687,6 +803,10 @@ function App() {
   })
   const [isStaleSectionOpen, setIsStaleSectionOpen] = useState(false)
   const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null)
+  const [openSectionMenuKey, setOpenSectionMenuKey] = useState<SectionKey | null>(null)
+  const [sectionSortPreferences, setSectionSortPreferences] = useState<Record<SectionKey, SortPreference>>(
+    readSectionSortPreferences,
+  )
   const [refreshTick, setRefreshTick] = useState(0)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
@@ -821,24 +941,27 @@ function App() {
         return
       }
 
-      if (target.closest('.row-menu') || target.closest('.row-menu-toggle')) {
-        return
+      if (!target.closest('.row-menu') && !target.closest('.row-menu-toggle')) {
+        setOpenRowMenuKey(null)
       }
 
-      setOpenRowMenuKey(null)
+      if (!target.closest('.section-menu') && !target.closest('.section-menu-toggle')) {
+        setOpenSectionMenuKey(null)
+      }
     }
 
     function handleEscape(event: KeyboardEvent): void {
       if (event.key === 'Escape') {
         setOpenRowMenuKey(null)
+        setOpenSectionMenuKey(null)
       }
     }
 
-    document.addEventListener('mousedown', handleGlobalClick)
+    document.addEventListener('click', handleGlobalClick)
     window.addEventListener('keydown', handleEscape)
 
     return () => {
-      document.removeEventListener('mousedown', handleGlobalClick)
+      document.removeEventListener('click', handleGlobalClick)
       window.removeEventListener('keydown', handleEscape)
     }
   }, [])
@@ -1006,6 +1129,19 @@ function App() {
     setOpenRowMenuKey(null)
   }
 
+  function handleToggleSectionMenu(sectionKey: SectionKey): void {
+    setOpenSectionMenuKey((current) => (current === sectionKey ? null : sectionKey))
+  }
+
+  function handleSetSectionSort(sectionKey: SectionKey, sort: SortPreference): void {
+    setSectionSortPreferences((current) => {
+      const next = { ...current, [sectionKey]: sort }
+      localStorage.setItem(STORAGE_KEYS.sectionSort, JSON.stringify(next))
+      return next
+    })
+    setOpenSectionMenuKey(null)
+  }
+
   function toggleTheme(): void {
     const activeTheme = resolveTheme(themePreference)
     const nextPreference: ThemePreference = activeTheme === 'dark' ? 'light' : 'dark'
@@ -1015,6 +1151,11 @@ function App() {
 
   const activeTheme = resolveTheme(themePreference)
   const hasSavedConnection = Boolean(token && org)
+  const displayNeedsAttention = applySectionSort(needsAttention, sectionSortPreferences.needsAttention)
+  const displayYourPrs = applySectionSort(yourPrs, sectionSortPreferences.yourPrs)
+  const displayRelatedToYou = applySectionSort(relatedToYou, sectionSortPreferences.relatedToYou)
+  const displayStalePrs = applySectionSort(stalePrs, sectionSortPreferences.stalePrs)
+
   const refreshLabel = isLoading
     ? 'Refreshing...'
     : lastRefreshedAt
@@ -1041,19 +1182,24 @@ function App() {
       </header>
 
       <section className="section-card">
-        <div className="section-header">
-          <h2>Needs your attention</h2>
-          <span>{needsAttention.length}</span>
-        </div>
+        <SectionHeader
+          title="Needs your attention"
+          sectionKey="needsAttention"
+          count={displayNeedsAttention.length}
+          openSectionMenuKey={openSectionMenuKey}
+          sortPreference={sectionSortPreferences.needsAttention}
+          onToggleSectionMenu={handleToggleSectionMenu}
+          onSetSort={handleSetSectionSort}
+        />
         <div>
           {isLoading ? <p className="empty-state">Classifying pull requests...</p> : null}
-          {!isLoading && !error && token && org && needsAttention.length === 0 ? (
+          {!isLoading && !error && token && org && displayNeedsAttention.length === 0 ? (
             <p className="empty-state">Nothing currently needs your immediate attention.</p>
           ) : null}
           {!isLoading && !error && (!token || !org) ? (
             <p className="empty-state">Add org + PAT above to classify pull requests.</p>
           ) : null}
-          {needsAttention.map((pr) => (
+          {displayNeedsAttention.map((pr) => (
             <PullRequestRow
               key={pr.id}
               pr={pr}
@@ -1073,19 +1219,24 @@ function App() {
       </section>
 
       <section className="section-card">
-        <div className="section-header">
-          <h2>Your PRs</h2>
-          <span>{yourPrs.length}</span>
-        </div>
+        <SectionHeader
+          title="Your PRs"
+          sectionKey="yourPrs"
+          count={displayYourPrs.length}
+          openSectionMenuKey={openSectionMenuKey}
+          sortPreference={sectionSortPreferences.yourPrs}
+          onToggleSectionMenu={handleToggleSectionMenu}
+          onSetSort={handleSetSectionSort}
+        />
         <div>
           {isLoading ? <p className="empty-state">Loading your assigned/authored PRs...</p> : null}
-          {!isLoading && !error && token && org && yourPrs.length === 0 ? (
+          {!isLoading && !error && token && org && displayYourPrs.length === 0 ? (
             <p className="empty-state">No assigned or authored pull requests right now.</p>
           ) : null}
           {!isLoading && !error && (!token || !org) ? (
             <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
           ) : null}
-          {yourPrs.map((pr) => (
+          {displayYourPrs.map((pr) => (
             <PullRequestRow
               key={pr.id}
               pr={pr}
@@ -1105,20 +1256,25 @@ function App() {
       </section>
 
       <section className="section-card">
-        <div className="section-header">
-          <h2>Related to you</h2>
-          <span>{relatedToYou.length}</span>
-        </div>
+        <SectionHeader
+          title="Related to you"
+          sectionKey="relatedToYou"
+          count={displayRelatedToYou.length}
+          openSectionMenuKey={openSectionMenuKey}
+          sortPreference={sectionSortPreferences.relatedToYou}
+          onToggleSectionMenu={handleToggleSectionMenu}
+          onSetSort={handleSetSectionSort}
+        />
         <div>
           {isLoading ? <p className="empty-state">Loading open pull requests...</p> : null}
           {error ? <p className="empty-state error-state">{error}</p> : null}
-          {!isLoading && !error && token && org && relatedToYou.length === 0 ? (
+          {!isLoading && !error && token && org && displayRelatedToYou.length === 0 ? (
             <p className="empty-state">No non-urgent related pull requests right now.</p>
           ) : null}
           {!isLoading && !error && (!token || !org) ? (
             <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
           ) : null}
-          {relatedToYou.map((pr) => (
+          {displayRelatedToYou.map((pr) => (
             <PullRequestRow
               key={pr.id}
               pr={pr}
@@ -1138,10 +1294,15 @@ function App() {
       </section>
 
       <section className="section-card">
-        <div className="section-header">
-          <h2>Stale PRs</h2>
-          <div className="section-header-tools">
-            <span>{stalePrs.length}</span>
+        <SectionHeader
+          title="Stale PRs"
+          sectionKey="stalePrs"
+          count={displayStalePrs.length}
+          openSectionMenuKey={openSectionMenuKey}
+          sortPreference={sectionSortPreferences.stalePrs}
+          onToggleSectionMenu={handleToggleSectionMenu}
+          onSetSort={handleSetSectionSort}
+          extraTools={
             <button
               type="button"
               className="section-action"
@@ -1149,18 +1310,18 @@ function App() {
             >
               {isStaleSectionOpen ? 'Hide' : 'Show'}
             </button>
-          </div>
-        </div>
+          }
+        />
         {isStaleSectionOpen ? (
           <div>
             {isLoading ? <p className="empty-state">Loading stale pull requests...</p> : null}
-            {!isLoading && !error && token && org && stalePrs.length === 0 ? (
+            {!isLoading && !error && token && org && displayStalePrs.length === 0 ? (
               <p className="empty-state">No stale pull requests right now.</p>
             ) : null}
             {!isLoading && !error && (!token || !org) ? (
               <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
             ) : null}
-            {stalePrs.map((pr) => (
+            {displayStalePrs.map((pr) => (
               <PullRequestRow
                 key={pr.id}
                 pr={pr}
