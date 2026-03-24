@@ -4,7 +4,9 @@ import {
   type ActivitySignals,
   classifyPullRequest,
   type PullDetails,
+  type PullRequest,
   type Review,
+  sortByCreatedAt,
 } from './classification'
 
 const noActivity: ActivitySignals = {
@@ -21,6 +23,7 @@ function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
     title: 'feat: improve review signal quality',
     html_url: 'https://github.com/acme/review-radar/pull/123',
     updated_at: '2026-03-20T11:00:00Z',
+    created_at: '2026-03-15T10:00:00Z',
     state: 'open',
     merged_at: null,
     user: {
@@ -249,5 +252,84 @@ describe('classifyPullRequest', () => {
 
     expect(result.relatedToYou?.stateClass).toBe('viewed-updated')
     expect(result.needsAttention).toBeUndefined()
+  })
+
+  it('includes createdAtIso from pull created_at', () => {
+    const pull = createPull({
+      created_at: '2026-03-10T08:00:00Z',
+      user: { login: 'me', avatar_url: 'x', html_url: 'y' },
+    })
+
+    const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
+
+    expect(result.yourPrs?.createdAtIso).toBe('2026-03-10T08:00:00Z')
+  })
+})
+
+describe('sortByCreatedAt', () => {
+  function makePr(createdAtIso: string): PullRequest {
+    return {
+      id: 1,
+      number: 1,
+      title: '',
+      repository: '',
+      repositoryUrl: '',
+      author: '',
+      authorAvatarUrl: '',
+      authorProfileUrl: '',
+      requestedReviewers: [],
+      updatedAt: '',
+      updatedAtIso: '',
+      createdAtIso,
+      url: '',
+      checkState: 'pending',
+      stateLabel: '',
+      stateClass: '',
+      reason: '',
+    }
+  }
+
+  it('sorts ascending (oldest first)', () => {
+    const prs = [
+      makePr('2026-03-20T00:00:00Z'),
+      makePr('2026-03-10T00:00:00Z'),
+      makePr('2026-03-15T00:00:00Z'),
+    ]
+
+    const sorted = sortByCreatedAt(prs, 'asc')
+
+    expect(sorted.map((pr) => pr.createdAtIso)).toEqual([
+      '2026-03-10T00:00:00Z',
+      '2026-03-15T00:00:00Z',
+      '2026-03-20T00:00:00Z',
+    ])
+  })
+
+  it('sorts descending (newest first)', () => {
+    const prs = [
+      makePr('2026-03-10T00:00:00Z'),
+      makePr('2026-03-20T00:00:00Z'),
+      makePr('2026-03-15T00:00:00Z'),
+    ]
+
+    const sorted = sortByCreatedAt(prs, 'desc')
+
+    expect(sorted.map((pr) => pr.createdAtIso)).toEqual([
+      '2026-03-20T00:00:00Z',
+      '2026-03-15T00:00:00Z',
+      '2026-03-10T00:00:00Z',
+    ])
+  })
+
+  it('does not mutate the original array', () => {
+    const prs = [
+      makePr('2026-03-20T00:00:00Z'),
+      makePr('2026-03-10T00:00:00Z'),
+    ]
+
+    const sorted = sortByCreatedAt(prs, 'asc')
+
+    expect(sorted).not.toBe(prs)
+    expect(prs[0].createdAtIso).toBe('2026-03-20T00:00:00Z')
   })
 })
