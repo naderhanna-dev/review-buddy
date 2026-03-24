@@ -44,11 +44,12 @@ const FALLBACK_REFRESH_MS = 10 * 60 * 1000
 const NOTIFICATION_FALLBACK_MS = 2 * 60 * 1000
 const REFRESH_FOCUS_COOLDOWN_MS = 5 * 60 * 1000
 
-const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'stalePreferences' | 'sectionSort', string> = {
+const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'compact' | 'stalePreferences' | 'sectionSort', string> = {
   token: 'review-radar.pat',
   org: 'review-radar.org',
   viewed: 'review-radar.viewed',
   theme: 'review-radar.theme',
+  compact: 'review-radar.compact',
   stalePreferences: 'review-radar.stalePreferences',
   sectionSort: 'review-radar.sectionSort',
 }
@@ -81,6 +82,10 @@ function readThemePreference(): ThemePreference {
   }
 
   return 'system'
+}
+
+function readCompactPreference(): boolean {
+  return readStorageItem(STORAGE_KEYS.compact) === 'true'
 }
 
 function readStalePreferences(): Record<string, StalePreference> {
@@ -762,6 +767,7 @@ function App() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
     readThemePreference(),
   )
+  const [isCompact, setIsCompact] = useState(() => readCompactPreference())
   const [isConnectionPanelOpen, setIsConnectionPanelOpen] = useState(() => {
     const savedToken = readStorageItem(STORAGE_KEYS.token)
     const savedOrg = readStorageItem(STORAGE_KEYS.org)
@@ -813,6 +819,10 @@ function App() {
       mediaQuery.removeEventListener('change', applyTheme)
     }
   }, [themePreference])
+
+  useEffect(() => {
+    document.documentElement.dataset.compact = String(isCompact)
+  }, [isCompact])
 
   useEffect(() => {
     isLoadingRef.current = isLoading
@@ -1083,6 +1093,14 @@ function App() {
     const nextPreference: ThemePreference = activeTheme === 'dark' ? 'light' : 'dark'
     setThemePreference(nextPreference)
     localStorage.setItem(STORAGE_KEYS.theme, nextPreference)
+  }
+
+  function toggleCompact(): void {
+    setIsCompact((current) => {
+      const next = !current
+      localStorage.setItem(STORAGE_KEYS.compact, String(next))
+      return next
+    })
   }
 
   const activeTheme = resolveTheme(themePreference)
@@ -1407,14 +1425,36 @@ function App() {
 
       <button
         type="button"
+        className="compact-fab"
+        onClick={toggleCompact}
+        aria-label={isCompact ? 'Switch to comfortable view' : 'Switch to compact view'}
+      >
+        <span className="fab-tooltip">{isCompact ? 'Comfortable view' : 'Compact view'}</span>
+        {isCompact ? (
+          <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
+            <path d="M20.25 3a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V5.56l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97h-2.69a.75.75 0 0 1 0-1.5h4.5Z" />
+            <path d="M3.75 3a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0V5.56l3.97 3.97a.75.75 0 0 0 1.06-1.06L5.56 4.5h2.69a.75.75 0 0 0 0-1.5h-4.5Z" />
+            <path d="M20.25 21a.75.75 0 0 0 .75-.75v-4.5a.75.75 0 0 0-1.5 0v2.69l-3.97-3.97a.75.75 0 0 0-1.06 1.06l3.97 3.97h-2.69a.75.75 0 0 0 0 1.5h4.5Z" />
+            <path d="M3.75 21a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 1 1.5 0v2.69l3.97-3.97a.75.75 0 0 1 1.06 1.06L5.56 19.5h2.69a.75.75 0 0 1 0 1.5h-4.5Z" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
+            <rect x="10" y="10" width="4" height="4" rx="0.5" />
+            <path fillRule="evenodd" clipRule="evenodd" d="M3.22 3.22a.75.75 0 0 1 1.06 0l3.97 3.97V4.5a.75.75 0 0 1 1.5 0V9a.75.75 0 0 1-.75.75H4.5a.75.75 0 0 1 0-1.5h2.69L3.22 4.28a.75.75 0 0 1 0-1.06Zm17.56 0a.75.75 0 0 1 0 1.06l-3.97 3.97h2.69a.75.75 0 0 1 0 1.5H15a.75.75 0 0 1-.75-.75V4.5a.75.75 0 0 1 1.5 0v2.69l3.97-3.97a.75.75 0 0 1 1.06 0ZM3.75 15a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-2.69l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97H4.5a.75.75 0 0 1-.75-.75Zm10.5 0a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-2.69l3.97 3.97a.75.75 0 1 1-1.06 1.06l-3.97-3.97v2.69a.75.75 0 0 1-1.5 0V15Z" />
+          </svg>
+        )}
+      </button>
+
+      <button
+        type="button"
         className="theme-fab"
         onClick={toggleTheme}
-        title={`Switch to ${activeTheme === 'dark' ? 'light' : 'dark'} mode`}
         aria-label={`Switch to ${activeTheme === 'dark' ? 'light' : 'dark'} mode`}
       >
+        <span className="fab-tooltip">{activeTheme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
         {activeTheme === 'dark' ? (
           <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
-            <path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12Zm0-14a1 1 0 0 0 1-1V2a1 1 0 1 0-2 0v1a1 1 0 0 0 1 1Zm0 17a1 1 0 0 0-1 1v1a1 1 0 1 0 2 0v-1a1 1 0 0 0-1-1Zm8-8a1 1 0 0 0 1-1 1 1 0 1 0 0-2h-1a1 1 0 1 0 0 2h1ZM4 12a1 1 0 1 0 0-2H3a1 1 0 1 0 0 2h1Zm12.95 6.536a1 1 0 0 0 1.414 0l.707-.707a1 1 0 1 0-1.414-1.414l-.707.707a1 1 0 0 0 0 1.414ZM6.343 7.929a1 1 0 0 0 1.414 0l.707-.707A1 1 0 1 0 7.05 5.808l-.707.707a1 1 0 0 0 0 1.414Zm11.314 0a1 1 0 0 0 0-1.414l-.707-.707a1 1 0 1 0-1.414 1.414l.707.707a1 1 0 0 0 1.414 0ZM7.757 18.536a1 1 0 0 0 0-1.414l-.707-.707a1 1 0 0 0-1.414 1.414l.707.707a1 1 0 0 0 1.414 0Z" />
+            <path d="M12 17.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11Zm0-13a.75.75 0 0 1-.75-.75v-2a.75.75 0 0 1 1.5 0v2A.75.75 0 0 1 12 4.5Zm0 17a.75.75 0 0 1-.75-.75v-2a.75.75 0 0 1 1.5 0v2a.75.75 0 0 1-.75.75ZM4.5 12a.75.75 0 0 1-.75.75h-2a.75.75 0 0 1 0-1.5h2A.75.75 0 0 1 4.5 12Zm17 0a.75.75 0 0 1-.75.75h-2a.75.75 0 0 1 0-1.5h2a.75.75 0 0 1 .75.75ZM6.165 6.165a.75.75 0 0 1-1.06 0L3.69 4.75a.75.75 0 0 1 1.06-1.06l1.415 1.414a.75.75 0 0 1 0 1.06Zm12.73 12.73a.75.75 0 0 1-1.06 0l-1.415-1.414a.75.75 0 0 1 1.06-1.061l1.415 1.414a.75.75 0 0 1 0 1.061ZM6.165 17.835a.75.75 0 0 1 0 1.06L4.75 20.31a.75.75 0 0 1-1.06-1.06l1.414-1.415a.75.75 0 0 1 1.06 0Zm12.73-12.73a.75.75 0 0 1 0 1.06l-1.414 1.415a.75.75 0 0 1-1.061-1.06l1.414-1.415a.75.75 0 0 1 1.061 0Z" />
           </svg>
         ) : (
           <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
