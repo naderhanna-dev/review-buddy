@@ -33,6 +33,8 @@ Build a small webapp that shows which pull requests need your attention, inspire
 - Only open PRs are shown; merged/closed PRs are excluded and cleaned from local tracked lists.
 - Delivery workflow: changes should go through feature branches and PRs instead of direct commits to main.
 - Open-only source of truth comes from GitHub search candidate results; local tracked keys not in that open set are auto-cleaned.
+- Needs-attention pills are prioritized as: New updates, New comments, Review requested.
+- Your-PR pills are based on activity since last viewed and prioritized as: New reviews, New comments (hidden otherwise).
 
 ## PR Classification Rules
 

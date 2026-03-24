@@ -63,10 +63,18 @@ export type PullDetails = {
 
 export type Review = {
   state: string
+  commit_id?: string
   submitted_at?: string
   user?: {
     login: string
   }
+}
+
+export type ActivitySignals = {
+  hasNewCommitsSinceMyReview: boolean
+  hasNewCommentsSinceMyReview: boolean
+  hasNewReviewsSinceViewed: boolean
+  hasNewCommentsSinceViewed: boolean
 }
 
 export type ClassifiedPullRequest = {
@@ -108,6 +116,7 @@ export function classifyPullRequest(
   myLogin: string,
   myTeamSlugs: Set<string>,
   viewedAtMs?: number,
+  activitySignals?: ActivitySignals,
 ): ClassifiedPullRequest {
   const normalizedLogin = myLogin.toLowerCase()
   const myReviews = reviews
@@ -137,6 +146,11 @@ export function classifyPullRequest(
   const isRequiredReviewer = requestedReviewerLogins.includes(normalizedLogin)
   const hasUpdateSinceMyReview =
     lastReviewAtMs !== undefined && pullUpdatedAtMs > lastReviewAtMs
+  const hasNewCommitsSinceMyReview =
+    activitySignals?.hasNewCommitsSinceMyReview ?? hasUpdateSinceMyReview
+  const hasNewCommentsSinceMyReview = activitySignals?.hasNewCommentsSinceMyReview ?? false
+  const hasNewReviewsSinceViewed = activitySignals?.hasNewReviewsSinceViewed ?? false
+  const hasNewCommentsSinceViewed = activitySignals?.hasNewCommentsSinceViewed ?? false
   const assignedToMyTeam = requestedTeamSlugs.some((teamSlug) => myTeamSlugs.has(teamSlug))
   const lookedWithoutReviewAndUpdated =
     viewedAtMs !== undefined && !hasSubmittedReview && pullUpdatedAtMs > viewedAtMs
@@ -163,12 +177,34 @@ export function classifyPullRequest(
   }
 
   if (isAuthoredByMe || isAssignedToMe) {
+    if (hasNewReviewsSinceViewed) {
+      return {
+        yourPrs: {
+          ...basePr,
+          stateLabel: 'New reviews',
+          stateClass: 'your-pr-new-reviews',
+          reason: 'New reviews were submitted since you last viewed this PR.',
+        },
+      }
+    }
+
+    if (hasNewCommentsSinceViewed) {
+      return {
+        yourPrs: {
+          ...basePr,
+          stateLabel: 'New comments',
+          stateClass: 'your-pr-new-comments',
+          reason: 'New comments were added since you last viewed this PR.',
+        },
+      }
+    }
+
     if (isAuthoredByMe && isAssignedToMe) {
       return {
         yourPrs: {
           ...basePr,
-          stateLabel: 'Authored + assigned',
-          stateClass: 'your-pr',
+          stateLabel: '',
+          stateClass: 'your-pr-no-activity',
           reason: 'This PR is authored by you and assigned to you.',
         },
       }
@@ -178,8 +214,8 @@ export function classifyPullRequest(
       return {
         yourPrs: {
           ...basePr,
-          stateLabel: 'Authored by you',
-          stateClass: 'your-pr',
+          stateLabel: '',
+          stateClass: 'your-pr-no-activity',
           reason: 'This PR is authored by you.',
         },
       }
@@ -188,32 +224,36 @@ export function classifyPullRequest(
     return {
       yourPrs: {
         ...basePr,
-        stateLabel: 'Assigned to you',
-        stateClass: 'your-pr',
+        stateLabel: '',
+        stateClass: 'your-pr-no-activity',
         reason: 'This PR is assigned to you.',
       },
     }
   }
 
-  if (isRequiredReviewer || hasUpdateSinceMyReview) {
-    if (isRequiredReviewer && hasUpdateSinceMyReview) {
+  if (
+    hasNewCommitsSinceMyReview ||
+    hasNewCommentsSinceMyReview ||
+    (isRequiredReviewer && !hasSubmittedReview)
+  ) {
+    if (hasNewCommitsSinceMyReview) {
       return {
         needsAttention: {
           ...basePr,
-          stateLabel: 'Required + updated',
-          stateClass: 'required-and-updated',
-          reason: 'You are requested and new updates landed since your last review.',
+          stateLabel: 'New updates',
+          stateClass: 'new-updates',
+          reason: 'New commits were pushed after your last review.',
         },
       }
     }
 
-    if (isRequiredReviewer) {
+    if (hasNewCommentsSinceMyReview) {
       return {
         needsAttention: {
           ...basePr,
-          stateLabel: 'Required review',
-          stateClass: 'required-review',
-          reason: 'You are requested as a required reviewer.',
+          stateLabel: 'New comments',
+          stateClass: 'new-comments',
+          reason: 'New comments were added after your last review.',
         },
       }
     }
@@ -221,9 +261,9 @@ export function classifyPullRequest(
     return {
       needsAttention: {
         ...basePr,
-        stateLabel: 'Updated since review',
-        stateClass: 'updated-since-review',
-        reason: 'You already reviewed this PR and it changed afterward.',
+        stateLabel: 'Review requested',
+        stateClass: 'review-requested',
+        reason: 'You are requested as a direct reviewer and have not reviewed yet.',
       },
     }
   }

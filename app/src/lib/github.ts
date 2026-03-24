@@ -25,6 +25,13 @@ export type CombinedStatusResponse = {
   state: string
 }
 
+export type PullComment = {
+  created_at: string
+  user?: {
+    login: string
+  }
+}
+
 export async function apiFetch<T>(url: string, token: string, cache?: EtagCache): Promise<T> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
