@@ -711,6 +711,32 @@
   fill: currentColor;
 }
 
+.github-fab {
+  position: fixed;
+  right: 1rem;
+  bottom: 7.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 20%);
+  text-decoration: none;
+}
+
+.github-fab:hover {
+  background: var(--subtle);
+}
+
+.github-fab svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: currentColor;
+}
 .fab-tooltip {
   position: absolute;
   right: calc(100% + 0.5rem);
@@ -732,7 +758,8 @@
 }
 
 .theme-fab:hover .fab-tooltip,
-.compact-fab:hover .fab-tooltip {
+.compact-fab:hover .fab-tooltip,
+.github-fab:hover .fab-tooltip {
   opacity: 1;
   visibility: visible;
 }
@@ -843,6 +870,11 @@
   .compact-fab {
     right: 0.75rem;
     bottom: 4rem;
+  }
+
+  .github-fab {
+    right: 0.75rem;
+    bottom: 7.25rem;
   }
 
   .settings-toggle {
