@@ -29,7 +29,7 @@ type ClassifiedPullRequests = {
   needsAttention: PullRequest[]
   relatedToYou: PullRequest[]
   stalePrs: PullRequest[]
-  teamSignalsUnavailable: boolean
+  teamSignalsUnavailable: string | null
 }
 
 type ThemePreference = 'system' | 'dark' | 'light'
@@ -215,12 +215,16 @@ async function fetchAndClassifyPullRequests(
   }
 
   let teams: Team[] = []
-  let teamSignalsUnavailable = false
+  let teamSignalsUnavailable: string | null = null
 
   try {
     teams = await apiFetch<Team[]>('https://api.github.com/user/teams?per_page=100', token, etagCache)
-  } catch {
-    teamSignalsUnavailable = true
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    teamSignalsUnavailable =
+      `Could not fetch team memberships (${detail}). ` +
+      'Ensure the token has the "Members: Read" organization permission ' +
+      'and that the Resource owner is set to your org.'
   }
 
   const myTeamSlugs = new Set(
@@ -228,6 +232,13 @@ async function fetchAndClassifyPullRequests(
       .filter((team) => team.organization.login.toLowerCase() === org.toLowerCase())
       .map((team) => team.slug),
   )
+
+  if (!teamSignalsUnavailable && myTeamSlugs.size === 0) {
+    teamSignalsUnavailable =
+      'No team memberships found for this org. If you belong to teams, verify ' +
+      'that your token\'s Resource owner is set to the org (not your personal account) ' +
+      'and that it has the "Members: Read" organization permission.'
+  }
 
   const candidateQueries = [
     `is:pr is:open archived:false org:${org} review-requested:${me.login}`,
@@ -759,7 +770,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [errorToast, setErrorToast] = useState<string | null>(null)
   const [rateLimitWarning, setRateLimitWarning] = useState(false)
-  const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState(false)
+  const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState<string | null>(null)
   const [stalePrs, setStalePrs] = useState<PullRequest[]>([])
   const [yourPrs, setYourPrs] = useState<PullRequest[]>([])
   const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([])
@@ -963,7 +974,7 @@ function App() {
       setYourPrs([])
       setNeedsAttention([])
       setRelatedToYou([])
-      setTeamSignalsUnavailable(false)
+      setTeamSignalsUnavailable(null)
       return
     }
 
@@ -1401,7 +1412,7 @@ function App() {
               <ul>
                 <li>Pull requests: Read (required)</li>
                 <li>Commit statuses: Read (required for PR check status icons)</li>
-                <li>Administration: Read (optional, enables team-assigned PR signals)</li>
+                <li>Members: Read — organization permission (optional, enables team-assigned PR signals)</li>
               </ul>
               <p>
                 For <strong>live refresh</strong> (~60s), use a{' '}
@@ -1415,8 +1426,7 @@ function App() {
             </div>
             {teamSignalsUnavailable ? (
               <p className="helper-copy warning-copy">
-                Team permissions are unavailable for this token. Showing direct-review and
-                activity-based signals only.
+                {teamSignalsUnavailable} Showing direct-review and activity-based signals only.
               </p>
             ) : null}
           </aside>
