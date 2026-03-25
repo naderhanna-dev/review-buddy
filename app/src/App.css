@@ -193,13 +193,13 @@
 }
 
 .section-action--active {
-  background: var(--subtle);
-  border-color: var(--text);
-  color: var(--text);
+  background: var(--surface);
+  border-color: var(--link);
+  color: var(--link);
 }
 
 .section-action--active:hover {
-  background: var(--border);
+  background: var(--subtle);
 }
 
 .section-menu-wrap {
