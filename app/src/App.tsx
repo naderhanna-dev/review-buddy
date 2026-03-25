@@ -66,7 +66,7 @@ const MERGED_COUNT_DEFAULT = 5
 const MERGED_COUNT_MIN = 1
 const MERGED_COUNT_MAX = 25
 
-const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'compact' | 'stalePreferences' | 'sectionSort' | 'recentlyMergedCount', string> = {
+const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'compact' | 'stalePreferences' | 'sectionSort' | 'recentlyMergedCount', 'sectionHideDrafts', string> = {
   token: 'review-radar.pat',
   org: 'review-radar.org',
   viewed: 'review-radar.viewed',
@@ -75,6 +75,7 @@ const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'compact' | 's
   stalePreferences: 'review-radar.stalePreferences',
   sectionSort: 'review-radar.sectionSort',
   recentlyMergedCount: 'review-radar.recentlyMergedCount',
+  sectionHideDrafts: 'review-radar.sectionHideDrafts',
 }
 
 function readStorageItem(key: string): string {
@@ -181,6 +182,40 @@ function applySectionSort(prs: PullRequest[], preference: SortPreference): PullR
     return sortByCreatedAt(prs, 'desc')
   }
   return prs
+}
+
+const DEFAULT_SECTION_HIDE_DRAFTS: Record<SectionKey, boolean> = {
+  needsAttention: false,
+  yourPrs: false,
+  relatedToYou: false,
+  stalePrs: false,
+}
+
+function readSectionHideDrafts(): Record<SectionKey, boolean> {
+  const raw = readStorageItem(STORAGE_KEYS.sectionHideDrafts)
+  if (!raw) {
+    return { ...DEFAULT_SECTION_HIDE_DRAFTS }
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const result = { ...DEFAULT_SECTION_HIDE_DRAFTS }
+    for (const key of Object.keys(result) as SectionKey[]) {
+      if (parsed[key] === true) {
+        result[key] = true
+      }
+    }
+    return result
+  } catch {
+    return { ...DEFAULT_SECTION_HIDE_DRAFTS }
+  }
+}
+
+function applyDraftFilter(pullRequests: PullRequest[], hideDrafts: boolean): PullRequest[] {
+  if (!hideDrafts) {
+    return pullRequests
+  }
+  return pullRequests.filter((pullRequest) => !pullRequest.isDraft)
 }
 
 function formatRefreshAge(timestampMs: number, nowMs: number): string {
@@ -597,9 +632,12 @@ function SectionHeader({
   statusLabel,
   openSectionMenuKey,
   sortPreference,
+  isOpen,
+  onToggleOpen,
+  hideDrafts,
+  onToggleHideDrafts,
   onToggleSectionMenu,
   onSetSort,
-  extraTools,
 }: {
   title: string
   sectionKey: SectionKey
@@ -608,15 +646,28 @@ function SectionHeader({
   statusLabel?: string
   openSectionMenuKey: SectionKey | null
   sortPreference: SortPreference
+  isOpen: boolean
+  onToggleOpen: () => void
+  hideDrafts: boolean
+  onToggleHideDrafts: () => void
   onToggleSectionMenu: (key: SectionKey) => void
   onSetSort: (key: SectionKey, sort: SortPreference) => void
-  extraTools?: React.ReactNode
 }) {
   const isMenuOpen = openSectionMenuKey === sectionKey
 
   return (
     <div className="section-header">
-      <h2>{title}</h2>
+      <button type="button" className="section-title-toggle" onClick={onToggleOpen} aria-expanded={isOpen}>
+        <svg
+          className={`section-chevron${isOpen ? '' : ' section-chevron--collapsed'}`}
+          viewBox="0 0 16 16"
+          aria-hidden="true"
+          role="presentation"
+        >
+          <path d="M4.5 6L8 9.5 11.5 6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="section-title-text">{title}</span>
+      </button>
       <div className="section-header-tools">
         <span>
           {count}
@@ -625,7 +676,17 @@ function SectionHeader({
           ) : null}
         </span>
         {statusLabel ? <span className="section-status-label">{statusLabel}</span> : null}
-        {extraTools}
+        <button
+          type="button"
+          className={`section-action${hideDrafts ? ' section-action--active' : ''}`}
+          aria-pressed={hideDrafts}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggleHideDrafts()
+          }}
+        >
+          Drafts
+        </button>
         <div className="section-menu-wrap">
           <button
             type="button"
@@ -1021,6 +1082,7 @@ function App() {
   const [sectionSortPreferences, setSectionSortPreferences] = useState<Record<SectionKey, SortPreference>>(
     readSectionSortPreferences,
   )
+  const [sectionHideDrafts, setSectionHideDrafts] = useState<Record<SectionKey, boolean>>(readSectionHideDrafts)
   const [refreshTick, setRefreshTick] = useState(0)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
@@ -1352,6 +1414,14 @@ function App() {
     setOpenSectionMenuKey(null)
   }
 
+  function handleToggleSectionHideDrafts(sectionKey: SectionKey): void {
+    setSectionHideDrafts((current) => {
+      const next = { ...current, [sectionKey]: !current[sectionKey] }
+      localStorage.setItem(STORAGE_KEYS.sectionHideDrafts, JSON.stringify(next))
+      return next
+    })
+  }
+
   function toggleTheme(): void {
     const activeTheme = resolveTheme(themePreference)
     const nextPreference: ThemePreference = activeTheme === 'dark' ? 'light' : 'dark'
@@ -1369,14 +1439,26 @@ function App() {
 
   const activeTheme = resolveTheme(themePreference)
   const hasSavedConnection = Boolean(token && org)
-  const displayNeedsAttention = applySectionSort(needsAttention, sectionSortPreferences.needsAttention)
-  const displayYourPrs = applySectionSort(yourPrs, sectionSortPreferences.yourPrs)
-  const displayRelatedToYou = applySectionSort(relatedToYou, sectionSortPreferences.relatedToYou)
+  const displayNeedsAttention = applyDraftFilter(
+    applySectionSort(needsAttention, sectionSortPreferences.needsAttention),
+    sectionHideDrafts.needsAttention,
+  )
+  const displayYourPrs = applyDraftFilter(
+    applySectionSort(yourPrs, sectionSortPreferences.yourPrs),
+    sectionHideDrafts.yourPrs,
+  )
+  const displayRelatedToYou = applyDraftFilter(
+    applySectionSort(relatedToYou, sectionSortPreferences.relatedToYou),
+    sectionHideDrafts.relatedToYou,
+  )
 
   const needsAttentionUpdatedCount = displayNeedsAttention.filter((pr) => pr.stateLabel).length
   const yourPrsUpdatedCount = displayYourPrs.filter((pr) => pr.stateLabel).length
   const relatedToYouUpdatedCount = displayRelatedToYou.filter((pr) => pr.stateLabel).length
-  const displayStalePrs = applySectionSort(stalePrs, sectionSortPreferences.stalePrs)
+  const displayStalePrs = applyDraftFilter(
+    applySectionSort(stalePrs, sectionSortPreferences.stalePrs),
+    sectionHideDrafts.stalePrs,
+  )
 
   const refreshLabel = isLoading
     ? 'Refreshing...'
@@ -1411,17 +1493,12 @@ function App() {
           statusLabel={isLoading && !lastRefreshedAt ? 'Classifying...' : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.needsAttention}
+          isOpen={isNeedsAttentionOpen}
+          onToggleOpen={() => setIsNeedsAttentionOpen((current) => !current)}
+          hideDrafts={sectionHideDrafts.needsAttention}
+          onToggleHideDrafts={() => handleToggleSectionHideDrafts('needsAttention')}
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
-          extraTools={
-            <button
-              type="button"
-              className="section-action"
-              onClick={() => setIsNeedsAttentionOpen((current) => !current)}
-            >
-              {isNeedsAttentionOpen ? 'Hide' : 'Show'}
-            </button>
-          }
         />
         {isNeedsAttentionOpen ? (
           <div>
@@ -1449,7 +1526,7 @@ function App() {
             ))}
           </div>
         ) : (
-          <p className="collapsed-hint">Section collapsed. Click Show to expand.</p>
+          <p className="collapsed-hint">Section collapsed — click the title to expand.</p>
         )}
       </section>
 
@@ -1462,17 +1539,12 @@ function App() {
           statusLabel={isLoading && !lastRefreshedAt ? 'Loading...' : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.yourPrs}
+          isOpen={isYourPrsOpen}
+          onToggleOpen={() => setIsYourPrsOpen((current) => !current)}
+          hideDrafts={sectionHideDrafts.yourPrs}
+          onToggleHideDrafts={() => handleToggleSectionHideDrafts('yourPrs')}
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
-          extraTools={
-            <button
-              type="button"
-              className="section-action"
-              onClick={() => setIsYourPrsOpen((current) => !current)}
-            >
-              {isYourPrsOpen ? 'Hide' : 'Show'}
-            </button>
-          }
         />
         {isYourPrsOpen ? (
           <div>
@@ -1500,7 +1572,7 @@ function App() {
             ))}
           </div>
         ) : (
-          <p className="collapsed-hint">Section collapsed. Click Show to expand.</p>
+          <p className="collapsed-hint">Section collapsed — click the title to expand.</p>
         )}
       </section>
 
@@ -1513,17 +1585,12 @@ function App() {
           statusLabel={isLoading && !lastRefreshedAt ? 'Loading...' : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.relatedToYou}
+          isOpen={isRelatedToYouOpen}
+          onToggleOpen={() => setIsRelatedToYouOpen((current) => !current)}
+          hideDrafts={sectionHideDrafts.relatedToYou}
+          onToggleHideDrafts={() => handleToggleSectionHideDrafts('relatedToYou')}
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
-          extraTools={
-            <button
-              type="button"
-              className="section-action"
-              onClick={() => setIsRelatedToYouOpen((current) => !current)}
-            >
-              {isRelatedToYouOpen ? 'Hide' : 'Show'}
-            </button>
-          }
         />
         {isRelatedToYouOpen ? (
           <div>
@@ -1551,7 +1618,7 @@ function App() {
             ))}
           </div>
         ) : (
-          <p className="collapsed-hint">Section collapsed. Click Show to expand.</p>
+          <p className="collapsed-hint">Section collapsed — click the title to expand.</p>
         )}
       </section>
 
@@ -1594,17 +1661,12 @@ function App() {
           count={displayStalePrs.length}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.stalePrs}
+          isOpen={isStaleSectionOpen}
+          onToggleOpen={() => setIsStaleSectionOpen((current) => !current)}
+          hideDrafts={sectionHideDrafts.stalePrs}
+          onToggleHideDrafts={() => handleToggleSectionHideDrafts('stalePrs')}
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
-          extraTools={
-            <button
-              type="button"
-              className="section-action"
-              onClick={() => setIsStaleSectionOpen((current) => !current)}
-            >
-              {isStaleSectionOpen ? 'Hide' : 'Show'}
-            </button>
-          }
         />
         {isStaleSectionOpen ? (
           <div>
@@ -1632,7 +1694,7 @@ function App() {
             ))}
           </div>
         ) : (
-          <p className="collapsed-hint">Hidden by default to keep active triage focused.</p>
+          <p className="collapsed-hint">Section collapsed — click the title to expand.</p>
         )}
       </section>
 

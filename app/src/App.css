@@ -137,10 +137,37 @@
   border-radius: calc(0.5rem - 1px) calc(0.5rem - 1px) 0 0;
 }
 
-.section-header h2 {
+.section-title-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 0;
+  padding: 0;
   margin: 0;
+  color: var(--text);
   font-size: 0.95rem;
   font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.section-title-toggle:hover .section-title-text {
+  text-decoration: underline;
+  text-decoration-color: var(--muted);
+}
+
+.section-chevron {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex-shrink: 0;
+  transition: transform 180ms ease;
+  color: var(--muted);
+}
+
+.section-chevron--collapsed {
+  transform: rotate(-90deg);
 }
 
 .section-header-tools {
@@ -162,6 +189,16 @@
 
 .section-action:hover {
   background: var(--subtle);
+}
+
+.section-action--active {
+  background: var(--subtle);
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.section-action--active:hover {
+  background: var(--border);
 }
 
 .section-menu-wrap {
