@@ -65,7 +65,7 @@ const sampleData = {
   needsAttention: [samplePullRequest],
   relatedToYou: [samplePullRequest],
   stalePrs: [],
-  teamSignalsUnavailable: false,
+  teamSignalsUnavailable: null,
 }
 
 function setRawCache(value: unknown): void {

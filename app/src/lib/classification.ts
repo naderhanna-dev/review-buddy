@@ -1,3 +1,9 @@
+export type PolicyBotStatus = {
+  state: 'success' | 'pending' | 'failure'
+  url: string | null
+  description: string | null
+}
+
 export type PullRequest = {
   id: number
   number: number
@@ -17,6 +23,7 @@ export type PullRequest = {
   createdAtIso: string
   url: string
   checkState: 'success' | 'pending' | 'failure'
+  policyBotStatus?: PolicyBotStatus
   staleState?: 'auto' | 'manual'
   stateLabel: string
   stateClass: string

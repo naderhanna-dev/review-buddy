@@ -125,7 +125,6 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
-  overflow: hidden;
 }
 
 .section-header {
@@ -135,6 +134,7 @@
   padding: 0.75rem 1rem;
   background: var(--subtle);
   border-bottom: 1px solid var(--border);
+  border-radius: calc(0.5rem - 1px) calc(0.5rem - 1px) 0 0;
 }
 
 .section-header h2 {
@@ -350,6 +350,51 @@
   color: var(--check-failure);
 }
 
+.policy-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.policy-indicator:hover {
+  opacity: 0.75;
+}
+
+.policy-indicator svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.policy-indicator.success {
+  color: var(--check-success);
+}
+
+.policy-indicator.pending {
+  color: var(--check-pending);
+}
+
+.policy-indicator.failure {
+  color: var(--check-failure);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .title-group {
   display: flex;
   gap: 0.6rem;
@@ -429,6 +474,13 @@
   align-self: start;
   justify-items: end;
   position: relative;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: flex-end;
 }
 
 .row-menu-wrap {
@@ -711,6 +763,32 @@
   fill: currentColor;
 }
 
+.github-fab {
+  position: fixed;
+  right: 1rem;
+  bottom: 7.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 20%);
+  text-decoration: none;
+}
+
+.github-fab:hover {
+  background: var(--subtle);
+}
+
+.github-fab svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: currentColor;
+}
 .fab-tooltip {
   position: absolute;
   right: calc(100% + 0.5rem);
@@ -732,7 +810,8 @@
 }
 
 .theme-fab:hover .fab-tooltip,
-.compact-fab:hover .fab-tooltip {
+.compact-fab:hover .fab-tooltip,
+.github-fab:hover .fab-tooltip {
   opacity: 1;
   visibility: visible;
 }
@@ -779,6 +858,11 @@
 :root[data-compact='true'] .check-indicator {
   width: 0.8rem;
   height: 0.8rem;
+}
+
+:root[data-compact='true'] .policy-indicator {
+  width: 0.7rem;
+  height: 0.7rem;
 }
 
 :root[data-compact='true'] .row-menu-wrap {
@@ -843,6 +927,11 @@
   .compact-fab {
     right: 0.75rem;
     bottom: 4rem;
+  }
+
+  .github-fab {
+    right: 0.75rem;
+    bottom: 7.25rem;
   }
 
   .settings-toggle {

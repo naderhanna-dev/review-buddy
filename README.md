@@ -36,7 +36,8 @@ ReviewRadar supports two token types. Both require the **Resource owner** set to
 - Pull requests: **Read** (required)
 - Commit statuses: **Read** (required for PR check status icons)
 - Metadata: **Read** (auto-granted when any other repo permission is set)
-- Administration: **Read** (optional, enables team-assigned PR signals)
+**Organization permissions**:
+- Members: **Read** (optional, enables team-assigned PR signals)
 
 Fine-grained tokens do not support the GitHub Notifications API, so the app uses
 **ETag-enhanced polling every 2 minutes** to detect changes. This is efficient —
@@ -58,8 +59,8 @@ regardless as a fallback.
 
 ### Permission notes
 
-If Administration read is missing, the app still works and shows direct-reviewer and
-activity-based signals; only team-assigned signals are skipped.
+If the Members organization permission is missing, the app still works and shows
+direct-reviewer and activity-based signals; only team-assigned signals are skipped.
 
 If Commit statuses read is missing, PR check icons fall back to pending.
 

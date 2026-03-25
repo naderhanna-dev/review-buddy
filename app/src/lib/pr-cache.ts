@@ -14,7 +14,7 @@ type CachedPRData = {
     needsAttention: PullRequest[]
     relatedToYou: PullRequest[]
     stalePrs: PullRequest[]
-    teamSignalsUnavailable: boolean
+    teamSignalsUnavailable: string | null
   }
 }
 
