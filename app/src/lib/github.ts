@@ -28,8 +28,16 @@ export type Team = {
   }
 }
 
+export type StatusEntry = {
+  context: string
+  state: string
+  target_url: string | null
+  description: string | null
+}
+
 export type CombinedStatusResponse = {
   state: string
+  statuses: StatusEntry[]
 }
 
 export type PullComment = {
