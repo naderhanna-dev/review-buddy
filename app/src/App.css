@@ -737,7 +737,6 @@
   height: 1.2rem;
   fill: currentColor;
 }
-
 .fab-tooltip {
   position: absolute;
   right: calc(100% + 0.5rem);
