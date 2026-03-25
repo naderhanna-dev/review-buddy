@@ -7,6 +7,7 @@ import {
   prViewKey,
   sortByCreatedAt,
   sortByUpdatedDesc,
+  type PolicyBotStatus,
   type PullDetails,
   type PullRequest,
   type Review,
@@ -320,6 +321,7 @@ async function fetchAndClassifyPullRequests(
       ])
 
       let checkState: PullRequest['checkState'] = 'pending'
+      let policyBotStatus: PolicyBotStatus | undefined
 
       try {
         const combinedStatus = await apiFetch<CombinedStatusResponse>(
@@ -336,11 +338,28 @@ async function fetchAndClassifyPullRequests(
         ) {
           checkState = 'failure'
         }
+
+        const policyEntry = combinedStatus.statuses.find((s) =>
+          s.context.toLowerCase().startsWith('policy-bot'),
+        )
+        if (policyEntry) {
+          const policyState: PolicyBotStatus['state'] =
+            policyEntry.state === 'success'
+              ? 'success'
+              : policyEntry.state === 'failure' || policyEntry.state === 'error'
+                ? 'failure'
+                : 'pending'
+          policyBotStatus = {
+            state: policyState,
+            url: policyEntry.target_url,
+            description: policyEntry.description,
+          }
+        }
       } catch {
         checkState = 'pending'
       }
 
-      return { pull, reviews, pullComments, checkState }
+      return { pull, reviews, pullComments, checkState, policyBotStatus }
     }),
   )
 
@@ -350,7 +369,7 @@ async function fetchAndClassifyPullRequests(
   const stalePrs: PullRequest[] = []
   const nowMs = Date.now()
 
-  for (const { pull, reviews, pullComments, checkState } of pullsWithReviews) {
+  for (const { pull, reviews, pullComments, checkState, policyBotStatus } of pullsWithReviews) {
     const viewKey = prViewKey(pull.base.repo.full_name, pull.number)
     const viewedAtMs = viewedMap[viewKey]
     const normalizedLogin = me.login.toLowerCase()
@@ -440,7 +459,7 @@ async function fetchAndClassifyPullRequests(
     const staleState = stalePreference === 'stale' ? 'manual' : 'auto'
 
     if (classification.yourPrs) {
-      const nextPr = { ...classification.yourPrs, checkState }
+      const nextPr = { ...classification.yourPrs, checkState, policyBotStatus }
       if (isStale) {
         stalePrs.push({ ...nextPr, staleState })
       } else {
@@ -450,7 +469,7 @@ async function fetchAndClassifyPullRequests(
     }
 
     if (classification.needsAttention) {
-      const nextPr = { ...classification.needsAttention, checkState }
+      const nextPr = { ...classification.needsAttention, checkState, policyBotStatus }
       if (isStale) {
         stalePrs.push({ ...nextPr, staleState })
       } else {
@@ -460,7 +479,7 @@ async function fetchAndClassifyPullRequests(
     }
 
     if (classification.relatedToYou) {
-      const nextPr = { ...classification.relatedToYou, checkState }
+      const nextPr = { ...classification.relatedToYou, checkState, policyBotStatus }
       if (isStale) {
         stalePrs.push({ ...nextPr, staleState })
       } else {
@@ -675,6 +694,14 @@ function PullRequestRow({
         ? 'Checks failing'
         : 'Checks pending'
 
+  const policyTitle = pr.policyBotStatus
+    ? pr.policyBotStatus.state === 'success'
+      ? 'Policy: approved'
+      : pr.policyBotStatus.state === 'failure'
+        ? 'Policy: not satisfied'
+        : 'Policy: pending'
+    : undefined
+
   const menuKey = prViewKey(pr.repository, pr.number)
   const isMenuOpen = openMenuKey === menuKey
 
@@ -771,14 +798,31 @@ function PullRequestRow({
         </div>
       </div>
       <div className="status-group">
-        {pr.stateLabel ? (
-          <span className="pill-wrap">
-            <span className={`pill ${pr.stateClass}`}>{pr.stateLabel}</span>
-            <span className="pill-tooltip" role="tooltip">
-              {pr.reason}
+        <div className="status-row">
+          {pr.policyBotStatus ? (
+            <a
+              href={pr.policyBotStatus.url ?? undefined}
+              className={`policy-indicator ${pr.policyBotStatus.state}`}
+              title={policyTitle}
+              aria-label={policyTitle}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span className="sr-only">{policyTitle}</span>
+              <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+                <path d="M8 0L1 3v4.5c0 3.88 2.98 7.5 7 8.5 4.02-1 7-4.62 7-8.5V3L8 0Zm0 1.33 5.5 2.36v3.81c0 3.22-2.42 6.25-5.5 7.17-3.08-.92-5.5-3.95-5.5-7.17V3.69L8 1.33Z" />
+              </svg>
+            </a>
+          ) : null}
+          {pr.stateLabel ? (
+            <span className="pill-wrap">
+              <span className={`pill ${pr.stateClass}`}>{pr.stateLabel}</span>
+              <span className="pill-tooltip" role="tooltip">
+                {pr.reason}
+              </span>
             </span>
-          </span>
-        ) : null}
+          ) : null}
+        </div>
         <span className="updated-at">{pr.updatedAt}</span>
       </div>
       <div className="row-menu-wrap">

@@ -350,6 +350,51 @@
   color: var(--check-failure);
 }
 
+.policy-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.policy-indicator:hover {
+  opacity: 0.75;
+}
+
+.policy-indicator svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.policy-indicator.success {
+  color: var(--check-success);
+}
+
+.policy-indicator.pending {
+  color: var(--check-pending);
+}
+
+.policy-indicator.failure {
+  color: var(--check-failure);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .title-group {
   display: flex;
   gap: 0.6rem;
@@ -429,6 +474,13 @@
   align-self: start;
   justify-items: end;
   position: relative;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: flex-end;
 }
 
 .row-menu-wrap {
@@ -806,6 +858,11 @@
 :root[data-compact='true'] .check-indicator {
   width: 0.8rem;
   height: 0.8rem;
+}
+
+:root[data-compact='true'] .policy-indicator {
+  width: 0.7rem;
+  height: 0.7rem;
 }
 
 :root[data-compact='true'] .row-menu-wrap {
