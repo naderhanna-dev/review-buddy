@@ -138,9 +138,10 @@
 }
 
 .section-title-toggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.4rem;
+  appearance: none;
   background: none;
   border: 0;
   padding: 0;
