@@ -23,6 +23,7 @@ import { etagCache } from './lib/etag-cache'
 import {
   getCacheTimestamp,
   isCacheStale,
+  PR_CACHE_STORAGE_KEY,
   readCachedPRData,
   writeCachedPRData,
 } from './lib/pr-cache'
@@ -926,6 +927,34 @@ function App() {
       window.removeEventListener('focus', triggerFocusRefresh)
     }
   }, [org, token])
+
+  useEffect(() => {
+    function handleStorageEvent(event: StorageEvent): void {
+      if (event.key !== PR_CACHE_STORAGE_KEY || event.newValue === null) {
+        return
+      }
+
+      const crossTabData = readCachedPRData(org)
+      if (!crossTabData) {
+        return
+      }
+
+      setStalePrs(crossTabData.stalePrs)
+      setYourPrs(crossTabData.yourPrs)
+      setNeedsAttention(crossTabData.needsAttention)
+      setRelatedToYou(crossTabData.relatedToYou)
+      setTeamSignalsUnavailable(crossTabData.teamSignalsUnavailable)
+      const crossTabTimestamp = getCacheTimestamp(org)
+      if (crossTabTimestamp) {
+        setLastRefreshedAt(crossTabTimestamp)
+      }
+    }
+
+    window.addEventListener('storage', handleStorageEvent)
+    return () => {
+      window.removeEventListener('storage', handleStorageEvent)
+    }
+  }, [org])
 
   useEffect(() => {
     function handleGlobalClick(event: MouseEvent): void {
