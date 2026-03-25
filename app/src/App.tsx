@@ -20,6 +20,12 @@ import {
   type Team,
 } from './lib/github'
 import { etagCache } from './lib/etag-cache'
+import {
+  getCacheTimestamp,
+  isCacheStale,
+  readCachedPRData,
+  writeCachedPRData,
+} from './lib/pr-cache'
 import { SmartRefreshController } from './lib/smart-refresh'
 import './App.css'
 
@@ -44,7 +50,7 @@ const FALLBACK_REFRESH_MS = 10 * 60 * 1000
 const NOTIFICATION_FALLBACK_MS = 2 * 60 * 1000
 const REFRESH_FOCUS_COOLDOWN_MS = 5 * 60 * 1000
 
-const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'compact' | 'stalePreferences' | 'sectionSort', string> = {
+const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'compact' | 'stalePreferences' | 'sectionSort' | 'prCache', string> = {
   token: 'review-radar.pat',
   org: 'review-radar.org',
   viewed: 'review-radar.viewed',
@@ -52,6 +58,7 @@ const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'compact' | 's
   compact: 'review-radar.compact',
   stalePreferences: 'review-radar.stalePreferences',
   sectionSort: 'review-radar.sectionSort',
+  prCache: 'review-radar.prCache',
 }
 
 function readStorageItem(key: string): string {
@@ -757,6 +764,7 @@ function App() {
     () => readStalePreferences(),
   )
   const [isLoading, setIsLoading] = useState(false)
+  const [isRevalidating, setIsRevalidating] = useState(false)
   const [errorToast, setErrorToast] = useState<string | null>(null)
   const [rateLimitWarning, setRateLimitWarning] = useState(false)
   const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState(false)
@@ -969,8 +977,31 @@ function App() {
 
     let ignore = false
 
+    // Read cache immediately — hydrate state before any network fetch
+    const cachedData = readCachedPRData(org)
+    if (cachedData && !ignore) {
+      setStalePrs(cachedData.stalePrs)
+      setYourPrs(cachedData.yourPrs)
+      setNeedsAttention(cachedData.needsAttention)
+      setRelatedToYou(cachedData.relatedToYou)
+      setTeamSignalsUnavailable(cachedData.teamSignalsUnavailable)
+      const cachedTimestamp = getCacheTimestamp(org)
+      if (cachedTimestamp) {
+        setLastRefreshedAt(cachedTimestamp)
+      }
+    }
+
+    // If cache is fresh, skip the network fetch — SmartRefreshController will trigger refreshTick when stale
+    if (cachedData && !isCacheStale(org)) {
+      return () => { ignore = true }
+    }
+
     async function loadAndClassifyPulls(): Promise<void> {
-      setIsLoading(true)
+      if (cachedData) {
+        setIsRevalidating(true)
+      } else {
+        setIsLoading(true)
+      }
       setErrorToast(null)
 
       try {
@@ -988,6 +1019,13 @@ function App() {
           setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
           setLastRefreshedAt(Date.now())
           setRateLimitWarning(false)
+          writeCachedPRData(org, {
+            yourPrs: classified.yourPrs,
+            needsAttention: classified.needsAttention,
+            relatedToYou: classified.relatedToYou,
+            stalePrs: classified.stalePrs,
+            teamSignalsUnavailable: classified.teamSignalsUnavailable,
+          })
         }
       } catch (loadError) {
         if (!ignore) {
@@ -1002,6 +1040,7 @@ function App() {
       } finally {
         if (!ignore) {
           setIsLoading(false)
+          setIsRevalidating(false)
         }
       }
     }
@@ -1114,11 +1153,13 @@ function App() {
   const relatedToYouUpdatedCount = displayRelatedToYou.filter((pr) => pr.stateLabel).length
   const displayStalePrs = applySectionSort(stalePrs, sectionSortPreferences.stalePrs)
 
-  const refreshLabel = isLoading
-    ? 'Refreshing...'
-    : lastRefreshedAt
-      ? `Last updated ${formatRefreshAge(lastRefreshedAt, nowMs)}`
-      : 'Not refreshed yet'
+  const refreshLabel = isRevalidating
+    ? `Updating... (${lastRefreshedAt ? formatRefreshAge(lastRefreshedAt, nowMs) : 'loading'})`
+    : isLoading
+      ? 'Refreshing...'
+      : lastRefreshedAt
+        ? `Last updated ${formatRefreshAge(lastRefreshedAt, nowMs)}`
+        : 'Not refreshed yet'
 
   return (
     <main className="app-shell">
