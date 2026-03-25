@@ -22,6 +22,7 @@ import {
 import { etagCache } from './lib/etag-cache'
 import {
   getCacheTimestamp,
+  invalidatePRCache,
   isCacheStale,
   PR_CACHE_STORAGE_KEY,
   readCachedPRData,
@@ -1001,6 +1002,7 @@ function App() {
       setNeedsAttention([])
       setRelatedToYou([])
       setTeamSignalsUnavailable(false)
+      invalidatePRCache()
       return
     }
 
@@ -1088,6 +1090,12 @@ function App() {
 
     localStorage.setItem(STORAGE_KEYS.token, nextToken)
     localStorage.setItem(STORAGE_KEYS.org, nextOrg)
+
+    if (nextToken !== token || nextOrg !== org) {
+      invalidatePRCache()
+      etagCache.clear()
+    }
+
     setToken(nextToken)
     setOrg(nextOrg)
     setIsConnectionPanelOpen(false)
