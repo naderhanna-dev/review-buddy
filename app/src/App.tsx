@@ -20,6 +20,7 @@ import {
   type Team,
 } from './lib/github'
 import { etagCache } from './lib/etag-cache'
+import { withRetry } from './lib/retry'
 import {
   getCacheTimestamp,
   invalidatePRCache,
@@ -277,19 +278,19 @@ async function fetchAndClassifyPullRequests(
   const pullsWithReviews = await Promise.all(
     Array.from(pullUrls).map(async (pullUrl) => {
       const [pull, reviews, pullComments] = await Promise.all([
-        apiFetch<PullDetails>(pullUrl, token, etagCache),
-        apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token, etagCache),
-        apiFetch<PullComment[]>(`${pullUrl}/comments?per_page=100`, token, etagCache),
+        withRetry(() => apiFetch<PullDetails>(pullUrl, token, etagCache)),
+        withRetry(() => apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token, etagCache)),
+        withRetry(() => apiFetch<PullComment[]>(`${pullUrl}/comments?per_page=100`, token, etagCache)),
       ])
 
       let checkState: PullRequest['checkState'] = 'pending'
 
       try {
-        const combinedStatus = await apiFetch<CombinedStatusResponse>(
+        const combinedStatus = await withRetry(() => apiFetch<CombinedStatusResponse>(
           `https://api.github.com/repos/${pull.base.repo.full_name}/commits/${pull.head.sha}/status`,
           token,
           etagCache,
-        )
+        ))
 
         if (combinedStatus.state === 'success') {
           checkState = 'success'
