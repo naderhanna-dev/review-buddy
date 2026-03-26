@@ -1,48 +1,28 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { prViewKey } from "./lib/classification";
-import type { PullRequest } from "./lib/classification";
-import { RateLimitError } from "./lib/github";
 import { etagCache } from "./lib/etag-cache";
-import {
-  getCacheTimestamp,
-  invalidatePRCache,
-  isCacheStale,
-  PR_CACHE_STORAGE_KEY,
-  readCachedPRData,
-  writeCachedPRData,
-} from "./lib/pr-cache";
-import { SmartRefreshController } from "./lib/smart-refresh";
-import { fetchAndClassifyPullRequests, fetchRecentlyMergedPRs } from "./lib/fetch-prs";
+import { invalidatePRCache } from "./lib/pr-cache";
 import {
   readCompactPreference,
   readDimViewedPreference,
   readMergedCountPreference,
   readSectionHideDrafts,
   readSectionSortPreferences,
-  readStalePreferences,
   readStorageItem,
   readThemePreference,
-  readViewedMap,
 } from "./lib/storage";
 import { applySectionSort, applyDraftFilter, formatRefreshAge } from "./lib/pr-utils";
-import { SectionHeader } from "./components/SectionHeader";
-import { PullRequestRow } from "./components/PullRequestRow";
-import { MergedPrRow } from "./components/MergedPrRow";
-import type {
-  MergedPullRequest,
-  SectionKey,
-  SortPreference,
-  StalePreference,
-  ThemePreference,
-} from "./types";
+import { usePRData } from "./hooks/usePRData";
+import { useRefreshTick } from "./hooks/useRefreshTick";
+import { useMenuDismiss } from "./hooks/useMenuDismiss";
+import { PrSection } from "./components/PrSection";
+import { RecentlyMergedSection } from "./components/RecentlyMergedSection";
+import { SettingsDrawer } from "./components/SettingsDrawer";
+import type { SectionKey, SortPreference, ThemePreference } from "./types";
 import {
-  FALLBACK_REFRESH_MS,
   MERGED_COUNT_DEFAULT,
   MERGED_COUNT_MAX,
   MERGED_COUNT_MIN,
-  NOTIFICATION_FALLBACK_MS,
-  REFRESH_FOCUS_COOLDOWN_MS,
   STORAGE_KEYS,
 } from "./constants";
 import "./App.css";
@@ -56,48 +36,24 @@ function App() {
     () => readStorageItem(STORAGE_KEYS.org) || "MaintainX",
   );
   const [org, setOrg] = useState(() => readStorageItem(STORAGE_KEYS.org));
-  const [viewedMap, setViewedMap] = useState<Record<string, number>>(() =>
-    readViewedMap(),
+  const [mergedCount, setMergedCount] = useState(() => readMergedCountPreference());
+  const [mergedCountInput, setMergedCountInput] = useState(() =>
+    String(readMergedCountPreference()),
   );
-  const [stalePreferences, setStalePreferences] = useState<
-    Record<string, StalePreference>
-  >(() => readStalePreferences());
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRevalidating, setIsRevalidating] = useState(false);
-  const [errorToast, setErrorToast] = useState<string | null>(null);
-  const [rateLimitWarning, setRateLimitWarning] = useState(false);
-  const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState<
-    string | null
-  >(null);
-  const [stalePrs, setStalePrs] = useState<PullRequest[]>([]);
-  const [yourPrs, setYourPrs] = useState<PullRequest[]>([]);
-  const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([]);
-  const [relatedToYou, setRelatedToYou] = useState<PullRequest[]>([]);
-  const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
-    readThemePreference(),
-  );
-  const [isCompact, setIsCompact] = useState(() => readCompactPreference());
-  const [dimViewed, setDimViewed] = useState(() => readDimViewedPreference());
   const [isConnectionPanelOpen, setIsConnectionPanelOpen] = useState(() => {
     const savedToken = readStorageItem(STORAGE_KEYS.token);
     const savedOrg = readStorageItem(STORAGE_KEYS.org);
     return !(savedToken && savedOrg);
   });
-  const [recentlyMerged, setRecentlyMerged] = useState<MergedPullRequest[]>([]);
-  const [isRecentlyMergedOpen, setIsRecentlyMergedOpen] = useState(false);
-  const [mergedCount, setMergedCount] = useState(() =>
-    readMergedCountPreference(),
-  );
-  const [mergedCountInput, setMergedCountInput] = useState(() =>
-    String(readMergedCountPreference()),
+  const [isCompact, setIsCompact] = useState(() => readCompactPreference());
+  const [dimViewed, setDimViewed] = useState(() => readDimViewedPreference());
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
+    readThemePreference(),
   );
   const [isStaleSectionOpen, setIsStaleSectionOpen] = useState(false);
   const [isNeedsAttentionOpen, setIsNeedsAttentionOpen] = useState(true);
   const [isYourPrsOpen, setIsYourPrsOpen] = useState(true);
   const [isRelatedToYouOpen, setIsRelatedToYouOpen] = useState(true);
-  const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null);
-  const [openSectionMenuKey, setOpenSectionMenuKey] =
-    useState<SectionKey | null>(null);
   const [sectionSortPreferences, setSectionSortPreferences] = useState<
     Record<SectionKey, SortPreference>
   >(readSectionSortPreferences);
@@ -105,21 +61,30 @@ function App() {
     Record<SectionKey, boolean>
   >(readSectionHideDrafts);
   const [refreshTick, setRefreshTick] = useState(0);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const isLoadingRef = useRef(false);
-  const viewedMapRef = useRef<Record<string, number>>(viewedMap);
-  const lastVisibilityRefreshAtRef = useRef(0);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshTick((current) => current + 1);
+  }, []);
+
+  const prData = usePRData({ org, token, mergedCount, refreshTick });
+
+  useRefreshTick({
+    org,
+    token,
+    isLoadingRef: prData.isLoadingRef,
+    onRefresh: handleRefresh,
+  });
+
+  const menu = useMenuDismiss();
 
   function resolveTheme(preference: ThemePreference): "dark" | "light" {
     if (preference === "dark") {
       return "dark";
     }
-
     if (preference === "light") {
       return "light";
     }
-
     return window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
@@ -149,18 +114,9 @@ function App() {
   }, [isCompact]);
 
   useEffect(() => {
-    isLoadingRef.current = isLoading;
-  }, [isLoading]);
-
-  useEffect(() => {
-    viewedMapRef.current = viewedMap;
-  }, [viewedMap]);
-
-  useEffect(() => {
     const intervalId = window.setInterval(() => {
       setNowMs(Date.now());
     }, 30 * 1000);
-
     return () => {
       window.clearInterval(intervalId);
     };
@@ -183,248 +139,6 @@ function App() {
     };
   }, [isConnectionPanelOpen]);
 
-  useEffect(() => {
-    if (!token || !org) {
-      return;
-    }
-
-    const controller = new SmartRefreshController({
-      token,
-      org,
-      onRefresh: () => {
-        if (document.visibilityState !== "visible" || isLoadingRef.current) {
-          return;
-        }
-
-        setRefreshTick((current) => current + 1);
-      },
-      fallbackIntervalMs: FALLBACK_REFRESH_MS,
-      degradedIntervalMs: NOTIFICATION_FALLBACK_MS,
-    });
-
-    controller.start();
-
-    return () => {
-      controller.stop();
-    };
-  }, [org, token]);
-
-  useEffect(() => {
-    if (!token || !org) {
-      return;
-    }
-
-    function triggerFocusRefresh(): void {
-      if (document.visibilityState !== "visible" || isLoadingRef.current) {
-        return;
-      }
-
-      const now = Date.now();
-      if (
-        now - lastVisibilityRefreshAtRef.current <
-        REFRESH_FOCUS_COOLDOWN_MS
-      ) {
-        return;
-      }
-
-      lastVisibilityRefreshAtRef.current = now;
-      setRefreshTick((current) => current + 1);
-    }
-
-    function handleVisibilityChange(): void {
-      if (document.visibilityState === "visible") {
-        triggerFocusRefresh();
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", triggerFocusRefresh);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", triggerFocusRefresh);
-    };
-  }, [org, token]);
-
-  useEffect(() => {
-    function handleStorageEvent(event: StorageEvent): void {
-      if (event.key !== PR_CACHE_STORAGE_KEY || event.newValue === null) {
-        return;
-      }
-
-      const crossTabData = readCachedPRData(org);
-      if (!crossTabData) {
-        return;
-      }
-
-      setStalePrs(crossTabData.stalePrs);
-      setYourPrs(crossTabData.yourPrs);
-      setNeedsAttention(crossTabData.needsAttention);
-      setRelatedToYou(crossTabData.relatedToYou);
-      setRecentlyMerged(crossTabData.recentlyMerged);
-      setTeamSignalsUnavailable(crossTabData.teamSignalsUnavailable);
-      const crossTabTimestamp = getCacheTimestamp(org);
-      if (crossTabTimestamp) {
-        setLastRefreshedAt(crossTabTimestamp);
-      }
-    }
-
-    window.addEventListener("storage", handleStorageEvent);
-    return () => {
-      window.removeEventListener("storage", handleStorageEvent);
-    };
-  }, [org]);
-
-  useEffect(() => {
-    function handleGlobalClick(event: MouseEvent): void {
-      const target = event.target as HTMLElement | null;
-      if (!target) {
-        return;
-      }
-
-      if (!target.closest(".row-menu") && !target.closest(".row-menu-toggle")) {
-        setOpenRowMenuKey(null);
-      }
-
-      if (
-        !target.closest(".section-menu") &&
-        !target.closest(".section-menu-toggle")
-      ) {
-        setOpenSectionMenuKey(null);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent): void {
-      if (event.key === "Escape") {
-        setOpenRowMenuKey(null);
-        setOpenSectionMenuKey(null);
-      }
-    }
-
-    document.addEventListener("click", handleGlobalClick);
-    window.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("click", handleGlobalClick);
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!token || !org) {
-      setIsConnectionPanelOpen(true);
-    }
-  }, [org, token]);
-
-  useEffect(() => {
-    if (!token || !org) {
-      setStalePrs([]);
-      setYourPrs([]);
-      setNeedsAttention([]);
-      setRelatedToYou([]);
-      setRecentlyMerged([]);
-      setTeamSignalsUnavailable(null);
-      invalidatePRCache();
-      return;
-    }
-
-    let ignore = false;
-
-    // Read cache immediately — hydrate state before any network fetch
-    const cachedData = readCachedPRData(org);
-    if (cachedData && !ignore) {
-      setStalePrs(cachedData.stalePrs);
-      setYourPrs(cachedData.yourPrs);
-      setNeedsAttention(cachedData.needsAttention);
-      setRelatedToYou(cachedData.relatedToYou);
-      setRecentlyMerged(cachedData.recentlyMerged);
-      setTeamSignalsUnavailable(cachedData.teamSignalsUnavailable);
-      const cachedTimestamp = getCacheTimestamp(org);
-      if (cachedTimestamp) {
-        setLastRefreshedAt(cachedTimestamp);
-      }
-    }
-
-    // If cache is fresh, skip the network fetch — SmartRefreshController will trigger refreshTick when stale
-    if (cachedData && !isCacheStale(org)) {
-      return () => { ignore = true; };
-    }
-
-    async function loadAndClassifyPulls(): Promise<void> {
-      if (cachedData) {
-        setIsRevalidating(true);
-      } else {
-        setIsLoading(true);
-      }
-      setErrorToast(null);
-
-      try {
-        const [classified, merged] = await Promise.all([
-          fetchAndClassifyPullRequests(
-            org,
-            token,
-            viewedMapRef.current,
-            stalePreferences,
-          ),
-          fetchRecentlyMergedPRs(org, token, mergedCount),
-        ]);
-        if (!ignore) {
-          setStalePrs(classified.stalePrs);
-          setYourPrs(classified.yourPrs);
-          setNeedsAttention(classified.needsAttention);
-          setRelatedToYou(classified.relatedToYou);
-          setTeamSignalsUnavailable(classified.teamSignalsUnavailable);
-          setRecentlyMerged(merged);
-          setLastRefreshedAt(Date.now());
-          setRateLimitWarning(false);
-
-          if (classified.closedViewedKeys.length > 0) {
-            setViewedMap((current) => {
-              const next = { ...current };
-              for (const key of classified.closedViewedKeys) {
-                delete next[key];
-              }
-              localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next));
-              return next;
-            });
-          }
-
-          writeCachedPRData(org, {
-            yourPrs: classified.yourPrs,
-            needsAttention: classified.needsAttention,
-            relatedToYou: classified.relatedToYou,
-            stalePrs: classified.stalePrs,
-            recentlyMerged: merged,
-            teamSignalsUnavailable: classified.teamSignalsUnavailable,
-          });
-        }
-      } catch (loadError) {
-        if (!ignore) {
-          if (loadError instanceof RateLimitError) {
-            setRateLimitWarning(true);
-          } else {
-            const message =
-              loadError instanceof Error
-                ? loadError.message
-                : "Failed to load pull requests.";
-            setErrorToast(message);
-          }
-        }
-      } finally {
-        if (!ignore) {
-          setIsLoading(false);
-          setIsRevalidating(false);
-        }
-      }
-    }
-
-    void loadAndClassifyPulls();
-
-    return () => {
-      ignore = true;
-    };
-  }, [mergedCount, org, refreshTick, stalePreferences, token]);
-
   function handleSaveConfig(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     const nextToken = tokenInput.trim();
@@ -440,10 +154,7 @@ function App() {
 
     localStorage.setItem(STORAGE_KEYS.token, nextToken);
     localStorage.setItem(STORAGE_KEYS.org, nextOrg);
-    localStorage.setItem(
-      STORAGE_KEYS.recentlyMergedCount,
-      String(nextMergedCount),
-    );
+    localStorage.setItem(STORAGE_KEYS.recentlyMergedCount, String(nextMergedCount));
 
     if (nextToken !== token || nextOrg !== org) {
       invalidatePRCache();
@@ -454,95 +165,38 @@ function App() {
     setOrg(nextOrg);
     setMergedCount(nextMergedCount);
     setMergedCountInput(String(nextMergedCount));
-    setIsConnectionPanelOpen(false);
+    setIsConnectionPanelOpen(!nextToken || !nextOrg);
   }
 
-  function handleViewed(repository: string, number: number): void {
-    const key = prViewKey(repository, number);
-    const now = Date.now();
-    setViewedMap((current) => {
-      const next = { ...current, [key]: now };
-      localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next));
-      return next;
-    });
+  function handleMergedCountChange(rawValue: string): void {
+    setMergedCountInput(rawValue);
+    const parsed = parseInt(rawValue, 10);
+    if (!isNaN(parsed) && parsed >= MERGED_COUNT_MIN && parsed <= MERGED_COUNT_MAX) {
+      setMergedCount(parsed);
+      localStorage.setItem(STORAGE_KEYS.recentlyMergedCount, String(parsed));
+    }
   }
 
-  function updateStalePreference(
-    repository: string,
-    number: number,
-    nextValue?: StalePreference,
-  ): void {
-    const key = prViewKey(repository, number);
-
-    setStalePreferences((current) => {
-      const next = { ...current };
-      if (nextValue) {
-        next[key] = nextValue;
-      } else {
-        delete next[key];
-      }
-
-      localStorage.setItem(STORAGE_KEYS.stalePreferences, JSON.stringify(next));
-      return next;
-    });
-  }
-
-  function handleMarkStale(repository: string, number: number): void {
-    updateStalePreference(repository, number, "stale");
-  }
-
-  function handleMarkActive(repository: string, number: number): void {
-    updateStalePreference(repository, number, "active");
-  }
-
-  function handleClearStalePreference(
-    repository: string,
-    number: number,
-  ): void {
-    updateStalePreference(repository, number);
-  }
-
-  function handleToggleRowMenu(menuKey: string): void {
-    setOpenRowMenuKey((current) => (current === menuKey ? null : menuKey));
-  }
-
-  function handleCloseRowMenu(): void {
-    setOpenRowMenuKey(null);
-  }
-
-  function handleToggleSectionMenu(sectionKey: SectionKey): void {
-    setOpenSectionMenuKey((current) =>
-      current === sectionKey ? null : sectionKey,
-    );
-  }
-
-  function handleSetSectionSort(
-    sectionKey: SectionKey,
-    sort: SortPreference,
-  ): void {
+  function handleSetSectionSort(sectionKey: SectionKey, sort: SortPreference): void {
     setSectionSortPreferences((current) => {
       const next = { ...current, [sectionKey]: sort };
       localStorage.setItem(STORAGE_KEYS.sectionSort, JSON.stringify(next));
       return next;
     });
-    setOpenSectionMenuKey(null);
+    menu.handleCloseSectionMenu();
   }
 
   function handleToggleSectionHideDrafts(sectionKey: SectionKey): void {
     setSectionHideDrafts((current) => {
       const next = { ...current, [sectionKey]: !current[sectionKey] };
-      localStorage.setItem(
-        STORAGE_KEYS.sectionHideDrafts,
-        JSON.stringify(next),
-      );
+      localStorage.setItem(STORAGE_KEYS.sectionHideDrafts, JSON.stringify(next));
       return next;
     });
   }
 
   function toggleTheme(): void {
     const activeTheme = resolveTheme(themePreference);
-    const nextPreference: ThemePreference =
-      activeTheme === "dark" ? "light" : "dark";
+    const nextPreference: ThemePreference = activeTheme === "dark" ? "light" : "dark";
     setThemePreference(nextPreference);
     localStorage.setItem(STORAGE_KEYS.theme, nextPreference);
   }
@@ -563,55 +217,51 @@ function App() {
     });
   }
 
-  function handleMergedCountChange(rawValue: string): void {
-    setMergedCountInput(rawValue);
-    const parsed = parseInt(rawValue, 10);
-    if (
-      !isNaN(parsed) &&
-      parsed >= MERGED_COUNT_MIN &&
-      parsed <= MERGED_COUNT_MAX
-    ) {
-      setMergedCount(parsed);
-      localStorage.setItem(STORAGE_KEYS.recentlyMergedCount, String(parsed));
-    }
-  }
-
+  const hasCredentials = Boolean(token && org);
   const activeTheme = resolveTheme(themePreference);
-  const hasSavedConnection = Boolean(token && org);
+
   const displayNeedsAttention = applyDraftFilter(
-    applySectionSort(needsAttention, sectionSortPreferences.needsAttention),
+    applySectionSort(prData.needsAttention, sectionSortPreferences.needsAttention),
     sectionHideDrafts.needsAttention,
   );
   const displayYourPrs = applyDraftFilter(
-    applySectionSort(yourPrs, sectionSortPreferences.yourPrs),
+    applySectionSort(prData.yourPrs, sectionSortPreferences.yourPrs),
     sectionHideDrafts.yourPrs,
   );
   const displayRelatedToYou = applyDraftFilter(
-    applySectionSort(relatedToYou, sectionSortPreferences.relatedToYou),
+    applySectionSort(prData.relatedToYou, sectionSortPreferences.relatedToYou),
     sectionHideDrafts.relatedToYou,
   );
-
-  const needsAttentionUpdatedCount = displayNeedsAttention.filter(
-    (pr) => pr.stateLabel,
-  ).length;
-  const yourPrsUpdatedCount = displayYourPrs.filter(
-    (pr) => pr.stateLabel,
-  ).length;
-  const relatedToYouUpdatedCount = displayRelatedToYou.filter(
-    (pr) => pr.stateLabel,
-  ).length;
   const displayStalePrs = applyDraftFilter(
-    applySectionSort(stalePrs, sectionSortPreferences.stalePrs),
+    applySectionSort(prData.stalePrs, sectionSortPreferences.stalePrs),
     sectionHideDrafts.stalePrs,
   );
 
-  const refreshLabel = isRevalidating
-    ? `Updating... (${lastRefreshedAt ? formatRefreshAge(lastRefreshedAt, nowMs) : "loading"})`
-    : isLoading
+  const refreshLabel = prData.isRevalidating
+    ? `Updating... (${prData.lastRefreshedAt ? formatRefreshAge(prData.lastRefreshedAt, nowMs) : "loading"})`
+    : prData.isLoading
       ? "Refreshing..."
-      : lastRefreshedAt
-        ? `Last updated ${formatRefreshAge(lastRefreshedAt, nowMs)}`
+      : prData.lastRefreshedAt
+        ? `Last updated ${formatRefreshAge(prData.lastRefreshedAt, nowMs)}`
         : "Not refreshed yet";
+
+  const sharedSectionProps = {
+    openSectionMenuKey: menu.openSectionMenuKey,
+    onToggleSectionMenu: menu.handleToggleSectionMenu,
+    onSetSort: handleSetSectionSort,
+    dimViewed,
+    viewedMap: prData.viewedMap,
+    stalePreferences: prData.stalePreferences,
+    openMenuKey: menu.openRowMenuKey,
+    onViewed: prData.handleViewed,
+    onToggleMenu: menu.handleToggleRowMenu,
+    onCloseMenu: menu.handleCloseRowMenu,
+    onMarkStale: prData.handleMarkStale,
+    onMarkActive: prData.handleMarkActive,
+    onClearStalePreference: prData.handleClearStalePreference,
+    isLoading: prData.isLoading,
+    hasCredentials,
+  };
 
   return (
     <main className="app-shell">
@@ -631,419 +281,97 @@ function App() {
         <p className="refresh-meta">{refreshLabel}</p>
       </header>
 
-      <section className="section-card">
-        <SectionHeader
-          title="Needs your attention"
-          sectionKey="needsAttention"
-          count={displayNeedsAttention.length}
-          updatedCount={needsAttentionUpdatedCount}
-          statusLabel={
-            isLoading && !lastRefreshedAt ? "Classifying..." : undefined
-          }
-          openSectionMenuKey={openSectionMenuKey}
-          sortPreference={sectionSortPreferences.needsAttention}
-          isOpen={isNeedsAttentionOpen}
-          onToggleOpen={() => setIsNeedsAttentionOpen((current) => !current)}
-          hideDrafts={sectionHideDrafts.needsAttention}
-          onToggleHideDrafts={() =>
-            handleToggleSectionHideDrafts("needsAttention")
-          }
-          onToggleSectionMenu={handleToggleSectionMenu}
-          onSetSort={handleSetSectionSort}
-        />
-        {isNeedsAttentionOpen ? (
-          <div>
-            {!isLoading &&
-            token &&
-            org &&
-            displayNeedsAttention.length === 0 ? (
-              <p className="empty-state">
-                Nothing currently needs your immediate attention.
-              </p>
-            ) : null}
-            {!isLoading && (!token || !org) ? (
-              <p className="empty-state">
-                Add org + PAT above to classify pull requests.
-              </p>
-            ) : null}
-            {displayNeedsAttention.map((pr) => (
-              <PullRequestRow
-                key={pr.id}
-                pr={pr}
-                isViewed={
-                  dimViewed &&
-                  Boolean(viewedMap[prViewKey(pr.repository, pr.number)])
-                }
-                onViewed={handleViewed}
-                sectionKind="active"
-                openMenuKey={openRowMenuKey}
-                onToggleMenu={handleToggleRowMenu}
-                onCloseMenu={handleCloseRowMenu}
-                stalePreference={
-                  stalePreferences[prViewKey(pr.repository, pr.number)]
-                }
-                onMarkStale={handleMarkStale}
-                onMarkActive={handleMarkActive}
-                onClearStalePreference={handleClearStalePreference}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="collapsed-hint">
-            Section collapsed — click the title to expand.
-          </p>
-        )}
-      </section>
+      <PrSection
+        {...sharedSectionProps}
+        title="Needs your attention"
+        sectionKey="needsAttention"
+        sectionKind="active"
+        prs={displayNeedsAttention}
+        isOpen={isNeedsAttentionOpen}
+        onToggleOpen={() => setIsNeedsAttentionOpen((current) => !current)}
+        emptyConnectedMessage="Nothing currently needs your immediate attention."
+        emptyDisconnectedMessage="Add org + PAT above to classify pull requests."
+        updatedCount={displayNeedsAttention.filter((pr) => pr.stateLabel).length}
+        statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Classifying..." : undefined}
+        sortPreference={sectionSortPreferences.needsAttention}
+        hideDrafts={sectionHideDrafts.needsAttention}
+        onToggleHideDrafts={() => handleToggleSectionHideDrafts("needsAttention")}
+      />
 
-      <section className="section-card">
-        <SectionHeader
-          title="Your PRs"
-          sectionKey="yourPrs"
-          count={displayYourPrs.length}
-          updatedCount={yourPrsUpdatedCount}
-          statusLabel={isLoading && !lastRefreshedAt ? "Loading..." : undefined}
-          openSectionMenuKey={openSectionMenuKey}
-          sortPreference={sectionSortPreferences.yourPrs}
-          isOpen={isYourPrsOpen}
-          onToggleOpen={() => setIsYourPrsOpen((current) => !current)}
-          hideDrafts={sectionHideDrafts.yourPrs}
-          onToggleHideDrafts={() => handleToggleSectionHideDrafts("yourPrs")}
-          onToggleSectionMenu={handleToggleSectionMenu}
-          onSetSort={handleSetSectionSort}
-        />
-        {isYourPrsOpen ? (
-          <div>
-            {!isLoading && token && org && displayYourPrs.length === 0 ? (
-              <p className="empty-state">
-                No assigned or authored pull requests right now.
-              </p>
-            ) : null}
-            {!isLoading && (!token || !org) ? (
-              <p className="empty-state">
-                Add org + PAT above to load pull requests from GitHub.
-              </p>
-            ) : null}
-            {displayYourPrs.map((pr) => (
-              <PullRequestRow
-                key={pr.id}
-                pr={pr}
-                isViewed={
-                  dimViewed &&
-                  Boolean(viewedMap[prViewKey(pr.repository, pr.number)])
-                }
-                onViewed={handleViewed}
-                sectionKind="active"
-                openMenuKey={openRowMenuKey}
-                onToggleMenu={handleToggleRowMenu}
-                onCloseMenu={handleCloseRowMenu}
-                stalePreference={
-                  stalePreferences[prViewKey(pr.repository, pr.number)]
-                }
-                onMarkStale={handleMarkStale}
-                onMarkActive={handleMarkActive}
-                onClearStalePreference={handleClearStalePreference}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="collapsed-hint">
-            Section collapsed — click the title to expand.
-          </p>
-        )}
-      </section>
+      <PrSection
+        {...sharedSectionProps}
+        title="Your PRs"
+        sectionKey="yourPrs"
+        sectionKind="active"
+        prs={displayYourPrs}
+        isOpen={isYourPrsOpen}
+        onToggleOpen={() => setIsYourPrsOpen((current) => !current)}
+        emptyConnectedMessage="No assigned or authored pull requests right now."
+        emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
+        updatedCount={displayYourPrs.filter((pr) => pr.stateLabel).length}
+        statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Loading..." : undefined}
+        sortPreference={sectionSortPreferences.yourPrs}
+        hideDrafts={sectionHideDrafts.yourPrs}
+        onToggleHideDrafts={() => handleToggleSectionHideDrafts("yourPrs")}
+      />
 
-      <section className="section-card">
-        <SectionHeader
-          title="Related to you"
-          sectionKey="relatedToYou"
-          count={displayRelatedToYou.length}
-          updatedCount={relatedToYouUpdatedCount}
-          statusLabel={isLoading && !lastRefreshedAt ? "Loading..." : undefined}
-          openSectionMenuKey={openSectionMenuKey}
-          sortPreference={sectionSortPreferences.relatedToYou}
-          isOpen={isRelatedToYouOpen}
-          onToggleOpen={() => setIsRelatedToYouOpen((current) => !current)}
-          hideDrafts={sectionHideDrafts.relatedToYou}
-          onToggleHideDrafts={() =>
-            handleToggleSectionHideDrafts("relatedToYou")
-          }
-          onToggleSectionMenu={handleToggleSectionMenu}
-          onSetSort={handleSetSectionSort}
-        />
-        {isRelatedToYouOpen ? (
-          <div>
-            {!isLoading && token && org && displayRelatedToYou.length === 0 ? (
-              <p className="empty-state">
-                No non-urgent related pull requests right now.
-              </p>
-            ) : null}
-            {!isLoading && (!token || !org) ? (
-              <p className="empty-state">
-                Add org + PAT above to load pull requests from GitHub.
-              </p>
-            ) : null}
-            {displayRelatedToYou.map((pr) => (
-              <PullRequestRow
-                key={pr.id}
-                pr={pr}
-                isViewed={
-                  dimViewed &&
-                  Boolean(viewedMap[prViewKey(pr.repository, pr.number)])
-                }
-                onViewed={handleViewed}
-                sectionKind="active"
-                openMenuKey={openRowMenuKey}
-                onToggleMenu={handleToggleRowMenu}
-                onCloseMenu={handleCloseRowMenu}
-                stalePreference={
-                  stalePreferences[prViewKey(pr.repository, pr.number)]
-                }
-                onMarkStale={handleMarkStale}
-                onMarkActive={handleMarkActive}
-                onClearStalePreference={handleClearStalePreference}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="collapsed-hint">
-            Section collapsed — click the title to expand.
-          </p>
-        )}
-      </section>
+      <PrSection
+        {...sharedSectionProps}
+        title="Related to you"
+        sectionKey="relatedToYou"
+        sectionKind="active"
+        prs={displayRelatedToYou}
+        isOpen={isRelatedToYouOpen}
+        onToggleOpen={() => setIsRelatedToYouOpen((current) => !current)}
+        emptyConnectedMessage="No non-urgent related pull requests right now."
+        emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
+        updatedCount={displayRelatedToYou.filter((pr) => pr.stateLabel).length}
+        statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Loading..." : undefined}
+        sortPreference={sectionSortPreferences.relatedToYou}
+        hideDrafts={sectionHideDrafts.relatedToYou}
+        onToggleHideDrafts={() => handleToggleSectionHideDrafts("relatedToYou")}
+      />
 
-      <section className="section-card">
-        <div className="section-header">
-          <button
-            type="button"
-            className="section-title-toggle"
-            onClick={() => setIsRecentlyMergedOpen((current) => !current)}
-            aria-expanded={isRecentlyMergedOpen}
-          >
-            <svg
-              className={`section-chevron${isRecentlyMergedOpen ? "" : " section-chevron--collapsed"}`}
-              viewBox="0 0 16 16"
-              width="14"
-              height="14"
-              aria-hidden="true"
-              role="presentation"
-            >
-              <path d="M4.5 6L8 9.5 11.5 6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="section-title-text">Recently merged</span>
-          </button>
-          <div className="section-header-tools">
-            <span>{recentlyMerged.length}</span>
-            {isLoading && !lastRefreshedAt ? (
-              <span className="section-status-label">Loading...</span>
-            ) : null}
-          </div>
-        </div>
-        {isRecentlyMergedOpen ? (
-          <div>
-            {!isLoading && token && org && recentlyMerged.length === 0 ? (
-              <p className="empty-state">
-                No recently merged pull requests found.
-              </p>
-            ) : null}
-            {!isLoading && (!token || !org) ? (
-              <p className="empty-state">
-                Add org + PAT above to load pull requests from GitHub.
-              </p>
-            ) : null}
-            {recentlyMerged.map((pr) => (
-              <MergedPrRow key={pr.id} pr={pr} />
-            ))}
-          </div>
-        ) : (
-          <p className="collapsed-hint">Section collapsed — click the title to expand.</p>
-        )}
-      </section>
+      <RecentlyMergedSection
+        recentlyMerged={prData.recentlyMerged}
+        isLoading={prData.isLoading}
+        lastRefreshedAt={prData.lastRefreshedAt}
+        hasCredentials={hasCredentials}
+      />
 
-      <section className="section-card">
-        <SectionHeader
-          title="Stale PRs"
-          sectionKey="stalePrs"
-          count={displayStalePrs.length}
-          openSectionMenuKey={openSectionMenuKey}
-          sortPreference={sectionSortPreferences.stalePrs}
-          isOpen={isStaleSectionOpen}
-          onToggleOpen={() => setIsStaleSectionOpen((current) => !current)}
-          hideDrafts={sectionHideDrafts.stalePrs}
-          onToggleHideDrafts={() => handleToggleSectionHideDrafts("stalePrs")}
-          onToggleSectionMenu={handleToggleSectionMenu}
-          onSetSort={handleSetSectionSort}
-        />
-        {isStaleSectionOpen ? (
-          <div>
-            {!isLoading && token && org && displayStalePrs.length === 0 ? (
-              <p className="empty-state">No stale pull requests right now.</p>
-            ) : null}
-            {!isLoading && (!token || !org) ? (
-              <p className="empty-state">
-                Add org + PAT above to load pull requests from GitHub.
-              </p>
-            ) : null}
-            {displayStalePrs.map((pr) => (
-              <PullRequestRow
-                key={pr.id}
-                pr={pr}
-                isViewed={
-                  dimViewed &&
-                  Boolean(viewedMap[prViewKey(pr.repository, pr.number)])
-                }
-                onViewed={handleViewed}
-                sectionKind="stale"
-                openMenuKey={openRowMenuKey}
-                onToggleMenu={handleToggleRowMenu}
-                onCloseMenu={handleCloseRowMenu}
-                stalePreference={
-                  stalePreferences[prViewKey(pr.repository, pr.number)]
-                }
-                onMarkStale={handleMarkStale}
-                onMarkActive={handleMarkActive}
-                onClearStalePreference={handleClearStalePreference}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="collapsed-hint">
-            Section collapsed — click the title to expand.
-          </p>
-        )}
-      </section>
+      <PrSection
+        {...sharedSectionProps}
+        title="Stale PRs"
+        sectionKey="stalePrs"
+        sectionKind="stale"
+        prs={displayStalePrs}
+        isOpen={isStaleSectionOpen}
+        onToggleOpen={() => setIsStaleSectionOpen((current) => !current)}
+        emptyConnectedMessage="No stale pull requests right now."
+        emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
+        sortPreference={sectionSortPreferences.stalePrs}
+        hideDrafts={sectionHideDrafts.stalePrs}
+        onToggleHideDrafts={() => handleToggleSectionHideDrafts("stalePrs")}
+      />
 
       {isConnectionPanelOpen ? (
-        <>
-          <button
-            type="button"
-            className="settings-backdrop"
-            aria-label="Close settings"
-            onClick={() => setIsConnectionPanelOpen(false)}
-          />
-          <aside className="settings-drawer" aria-label="Connection settings">
-            <div className="settings-header">
-              <h2>Settings</h2>
-              <button
-                type="button"
-                className="settings-close"
-                onClick={() => setIsConnectionPanelOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            {hasSavedConnection ? (
-              <p className="connection-summary">
-                Connected to {org} with saved PAT.
-              </p>
-            ) : null}
-            <form className="config-form" onSubmit={handleSaveConfig}>
-              <label>
-                GitHub organization
-                <input
-                  type="text"
-                  value={orgInput}
-                  onChange={(event) => setOrgInput(event.target.value)}
-                  placeholder="your-org"
-                  autoComplete="organization"
-                />
-              </label>
-              <label>
-                Personal access token
-                <input
-                  type="password"
-                  value={tokenInput}
-                  onChange={(event) => setTokenInput(event.target.value)}
-                  placeholder="github_pat_..."
-                  autoComplete="off"
-                />
-              </label>
-              <button type="submit">Save and refresh</button>
-            </form>
-            <div className="helper-copy">
-              <p>PAT is stored in local storage for this browser profile.</p>
-              <p>
-                <a
-                  href="https://github.com/settings/personal-access-tokens/new"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Create a fine-grained PAT
-                </a>{" "}
-                and set <strong>Resource owner</strong> to{" "}
-                <strong>MaintainX</strong> (the Resource owner cannot be changed
-                after creation — if your existing token uses your personal
-                account, you need to generate a new one). Then select{" "}
-                <strong>All repositories</strong> and grant these permissions:
-              </p>
-              <ul>
-                <li>Pull requests: Read (required)</li>
-                <li>
-                  Commit statuses: Read (required for PR check status icons)
-                </li>
-                <li>
-                  Members: Read — organization permission (optional, enables
-                  team-assigned PR signals)
-                </li>
-              </ul>
-              <p>
-                For <strong>live refresh</strong> (~60s), use a{" "}
-                <a
-                  href="https://github.com/settings/tokens/new"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  classic token
-                </a>{" "}
-                with <strong>repo</strong> and <strong>notifications</strong>{" "}
-                scopes, then authorize it for <strong>MaintainX SSO</strong>.
-                Fine-grained tokens use 2-minute polling instead (still
-                efficient via ETag caching).
-              </p>
-            </div>
-            <div className="user-preferences">
-              <h3 className="user-preferences-heading">User preferences</h3>
-              <div className="user-preferences-group">
-                <h4 className="user-preferences-subheading">
-                  Recently merged count
-                </h4>
-                <p className="user-preferences-description">
-                  Number of recently merged PRs to show.
-                </p>
-                <input
-                  type="number"
-                  className="user-preferences-number"
-                  value={mergedCountInput}
-                  onChange={(event) =>
-                    handleMergedCountChange(event.target.value)
-                  }
-                  onBlur={() => setMergedCountInput(String(mergedCount))}
-                  min={MERGED_COUNT_MIN}
-                  max={MERGED_COUNT_MAX}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="user-preferences-group">
-                <h4 className="user-preferences-subheading">Dim viewed PRs</h4>
-                <label className="user-preferences-toggle">
-                  <span className="user-preferences-description">
-                    Reduce opacity of PRs you have already clicked.
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={dimViewed}
-                    onChange={toggleDimViewed}
-                  />
-                </label>
-              </div>
-            </div>
-            {teamSignalsUnavailable ? (
-              <p className="helper-copy warning-copy">
-                {teamSignalsUnavailable} Showing direct-review and
-                activity-based signals only.
-              </p>
-            ) : null}
-          </aside>
-        </>
+        <SettingsDrawer
+          org={org}
+          hasSavedConnection={Boolean(token && org)}
+          tokenInput={tokenInput}
+          setTokenInput={setTokenInput}
+          orgInput={orgInput}
+          setOrgInput={setOrgInput}
+          onSubmit={handleSaveConfig}
+          mergedCountInput={mergedCountInput}
+          onMergedCountChange={handleMergedCountChange}
+          mergedCount={mergedCount}
+          onMergedCountBlur={() => setMergedCountInput(String(mergedCount))}
+          dimViewed={dimViewed}
+          onToggleDimViewed={toggleDimViewed}
+          teamSignalsUnavailable={prData.teamSignalsUnavailable}
+          onClose={() => setIsConnectionPanelOpen(false)}
+        />
       ) : null}
 
       <a
@@ -1109,14 +437,14 @@ function App() {
         )}
       </button>
 
-      {rateLimitWarning ? (
+      {prData.rateLimitWarning ? (
         <div className="toast toast-warning" role="status">
           ⚠ Rate limit hit — showing cached data. Will refresh automatically.
         </div>
       ) : null}
-      {errorToast ? (
+      {prData.errorToast ? (
         <div className="toast toast-error" role="alert">
-          ⚠ {errorToast}
+          ⚠ {prData.errorToast}
         </div>
       ) : null}
     </main>
