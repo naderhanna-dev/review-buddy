@@ -7,46 +7,6 @@ export class RateLimitError extends Error {
   }
 }
 
-export type SearchIssueItem = {
-  pull_request?: {
-    url: string
-  }
-}
-
-export type SearchIssuesResponse = {
-  items: SearchIssueItem[]
-}
-
-export type GitHubUser = {
-  login: string
-}
-
-export type Team = {
-  slug: string
-  organization: {
-    login: string
-  }
-}
-
-export type StatusEntry = {
-  context: string
-  state: string
-  target_url: string | null
-  description: string | null
-}
-
-export type CombinedStatusResponse = {
-  state: string
-  statuses: StatusEntry[]
-}
-
-export type PullComment = {
-  created_at: string
-  user?: {
-    login: string
-  }
-}
-
 export async function apiFetch<T>(url: string, token: string, cache?: EtagCache): Promise<T> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',

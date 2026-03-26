@@ -19,31 +19,27 @@ const noActivity: ActivitySignals = {
 
 function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
   return {
-    id: 1,
+    databaseId: 1,
     number: 123,
     title: 'feat: improve review signal quality',
-    html_url: 'https://github.com/acme/review-radar/pull/123',
-    updated_at: '2026-03-20T11:00:00Z',
-    created_at: '2026-03-15T10:00:00Z',
-    state: 'open',
-    merged_at: null,
-    user: {
+    url: 'https://github.com/acme/review-radar/pull/123',
+    updatedAt: '2026-03-20T11:00:00Z',
+    createdAt: '2026-03-15T10:00:00Z',
+    state: 'OPEN',
+    mergedAt: null,
+    isDraft: false,
+    author: {
       login: 'author',
-      avatar_url: 'https://avatars.githubusercontent.com/u/100?v=4',
-      html_url: 'https://github.com/author',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/100?v=4',
+      url: 'https://github.com/author',
     },
-    assignees: [],
-    requested_reviewers: [],
-    requested_teams: [],
-    base: {
-      repo: {
-        full_name: 'acme/review-radar',
-        html_url: 'https://github.com/acme/review-radar',
-      },
+    assignees: { nodes: [] },
+    reviewRequests: { nodes: [] },
+    baseRepository: {
+      nameWithOwner: 'acme/review-radar',
+      url: 'https://github.com/acme/review-radar',
     },
-    head: {
-      sha: 'abc123def456',
-    },
+    headRefOid: 'abc123def456',
     ...overrides,
   }
 }
@@ -51,18 +47,23 @@ function createPull(overrides: Partial<PullDetails> = {}): PullDetails {
 describe('classifyPullRequest', () => {
   it('routes authored PRs to yourPrs before urgent buckets', () => {
     const pull = createPull({
-      user: {
+      author: {
         login: 'me',
-        avatar_url: 'https://avatars.githubusercontent.com/u/300?v=4',
-        html_url: 'https://github.com/me',
+        avatarUrl: 'https://avatars.githubusercontent.com/u/300?v=4',
+        url: 'https://github.com/me',
       },
-      requested_reviewers: [
-        {
-          login: 'me',
-          avatar_url: 'https://avatars.githubusercontent.com/u/300?v=4',
-          html_url: 'https://github.com/me',
-        },
-      ],
+      reviewRequests: {
+        nodes: [
+          {
+            requestedReviewer: {
+              __typename: 'User',
+              login: 'me',
+              avatarUrl: 'https://avatars.githubusercontent.com/u/300?v=4',
+              url: 'https://github.com/me',
+            },
+          },
+        ],
+      },
     })
 
     const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
@@ -74,20 +75,27 @@ describe('classifyPullRequest', () => {
 
   it('routes assigned PRs to yourPrs before urgent buckets', () => {
     const pull = createPull({
-      assignees: [
-        {
-          login: 'me',
-          avatar_url: 'https://avatars.githubusercontent.com/u/300?v=4',
-          html_url: 'https://github.com/me',
-        },
-      ],
-      requested_reviewers: [
-        {
-          login: 'me',
-          avatar_url: 'https://avatars.githubusercontent.com/u/300?v=4',
-          html_url: 'https://github.com/me',
-        },
-      ],
+      assignees: {
+        nodes: [
+          {
+            login: 'me',
+            avatarUrl: 'https://avatars.githubusercontent.com/u/300?v=4',
+            url: 'https://github.com/me',
+          },
+        ],
+      },
+      reviewRequests: {
+        nodes: [
+          {
+            requestedReviewer: {
+              __typename: 'User',
+              login: 'me',
+              avatarUrl: 'https://avatars.githubusercontent.com/u/300?v=4',
+              url: 'https://github.com/me',
+            },
+          },
+        ],
+      },
     })
 
     const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
@@ -97,7 +105,7 @@ describe('classifyPullRequest', () => {
   })
 
   it('shows New reviews on your PRs before other statuses', () => {
-    const pull = createPull({ user: { login: 'me', avatar_url: 'x', html_url: 'y' } })
+    const pull = createPull({ author: { login: 'me', avatarUrl: 'x', url: 'y' } })
 
     const result = classifyPullRequest(
       pull,
@@ -118,7 +126,7 @@ describe('classifyPullRequest', () => {
 
   it('shows New comments on your PRs when no new reviews exist', () => {
     const pull = createPull({
-      assignees: [{ login: 'me', avatar_url: 'x', html_url: 'y' }],
+      assignees: { nodes: [{ login: 'me', avatarUrl: 'x', url: 'y' }] },
     })
 
     const result = classifyPullRequest(
@@ -139,7 +147,7 @@ describe('classifyPullRequest', () => {
 
   it('shows Approved verdict on authored PR when latest non-self review is APPROVED', () => {
     const pull = createPull({
-      user: { login: 'me', avatar_url: 'x', html_url: 'y' },
+      author: { login: 'me', avatarUrl: 'x', url: 'y' },
     })
 
     const result = classifyPullRequest(
@@ -157,7 +165,7 @@ describe('classifyPullRequest', () => {
 
   it('shows Changes requested verdict on authored PR', () => {
     const pull = createPull({
-      user: { login: 'me', avatar_url: 'x', html_url: 'y' },
+      author: { login: 'me', avatarUrl: 'x', url: 'y' },
     })
 
     const result = classifyPullRequest(
@@ -175,7 +183,7 @@ describe('classifyPullRequest', () => {
 
   it('prioritizes New reviews over review verdict', () => {
     const pull = createPull({
-      user: { login: 'me', avatar_url: 'x', html_url: 'y' },
+      author: { login: 'me', avatarUrl: 'x', url: 'y' },
     })
 
     const result = classifyPullRequest(
@@ -193,13 +201,18 @@ describe('classifyPullRequest', () => {
 
   it('marks PR as needs attention when user is requested reviewer and unreviewed', () => {
     const pull = createPull({
-      requested_reviewers: [
-        {
-          login: 'me',
-          avatar_url: 'https://avatars.githubusercontent.com/u/300?v=4',
-          html_url: 'https://github.com/me',
-        },
-      ],
+      reviewRequests: {
+        nodes: [
+          {
+            requestedReviewer: {
+              __typename: 'User',
+              login: 'me',
+              avatarUrl: 'https://avatars.githubusercontent.com/u/300?v=4',
+              url: 'https://github.com/me',
+            },
+          },
+        ],
+      },
     })
 
     const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
@@ -213,9 +226,9 @@ describe('classifyPullRequest', () => {
     const reviews: Review[] = [
       {
         state: 'APPROVED',
-        commit_id: 'abc123def456',
-        submitted_at: '2026-03-20T10:00:00Z',
-        user: { login: 'me' },
+        commit: { oid: 'abc123def456' },
+        submittedAt: '2026-03-20T10:00:00Z',
+        author: { login: 'me' },
       },
     ]
 
@@ -234,8 +247,9 @@ describe('classifyPullRequest', () => {
     const reviews: Review[] = [
       {
         state: 'APPROVED',
-        submitted_at: '2026-03-20T10:00:00Z',
-        user: { login: 'me' },
+        submittedAt: '2026-03-20T10:00:00Z',
+        commit: null,
+        author: { login: 'me' },
       },
     ]
 
@@ -250,7 +264,18 @@ describe('classifyPullRequest', () => {
   })
 
   it('marks PR as related when requested team matches user team', () => {
-    const pull = createPull({ requested_teams: [{ slug: 'reviewers-platform' }] })
+    const pull = createPull({
+      reviewRequests: {
+        nodes: [
+          {
+            requestedReviewer: {
+              __typename: 'Team',
+              slug: 'reviewers-platform',
+            },
+          },
+        ],
+      },
+    })
 
     const result = classifyPullRequest(
       pull,
@@ -265,14 +290,24 @@ describe('classifyPullRequest', () => {
 
   it('maps author and reviewer profile metadata for UI links', () => {
     const pull = createPull({
-      requested_teams: [{ slug: 'reviewers-platform' }],
-      requested_reviewers: [
-        {
-          login: 'reviewer-1',
-          avatar_url: 'https://avatars.githubusercontent.com/u/201?v=4',
-          html_url: 'https://github.com/reviewer-1',
-        },
-      ],
+      reviewRequests: {
+        nodes: [
+          {
+            requestedReviewer: {
+              __typename: 'Team',
+              slug: 'reviewers-platform',
+            },
+          },
+          {
+            requestedReviewer: {
+              __typename: 'User',
+              login: 'reviewer-1',
+              avatarUrl: 'https://avatars.githubusercontent.com/u/201?v=4',
+              url: 'https://github.com/reviewer-1',
+            },
+          },
+        ],
+      },
     })
 
     const result = classifyPullRequest(
@@ -292,7 +327,18 @@ describe('classifyPullRequest', () => {
   })
 
   it('skips team signal when user has no readable team membership', () => {
-    const pull = createPull({ requested_teams: [{ slug: 'reviewers-platform' }] })
+    const pull = createPull({
+      reviewRequests: {
+        nodes: [
+          {
+            requestedReviewer: {
+              __typename: 'Team',
+              slug: 'reviewers-platform',
+            },
+          },
+        ],
+      },
+    })
 
     const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
 
@@ -301,7 +347,7 @@ describe('classifyPullRequest', () => {
   })
 
   it('marks PR as related when viewed without review and updated since', () => {
-    const pull = createPull({ updated_at: '2026-03-20T12:00:00Z' })
+    const pull = createPull({ updatedAt: '2026-03-20T12:00:00Z' })
 
     const result = classifyPullRequest(pull, [], 'me', new Set(), new Date('2026-03-20T11:00:00Z').getTime(), noActivity)
 
@@ -311,8 +357,8 @@ describe('classifyPullRequest', () => {
 
   it('includes createdAtIso from pull created_at', () => {
     const pull = createPull({
-      created_at: '2026-03-10T08:00:00Z',
-      user: { login: 'me', avatar_url: 'x', html_url: 'y' },
+      createdAt: '2026-03-10T08:00:00Z',
+      author: { login: 'me', avatarUrl: 'x', url: 'y' },
     })
 
     const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
@@ -322,9 +368,9 @@ describe('classifyPullRequest', () => {
 
   it('classifies a merged PR the same as an open one (state guard lives in caller)', () => {
     const pull = createPull({
-      state: 'closed',
-      merged_at: '2026-03-21T12:00:00Z',
-      user: { login: 'me', avatar_url: 'x', html_url: 'y' },
+      state: 'CLOSED',
+      mergedAt: '2026-03-21T12:00:00Z',
+      author: { login: 'me', avatarUrl: 'x', url: 'y' },
     })
 
     const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)

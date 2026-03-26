@@ -12,17 +12,19 @@ import {
   type PullRequest,
   type Review,
 } from "./lib/classification";
-import {
-  apiFetch,
-  type CombinedStatusResponse,
-  type GitHubUser,
-  type PullComment,
-  RateLimitError,
-  type SearchIssuesResponse,
-  type Team,
-} from "./lib/github";
+import { RateLimitError } from "./lib/github";
 import { etagCache } from "./lib/etag-cache";
-import { withRetry } from "./lib/retry";
+import {
+  graphqlFetch,
+  type GqlMergedPullRequestNode,
+  type GqlPullRequestNode,
+  type GqlSearchResponse,
+  type GqlTeamsResponse,
+  PR_DETAILS_FRAGMENT,
+  SEARCH_MERGED_PRS_QUERY,
+  SEARCH_OPEN_PRS_QUERY,
+  VIEWER_AND_TEAMS_QUERY,
+} from "./lib/graphql";
 import {
   getCacheTimestamp,
   invalidatePRCache,
@@ -296,45 +298,21 @@ async function fetchAndClassifyPullRequests(
   viewedMap: Record<string, number>,
   stalePreferences: Record<string, StalePreference>,
 ): Promise<ClassifiedPullRequests> {
-  const me = await apiFetch<GitHubUser>(
-    "https://api.github.com/user",
+  const viewerResult = await graphqlFetch<{ viewer: { login: string } }>(
+    "query { viewer { login } }",
+    {},
     token,
-    etagCache,
   );
+  const viewerLogin = viewerResult.viewer.login;
 
-  async function searchPullRequestUrls(query: string): Promise<Set<string>> {
-    const urls = new Set<string>();
-
-    for (let page = 1; page <= SEARCH_MAX_PAGES; page += 1) {
-      const encodedQuery = encodeURIComponent(query);
-      const response = await apiFetch<SearchIssuesResponse>(
-        `https://api.github.com/search/issues?q=${encodedQuery}&sort=updated&order=desc&per_page=${SEARCH_PAGE_SIZE}&page=${page}`,
-        token,
-        etagCache,
-      );
-
-      for (const item of response.items) {
-        if (item.pull_request?.url) {
-          urls.add(item.pull_request.url);
-        }
-      }
-
-      if (response.items.length < SEARCH_PAGE_SIZE) {
-        break;
-      }
-    }
-
-    return urls;
-  }
-
-  let teams: Team[] = [];
+  let teamsData: GqlTeamsResponse;
   let teamSignalsUnavailable: string | null = null;
 
   try {
-    teams = await apiFetch<Team[]>(
-      "https://api.github.com/user/teams?per_page=100",
+    teamsData = await graphqlFetch<GqlTeamsResponse>(
+      VIEWER_AND_TEAMS_QUERY,
+      { org, login: viewerLogin },
       token,
-      etagCache,
     );
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -342,14 +320,15 @@ async function fetchAndClassifyPullRequests(
       `Could not fetch team memberships (${detail}). ` +
       'Ensure the token has the "Members: Read" organization permission ' +
       "and that the Resource owner is set to your org.";
+    teamsData = {
+      viewer: { login: viewerLogin, databaseId: 0, avatarUrl: "", url: "" },
+      organization: null,
+    };
   }
 
+  const me = teamsData.viewer;
   const myTeamSlugs = new Set(
-    teams
-      .filter(
-        (team) => team.organization.login.toLowerCase() === org.toLowerCase(),
-      )
-      .map((team) => team.slug),
+    (teamsData.organization?.teams.nodes ?? []).map((team) => team.slug),
   );
 
   if (!teamSignalsUnavailable && myTeamSlugs.size === 0) {
@@ -372,83 +351,111 @@ async function fetchAndClassifyPullRequests(
     );
   }
 
-  const candidateUrlSets = await Promise.all(
-    candidateQueries.map((query) => searchPullRequestUrls(query)),
+  async function searchGqlPRs(query: string): Promise<GqlPullRequestNode[]> {
+    const nodes: GqlPullRequestNode[] = [];
+    let cursor: string | null = null;
+
+    for (let page = 0; page < SEARCH_MAX_PAGES; page++) {
+      const result: GqlSearchResponse<GqlPullRequestNode> =
+        await graphqlFetch<GqlSearchResponse<GqlPullRequestNode>>(
+        SEARCH_OPEN_PRS_QUERY,
+        { query, first: SEARCH_PAGE_SIZE, after: cursor ?? undefined },
+        token,
+      );
+      const pageNodes = result.search.nodes.filter(
+        (node): node is GqlPullRequestNode => node !== null,
+      );
+      nodes.push(...pageNodes);
+
+      if (!result.search.pageInfo.hasNextPage) {
+        break;
+      }
+      cursor = result.search.pageInfo.endCursor;
+    }
+
+    return nodes;
+  }
+
+  const candidateNodeArrays = await Promise.all(
+    candidateQueries.map((query) => searchGqlPRs(query)),
   );
 
-  const pullUrls = new Set<string>();
-  for (const urlSet of candidateUrlSets) {
-    for (const url of urlSet) {
-      pullUrls.add(url);
+  const prMap = new Map<number, GqlPullRequestNode>();
+  for (const nodes of candidateNodeArrays) {
+    for (const node of nodes) {
+      if (!prMap.has(node.databaseId)) {
+        prMap.set(node.databaseId, node);
+      }
     }
   }
 
+  const viewedKeysToFetch: Array<{
+    owner: string;
+    name: string;
+    number: number;
+    viewKey: string;
+  }> = [];
+
   for (const key of Object.keys(viewedMap)) {
-    const [repository, number] = key.split("#");
-    if (!repository || !number) {
+    const [repository, numberStr] = key.split("#");
+    if (!repository || !numberStr) {
       continue;
     }
-
     if (!repository.toLowerCase().startsWith(`${org.toLowerCase()}/`)) {
       continue;
     }
-    pullUrls.add(`https://api.github.com/repos/${repository}/pulls/${number}`);
+
+    const prNumber = parseInt(numberStr, 10);
+    if (isNaN(prNumber)) {
+      continue;
+    }
+
+    const alreadyFetched = Array.from(prMap.values()).some(
+      (node) =>
+        node.baseRepository?.nameWithOwner.toLowerCase() ===
+          repository.toLowerCase() && node.number === prNumber,
+    );
+    if (alreadyFetched) {
+      continue;
+    }
+
+    const [owner, name] = repository.split("/");
+    if (!owner || !name) {
+      continue;
+    }
+
+    viewedKeysToFetch.push({ owner, name, number: prNumber, viewKey: key });
   }
 
-  const pullsWithReviews = await Promise.all(
-    Array.from(pullUrls).map(async (pullUrl) => {
-      const [pull, reviews, pullComments] = await Promise.all([
-        withRetry(() => apiFetch<PullDetails>(pullUrl, token, etagCache)),
-        withRetry(() =>
-          apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token, etagCache),
-        ),
-        withRetry(() =>
-          apiFetch<PullComment[]>(`${pullUrl}/comments?per_page=100`, token, etagCache),
-        ),
-      ]);
-
-      let checkState: PullRequest["checkState"] = "pending";
-      let policyBotStatus: PolicyBotStatus | undefined;
-
-      try {
-        const combinedStatus = await withRetry(() => apiFetch<CombinedStatusResponse>(
-          `https://api.github.com/repos/${pull.base.repo.full_name}/commits/${pull.head.sha}/status`,
-          token,
-          etagCache,
-        ));
-
-        if (combinedStatus.state === "success") {
-          checkState = "success";
-        } else if (
-          combinedStatus.state === "failure" ||
-          combinedStatus.state === "error"
-        ) {
-          checkState = "failure";
+  if (viewedKeysToFetch.length > 0) {
+    const aliases = viewedKeysToFetch.map(({ owner, name, number, viewKey }) => {
+      const alias = `pr_${viewKey.replace(/[^a-zA-Z0-9]/g, "_")}`;
+      return `${alias}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) {
+        pullRequest(number: ${number}) {
+          ${PR_DETAILS_FRAGMENT}
         }
+      }`;
+    });
 
-        const policyEntry = combinedStatus.statuses.find((s) =>
-          s.context.toLowerCase().startsWith("policy-bot"),
-        );
-        if (policyEntry) {
-          const policyState: PolicyBotStatus["state"] =
-            policyEntry.state === "success"
-              ? "success"
-              : policyEntry.state === "failure" || policyEntry.state === "error"
-                ? "failure"
-                : "pending";
-          policyBotStatus = {
-            state: policyState,
-            url: policyEntry.target_url,
-            description: policyEntry.description,
-          };
+    const batchQuery = `query BatchViewedPRs { ${aliases.join("\n")} }`;
+
+    try {
+      const batchResult = await graphqlFetch<
+        Record<string, { pullRequest: GqlPullRequestNode | null }>
+      >(batchQuery, {}, token);
+
+      for (const { viewKey } of viewedKeysToFetch) {
+        const alias = `pr_${viewKey.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        const repoResult = batchResult[alias];
+        const pullNode = repoResult?.pullRequest;
+        if (pullNode && !prMap.has(pullNode.databaseId)) {
+          prMap.set(pullNode.databaseId, pullNode);
         }
-      } catch {
-        checkState = "pending";
       }
-
-      return { pull, reviews, pullComments, checkState, policyBotStatus };
-    }),
-  );
+    } catch {
+      // Silently ignore batch fetch failures for locally-viewed PRs — they will be cleaned up on next full refresh
+    }
+  }
 
   const yourPrs: PullRequest[] = [];
   const needsAttention: PullRequest[] = [];
@@ -457,83 +464,129 @@ async function fetchAndClassifyPullRequests(
   const closedViewedKeys: string[] = [];
   const nowMs = Date.now()
 
-  for (const { pull, reviews, pullComments, checkState, policyBotStatus } of pullsWithReviews) {
-    const viewKey = prViewKey(pull.base.repo.full_name, pull.number)
+  for (const pull of prMap.values()) {
+    const viewKey = prViewKey(pull.baseRepository?.nameWithOwner ?? "", pull.number);
 
-    if (pull.state !== 'open' || pull.merged_at !== null) {
+    if (pull.state !== "OPEN" || pull.mergedAt !== null) {
       if (viewedMap[viewKey] !== undefined) {
-        closedViewedKeys.push(viewKey)
+        closedViewedKeys.push(viewKey);
       }
-      continue
+      continue;
     }
 
-    const viewedAtMs = viewedMap[viewKey]
-    const normalizedLogin = me.login.toLowerCase()
+    const viewedAtMs = viewedMap[viewKey];
+    const normalizedLogin = me.login.toLowerCase();
+    const reviews = pull.reviews.nodes;
+    const pullComments = pull.comments.nodes;
+
+    let checkState: PullRequest["checkState"] = "pending";
+    let policyBotStatus: PolicyBotStatus | undefined;
+
+    const latestCommit = pull.commits.nodes[0]?.commit;
+    if (latestCommit?.statusCheckRollup) {
+      const rollup = latestCommit.statusCheckRollup;
+      if (rollup.state === "SUCCESS") {
+        checkState = "success";
+      } else if (rollup.state === "FAILURE" || rollup.state === "ERROR") {
+        checkState = "failure";
+      }
+
+      const policyEntry = rollup.contexts.nodes.find(
+        (
+          node,
+        ): node is {
+          __typename: "StatusContext";
+          context: string;
+          state: string;
+          targetUrl: string | null;
+          description: string | null;
+        } =>
+          node.__typename === "StatusContext" &&
+          "context" in node &&
+          node.context.toLowerCase().startsWith("policy-bot"),
+      );
+
+      if (policyEntry) {
+        const status = policyEntry.state.toLowerCase();
+        const policyState: PolicyBotStatus["state"] =
+          status === "success"
+            ? "success"
+            : status === "failure" || status === "error"
+              ? "failure"
+              : "pending";
+        policyBotStatus = {
+          state: policyState,
+          url: policyEntry.targetUrl,
+          description: policyEntry.description,
+        };
+      }
+    }
 
     const myLatestReview = reviews
       .filter(
         (review) =>
-          review.user?.login?.toLowerCase() === normalizedLogin &&
-          Boolean(review.submitted_at),
+          review.author?.login?.toLowerCase() === normalizedLogin &&
+          Boolean(review.submittedAt),
       )
       .sort(
         (a, b) =>
-          new Date(b.submitted_at ?? 0).getTime() -
-          new Date(a.submitted_at ?? 0).getTime(),
+          new Date(b.submittedAt ?? 0).getTime() -
+          new Date(a.submittedAt ?? 0).getTime(),
       )[0];
 
-    const lastReviewAtMs = myLatestReview?.submitted_at
-      ? new Date(myLatestReview.submitted_at).getTime()
+    const lastReviewAtMs = myLatestReview?.submittedAt
+      ? new Date(myLatestReview.submittedAt).getTime()
       : undefined;
+
     const hasNewCommitsSinceMyReview =
       lastReviewAtMs !== undefined &&
-      Boolean(myLatestReview?.commit_id) &&
-      myLatestReview.commit_id !== pull.head.sha;
+      Boolean(myLatestReview?.commit?.oid) &&
+      myLatestReview.commit?.oid !== pull.headRefOid;
 
     const hasNewCommentsSinceMyReview =
       lastReviewAtMs !== undefined &&
       (reviews.some(
         (review) =>
-          review.user?.login?.toLowerCase() !== normalizedLogin &&
-          Boolean(review.submitted_at) &&
-          new Date(review.submitted_at as string).getTime() > lastReviewAtMs,
+          review.author?.login?.toLowerCase() !== normalizedLogin &&
+          Boolean(review.submittedAt) &&
+          new Date(review.submittedAt as string).getTime() > lastReviewAtMs,
       ) ||
         pullComments.some(
           (comment) =>
-            comment.user?.login?.toLowerCase() !== normalizedLogin &&
-            new Date(comment.created_at).getTime() > lastReviewAtMs,
+            comment.author?.login?.toLowerCase() !== normalizedLogin &&
+            new Date(comment.createdAt).getTime() > lastReviewAtMs,
         ));
 
     const hasNewReviewsSinceViewed =
       viewedAtMs !== undefined &&
       reviews.some(
         (review) =>
-          review.user?.login?.toLowerCase() !== normalizedLogin &&
-          Boolean(review.submitted_at) &&
-          new Date(review.submitted_at as string).getTime() > viewedAtMs,
+          review.author?.login?.toLowerCase() !== normalizedLogin &&
+          Boolean(review.submittedAt) &&
+          new Date(review.submittedAt as string).getTime() > viewedAtMs,
       );
 
     const hasNewCommentsSinceViewed =
       viewedAtMs !== undefined &&
       pullComments.some(
         (comment) =>
-          comment.user?.login?.toLowerCase() !== normalizedLogin &&
-          new Date(comment.created_at).getTime() > viewedAtMs,
+          comment.author?.login?.toLowerCase() !== normalizedLogin &&
+          new Date(comment.createdAt).getTime() > viewedAtMs,
       );
 
     const latestReviewVerdict =
       (reviews
         .filter(
           (review) =>
-            review.user?.login?.toLowerCase() !== normalizedLogin &&
-            Boolean(review.submitted_at) &&
+            review.author?.login?.toLowerCase() !== normalizedLogin &&
+            Boolean(review.submittedAt) &&
             (review.state === "APPROVED" ||
               review.state === "CHANGES_REQUESTED"),
         )
         .sort(
           (a, b) =>
-            new Date(b.submitted_at ?? 0).getTime() -
-            new Date(a.submitted_at ?? 0).getTime(),
+            new Date(b.submittedAt ?? 0).getTime() -
+            new Date(a.submittedAt ?? 0).getTime(),
         )[0]?.state as "APPROVED" | "CHANGES_REQUESTED" | undefined) ?? null;
 
     const activitySignals: ActivitySignals = {
@@ -541,12 +594,12 @@ async function fetchAndClassifyPullRequests(
       hasNewCommentsSinceMyReview,
       hasNewReviewsSinceViewed,
       hasNewCommentsSinceViewed,
-      latestReviewVerdict: latestReviewVerdict ?? null,
+      latestReviewVerdict,
     };
 
     const classification = classifyPullRequest(
-      pull,
-      reviews,
+      pull as PullDetails,
+      reviews as Review[],
       me.login,
       myTeamSlugs,
       viewedAtMs,
@@ -555,7 +608,7 @@ async function fetchAndClassifyPullRequests(
 
     const stalePreference = stalePreferences[viewKey];
     const isAutoStale =
-      nowMs - new Date(pull.updated_at).getTime() >= STALE_AFTER_MS;
+      nowMs - new Date(pull.updatedAt).getTime() >= STALE_AFTER_MS;
     const isStale =
       stalePreference === "stale" ||
       (stalePreference !== "active" && isAutoStale);
@@ -625,69 +678,67 @@ async function fetchRecentlyMergedPRs(
   token: string,
   limit: number,
 ): Promise<MergedPullRequest[]> {
-  const me = await apiFetch<GitHubUser>(
-    "https://api.github.com/user",
+  const viewerResult = await graphqlFetch<{ viewer: { login: string } }>(
+    "query { viewer { login } }",
+    {},
     token,
-    etagCache,
   );
+  const meLogin = viewerResult.viewer.login;
 
-  const authorQuery = `is:pr is:merged archived:false org:${org} author:${me.login}`;
-  const reviewerQuery = `is:pr is:merged archived:false org:${org} reviewed-by:${me.login}`;
+  const authorQuery = `is:pr is:merged archived:false org:${org} author:${meLogin}`;
+  const reviewerQuery = `is:pr is:merged archived:false org:${org} reviewed-by:${meLogin}`;
 
   const perQueryLimit = Math.min(limit * 2, SEARCH_PAGE_SIZE);
 
-  const [authorResponse, reviewerResponse] = await Promise.all([
-    apiFetch<SearchIssuesResponse>(
-      `https://api.github.com/search/issues?q=${encodeURIComponent(authorQuery)}&sort=updated&order=desc&per_page=${perQueryLimit}`,
+  const [authorResult, reviewerResult] = await Promise.all([
+    graphqlFetch<GqlSearchResponse<GqlMergedPullRequestNode>>(
+      SEARCH_MERGED_PRS_QUERY,
+      { query: authorQuery, first: perQueryLimit },
       token,
-      etagCache,
     ),
-    apiFetch<SearchIssuesResponse>(
-      `https://api.github.com/search/issues?q=${encodeURIComponent(reviewerQuery)}&sort=updated&order=desc&per_page=${perQueryLimit}`,
+    graphqlFetch<GqlSearchResponse<GqlMergedPullRequestNode>>(
+      SEARCH_MERGED_PRS_QUERY,
+      { query: reviewerQuery, first: perQueryLimit },
       token,
-      etagCache,
     ),
   ]);
 
-  const allUrls = new Map<string, "author" | "reviewed">();
-  for (const item of authorResponse.items) {
-    if (item.pull_request?.url) {
-      allUrls.set(item.pull_request.url, "author");
+  const allPrs = new Map<
+    number,
+    { pr: GqlMergedPullRequestNode; role: "author" | "reviewed" }
+  >();
+
+  for (const node of authorResult.search.nodes) {
+    if (node) {
+      allPrs.set(node.databaseId, { pr: node, role: "author" });
     }
   }
-  for (const item of reviewerResponse.items) {
-    if (item.pull_request?.url && !allUrls.has(item.pull_request.url)) {
-      allUrls.set(item.pull_request.url, "reviewed");
+  for (const node of reviewerResult.search.nodes) {
+    if (node && !allPrs.has(node.databaseId)) {
+      allPrs.set(node.databaseId, { pr: node, role: "reviewed" });
     }
   }
 
-  const pulls = await Promise.all(
-    Array.from(allUrls.entries()).map(async ([pullUrl, role]) => {
-      const pull = await apiFetch<PullDetails>(pullUrl, token, etagCache);
-      return { pull, role };
-    }),
-  );
-
-  return pulls
-    .filter(({ pull }) => pull.merged_at !== null)
+  return Array.from(allPrs.values())
+    .filter(({ pr }) => pr.mergedAt !== null)
     .sort(
       (a, b) =>
-        new Date(b.pull.merged_at as string).getTime() -
-        new Date(a.pull.merged_at as string).getTime(),
+        new Date(b.pr.mergedAt as string).getTime() -
+        new Date(a.pr.mergedAt as string).getTime(),
     )
     .slice(0, limit)
-    .map(({ pull, role }) => ({
-      id: pull.id,
-      number: pull.number,
-      title: pull.title,
-      repository: pull.base.repo.full_name,
-      repositoryUrl: pull.base.repo.html_url,
-      author: pull.user.login,
-      authorAvatarUrl: pull.user.avatar_url,
-      authorProfileUrl: pull.user.html_url,
-      url: pull.html_url,
-      mergedAt: formatRelativeTime(pull.merged_at as string),
-      mergedAtIso: pull.merged_at as string,
+    .map(({ pr, role }) => ({
+      id: pr.databaseId,
+      number: pr.number,
+      title: pr.title,
+      repository: pr.baseRepository?.nameWithOwner ?? "",
+      repositoryUrl: pr.baseRepository?.url ?? "",
+      author: pr.author?.login ?? "",
+      authorAvatarUrl: pr.author?.avatarUrl ?? "",
+      authorProfileUrl: pr.author?.url ?? "",
+      url: pr.url,
+      mergedAt: formatRelativeTime(pr.mergedAt as string),
+      mergedAtIso: pr.mergedAt as string,
       role,
     }));
 }
