@@ -89,11 +89,16 @@ export type GqlPullRequestNode = {
         } | null
       }
     }>
-  }
+  } | null
   baseRepository: {
     nameWithOwner: string
     url: string
   } | null
+  additions: number
+  deletions: number
+  labels: {
+    nodes: Array<{ name: string; color: string }>
+  }
 }
 
 export type GqlSearchResponse<T> = {
@@ -190,6 +195,11 @@ export const PR_DETAILS_FRAGMENT = `
   baseRepository {
     nameWithOwner
     url
+  }
+  additions
+  deletions
+  labels(first: 20) {
+    nodes { name color }
   }
 `
 
@@ -295,7 +305,14 @@ export async function graphqlFetch<T>(
     if (errorMessage.toLowerCase().includes('rate limit')) {
       throw new RateLimitError()
     }
-    throw new Error(errorMessage)
+
+    // If data is present alongside errors, treat as a partial success.
+    // This is standard GraphQL behaviour: fields the token cannot access
+    // (e.g. commits on fine-grained PATs) are nulled out with FORBIDDEN
+    // errors while the rest of the response remains valid.
+    if (!responseBody.data) {
+      throw new Error(errorMessage)
+    }
   }
 
   return responseBody.data as T

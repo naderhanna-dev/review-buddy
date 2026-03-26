@@ -34,6 +34,8 @@ export function PrSection({
   onMarkActive,
   onClearStalePreference,
   filterBar,
+  showLineChanges,
+  showLabels,
 }: {
   title: string;
   sectionKey: SectionKey;
@@ -64,6 +66,8 @@ export function PrSection({
   onMarkActive: (repository: string, number: number) => void;
   onClearStalePreference: (repository: string, number: number) => void;
   filterBar?: React.ReactNode;
+  showLineChanges: boolean;
+  showLabels: boolean;
 }) {
   return (
     <section className="section-card">
@@ -108,6 +112,8 @@ export function PrSection({
               onMarkStale={onMarkStale}
               onMarkActive={onMarkActive}
               onClearStalePreference={onClearStalePreference}
+              showLineChanges={showLineChanges}
+              showLabels={showLabels}
             />
           ))}
         </div>

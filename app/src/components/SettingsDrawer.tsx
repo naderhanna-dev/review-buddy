@@ -14,6 +14,10 @@ export function SettingsDrawer({
   onMergedCountBlur,
   dimViewed,
   onToggleDimViewed,
+  showLineChanges,
+  onToggleShowLineChanges,
+  showLabels,
+  onToggleShowLabels,
   teamSignalsUnavailable,
   onClose,
 }: {
@@ -30,6 +34,10 @@ export function SettingsDrawer({
   onMergedCountBlur: () => void;
   dimViewed: boolean;
   onToggleDimViewed: () => void;
+  showLineChanges: boolean;
+  onToggleShowLineChanges: () => void;
+  showLabels: boolean;
+  onToggleShowLabels: () => void;
   teamSignalsUnavailable: string | null;
   onClose: () => void;
 }) {
@@ -102,6 +110,9 @@ export function SettingsDrawer({
               Commit statuses: Read (required for PR check status icons)
             </li>
             <li>
+              Issues: Read (optional, enables PR label display)
+            </li>
+            <li>
               Members: Read — organization permission (optional, enables
               team-assigned PR signals)
             </li>
@@ -151,6 +162,32 @@ export function SettingsDrawer({
                 type="checkbox"
                 checked={dimViewed}
                 onChange={onToggleDimViewed}
+              />
+            </label>
+          </div>
+          <div className="user-preferences-group">
+            <h4 className="user-preferences-subheading">Show line changes</h4>
+            <label className="user-preferences-toggle">
+              <span className="user-preferences-description">
+                Display additions and deletions on each PR.
+              </span>
+              <input
+                type="checkbox"
+                checked={showLineChanges}
+                onChange={onToggleShowLineChanges}
+              />
+            </label>
+          </div>
+          <div className="user-preferences-group">
+            <h4 className="user-preferences-subheading">Show PR labels</h4>
+            <label className="user-preferences-toggle">
+              <span className="user-preferences-description">
+                Display GitHub labels on each PR.
+              </span>
+              <input
+                type="checkbox"
+                checked={showLabels}
+                onChange={onToggleShowLabels}
               />
             </label>
           </div>

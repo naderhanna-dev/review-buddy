@@ -392,7 +392,7 @@
 }
 
 .section-header span {
-  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
   font-size: 0.8rem;
   color: var(--muted);
 }
@@ -580,6 +580,47 @@
   opacity: 1;
 }
 
+.label-list {
+  margin-top: 0.25rem;
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.pr-label {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.line-changes {
+  font-size: 0.75rem;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  display: inline-flex;
+  gap: 0.4rem;
+  white-space: nowrap;
+  justify-self: end;
+}
+
+.line-additions {
+  color: #1a7f37;
+}
+
+.line-deletions {
+  color: #cf222e;
+}
+
+[data-theme="dark"] .line-additions {
+  color: #3fb950;
+}
+
+[data-theme="dark"] .line-deletions {
+  color: #f85149;
+}
+
 .user-filter-bar {
   display: flex;
   align-items: center;
@@ -622,7 +663,8 @@
   border-color: var(--link);
 }
 
-.user-filter-bar--active .user-filter-avatar-btn:not(.user-filter-avatar--selected) {
+.user-filter-bar--active
+  .user-filter-avatar-btn:not(.user-filter-avatar--selected) {
   opacity: 0.5;
 }
 
@@ -637,7 +679,7 @@
   color: var(--muted);
   font-size: 0.7rem;
   font-weight: 600;
-  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
   line-height: 1;
   flex-shrink: 0;
 }
@@ -780,10 +822,7 @@
   opacity: 0;
   visibility: hidden;
   transform: translateY(4px);
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease,
-    visibility 140ms ease;
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
   pointer-events: none;
 }
 
@@ -992,78 +1031,92 @@
   visibility: visible;
 }
 
-:root[data-compact='true'] .pr-row {
+:root[data-compact="true"] .pr-row {
   padding: 0.4rem 2.6rem 0.4rem 0.75rem;
   gap: 0.15rem 0.75rem;
 }
 
-:root[data-compact='true'] .avatar {
+:root[data-compact="true"] .avatar {
   width: 1.15rem;
   height: 1.15rem;
 }
 
-:root[data-compact='true'] .title-group {
+:root[data-compact="true"] .title-group {
   gap: 0.4rem;
 }
 
-:root[data-compact='true'] .pr-title {
+:root[data-compact="true"] .pr-title {
   font-size: 0.88rem;
 }
 
-:root[data-compact='true'] .pr-meta {
+:root[data-compact="true"] .pr-meta {
   font-size: 0.75rem;
 }
 
-:root[data-compact='true'] .updated-at {
+:root[data-compact="true"] .updated-at {
   font-size: 0.75rem;
 }
 
-:root[data-compact='true'] .reviewer-list {
+:root[data-compact="true"] .reviewer-list {
   display: none;
 }
 
-:root[data-compact='true'] .user-filter-bar {
+:root[data-compact="true"] .user-filter-bar {
   padding: 0.35rem 0.75rem;
   gap: 0.3rem;
 }
 
-:root[data-compact='true'] .user-filter-avatar-btn .user-filter-avatar {
+:root[data-compact="true"] .user-filter-avatar-btn .user-filter-avatar {
   width: 1.35rem;
   height: 1.35rem;
 }
 
-:root[data-compact='true'] .user-filter-overflow {
+:root[data-compact="true"] .user-filter-overflow {
   width: 1.35rem;
   height: 1.35rem;
   font-size: 0.6rem;
 }
 
-:root[data-compact='true'] .pill {
+:root[data-compact="true"] .pill {
   font-size: 0.65rem;
   padding: 0.12rem 0.4rem;
 }
 
-:root[data-compact='true'] .section-header {
+:root[data-compact="true"] .section-header {
   padding: 0.5rem 0.75rem;
 }
 
-:root[data-compact='true'] .check-indicator {
+:root[data-compact="true"] .check-indicator {
   width: 0.8rem;
   height: 0.8rem;
 }
 
-:root[data-compact='true'] .policy-indicator {
+:root[data-compact="true"] .policy-indicator {
   width: 0.7rem;
   height: 0.7rem;
 }
 
-:root[data-compact='true'] .row-menu-wrap {
+:root[data-compact="true"] .row-menu-wrap {
   top: 0.3rem;
 }
 
-:root[data-compact='true'] .empty-state {
+:root[data-compact="true"] .empty-state {
   padding: 0.5rem 0.75rem;
   font-size: 0.82rem;
+}
+
+:root[data-compact="true"] .label-list {
+  margin-top: 0.15rem;
+  gap: 0.15rem;
+}
+
+:root[data-compact="true"] .pr-label {
+  font-size: 0.58rem;
+  padding: 0.05rem 0.3rem;
+}
+
+:root[data-compact="true"] .line-changes {
+  font-size: 0.65rem;
 }
 
 @media (max-width: 760px) {

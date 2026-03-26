@@ -8,6 +8,8 @@ import {
   readMergedCountPreference,
   readSectionHideDrafts,
   readSectionSortPreferences,
+  readShowLabelsPreference,
+  readShowLineChangesPreference,
   readStorageItem,
   readThemePreference,
 } from "./lib/storage";
@@ -48,6 +50,8 @@ function App() {
   });
   const [isCompact, setIsCompact] = useState(() => readCompactPreference());
   const [dimViewed, setDimViewed] = useState(() => readDimViewedPreference());
+  const [showLineChanges, setShowLineChanges] = useState(() => readShowLineChangesPreference());
+  const [showLabels, setShowLabels] = useState(() => readShowLabelsPreference());
   const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
     readThemePreference(),
   );
@@ -219,6 +223,22 @@ function App() {
     });
   }
 
+  function toggleShowLineChanges(): void {
+    setShowLineChanges((current) => {
+      const next = !current;
+      localStorage.setItem(STORAGE_KEYS.showLineChanges, String(next));
+      return next;
+    });
+  }
+
+  function toggleShowLabels(): void {
+    setShowLabels((current) => {
+      const next = !current;
+      localStorage.setItem(STORAGE_KEYS.showLabels, String(next));
+      return next;
+    });
+  }
+
   const hasCredentials = Boolean(token && org);
   const activeTheme = resolveTheme(themePreference);
 
@@ -282,6 +302,8 @@ function App() {
     onClearStalePreference: prData.handleClearStalePreference,
     isLoading: prData.isLoading,
     hasCredentials,
+    showLineChanges,
+    showLabels,
   };
 
   return (
@@ -409,6 +431,10 @@ function App() {
           onMergedCountBlur={() => setMergedCountInput(String(mergedCount))}
           dimViewed={dimViewed}
           onToggleDimViewed={toggleDimViewed}
+          showLineChanges={showLineChanges}
+          onToggleShowLineChanges={toggleShowLineChanges}
+          showLabels={showLabels}
+          onToggleShowLabels={toggleShowLabels}
           teamSignalsUnavailable={prData.teamSignalsUnavailable}
           onClose={() => setIsConnectionPanelOpen(false)}
         />
