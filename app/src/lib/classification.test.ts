@@ -319,6 +319,19 @@ describe('classifyPullRequest', () => {
 
     expect(result.yourPrs?.createdAtIso).toBe('2026-03-10T08:00:00Z')
   })
+
+  it('classifies a merged PR the same as an open one (state guard lives in caller)', () => {
+    const pull = createPull({
+      state: 'closed',
+      merged_at: '2026-03-21T12:00:00Z',
+      user: { login: 'me', avatar_url: 'x', html_url: 'y' },
+    })
+
+    const result = classifyPullRequest(pull, [], 'me', new Set(), undefined, noActivity)
+
+    expect(result.yourPrs).toBeDefined()
+    expect(result.yourPrs?.stateClass).toBe('your-pr-no-activity')
+  })
 })
 
 describe('sortByCreatedAt', () => {
