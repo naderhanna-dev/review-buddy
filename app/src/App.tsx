@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import {
   type ActivitySignals,
   classifyPullRequest,
@@ -11,7 +11,7 @@ import {
   type PullDetails,
   type PullRequest,
   type Review,
-} from './lib/classification'
+} from "./lib/classification";
 import {
   apiFetch,
   type CombinedStatusResponse,
@@ -20,187 +20,238 @@ import {
   RateLimitError,
   type SearchIssuesResponse,
   type Team,
-} from './lib/github'
-import { etagCache } from './lib/etag-cache'
-import { SmartRefreshController } from './lib/smart-refresh'
-import './App.css'
-
+} from "./lib/github";
+import { etagCache } from "./lib/etag-cache";
+import { SmartRefreshController } from "./lib/smart-refresh";
+import "./App.css";
 
 type ClassifiedPullRequests = {
-  yourPrs: PullRequest[]
-  needsAttention: PullRequest[]
-  relatedToYou: PullRequest[]
-  stalePrs: PullRequest[]
-  teamSignalsUnavailable: string | null
-  closedViewedKeys: string[]
+  yourPrs: PullRequest[];
+  needsAttention: PullRequest[];
+  relatedToYou: PullRequest[];
+  stalePrs: PullRequest[];
+  teamSignalsUnavailable: string | null;
+  closedViewedKeys: string[];
 }
 
 type MergedPullRequest = {
-  id: number
-  number: number
-  title: string
-  repository: string
-  repositoryUrl: string
-  author: string
-  authorAvatarUrl: string
-  authorProfileUrl: string
-  url: string
-  mergedAt: string
-  mergedAtIso: string
-  role: 'author' | 'reviewed'
-}
+  id: number;
+  number: number;
+  title: string;
+  repository: string;
+  repositoryUrl: string;
+  author: string;
+  authorAvatarUrl: string;
+  authorProfileUrl: string;
+  url: string;
+  mergedAt: string;
+  mergedAtIso: string;
+  role: "author" | "reviewed";
+};
 
-type ThemePreference = 'system' | 'dark' | 'light'
-type StalePreference = 'stale' | 'active'
-type SectionKey = 'needsAttention' | 'yourPrs' | 'relatedToYou' | 'stalePrs'
-type SortPreference = 'default' | 'oldest-first' | 'newest-first'
+type ThemePreference = "system" | "dark" | "light";
+type StalePreference = "stale" | "active";
+type SectionKey = "needsAttention" | "yourPrs" | "relatedToYou" | "stalePrs";
+type SortPreference = "default" | "oldest-first" | "newest-first";
 
-const SEARCH_PAGE_SIZE = 100
-const SEARCH_MAX_PAGES = 10
-const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000
-const FALLBACK_REFRESH_MS = 10 * 60 * 1000
-const NOTIFICATION_FALLBACK_MS = 2 * 60 * 1000
-const REFRESH_FOCUS_COOLDOWN_MS = 5 * 60 * 1000
+const SEARCH_PAGE_SIZE = 100;
+const SEARCH_MAX_PAGES = 10;
+const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
+const FALLBACK_REFRESH_MS = 10 * 60 * 1000;
+const NOTIFICATION_FALLBACK_MS = 2 * 60 * 1000;
+const REFRESH_FOCUS_COOLDOWN_MS = 5 * 60 * 1000;
 
-const MERGED_COUNT_DEFAULT = 5
-const MERGED_COUNT_MIN = 1
-const MERGED_COUNT_MAX = 25
+const MERGED_COUNT_DEFAULT = 5;
+const MERGED_COUNT_MIN = 1;
+const MERGED_COUNT_MAX = 25;
 
-const STORAGE_KEYS: Record<'token' | 'org' | 'viewed' | 'theme' | 'compact' | 'stalePreferences' | 'sectionSort' | 'recentlyMergedCount', string> = {
-  token: 'review-radar.pat',
-  org: 'review-radar.org',
-  viewed: 'review-radar.viewed',
-  theme: 'review-radar.theme',
-  compact: 'review-radar.compact',
-  stalePreferences: 'review-radar.stalePreferences',
-  sectionSort: 'review-radar.sectionSort',
-  recentlyMergedCount: 'review-radar.recentlyMergedCount',
-}
+const STORAGE_KEYS: Record<
+  | "token"
+  | "org"
+  | "viewed"
+  | "theme"
+  | "compact"
+  | "stalePreferences"
+  | "sectionSort"
+  | "recentlyMergedCount"
+  | "sectionHideDrafts",
+  string
+> = {
+  token: "review-radar.pat",
+  org: "review-radar.org",
+  viewed: "review-radar.viewed",
+  theme: "review-radar.theme",
+  compact: "review-radar.compact",
+  stalePreferences: "review-radar.stalePreferences",
+  sectionSort: "review-radar.sectionSort",
+  recentlyMergedCount: "review-radar.recentlyMergedCount",
+  sectionHideDrafts: "review-radar.sectionHideDrafts",
+};
 
 function readStorageItem(key: string): string {
-  if (typeof window === 'undefined') {
-    return ''
+  if (typeof window === "undefined") {
+    return "";
   }
 
-  return localStorage.getItem(key) ?? ''
+  return localStorage.getItem(key) ?? "";
 }
 
 function readViewedMap(): Record<string, number> {
-  const raw = readStorageItem(STORAGE_KEYS.viewed)
+  const raw = readStorageItem(STORAGE_KEYS.viewed);
   if (!raw) {
-    return {}
+    return {};
   }
 
   try {
-    return JSON.parse(raw) as Record<string, number>
+    return JSON.parse(raw) as Record<string, number>;
   } catch {
-    return {}
+    return {};
   }
 }
 
 function readThemePreference(): ThemePreference {
-  const value = readStorageItem(STORAGE_KEYS.theme)
-  if (value === 'dark' || value === 'light' || value === 'system') {
-    return value
+  const value = readStorageItem(STORAGE_KEYS.theme);
+  if (value === "dark" || value === "light" || value === "system") {
+    return value;
   }
 
-  return 'system'
+  return "system";
 }
 
 function readCompactPreference(): boolean {
-  return readStorageItem(STORAGE_KEYS.compact) === 'true'
+  return readStorageItem(STORAGE_KEYS.compact) === "true";
 }
 
 function readStalePreferences(): Record<string, StalePreference> {
-  const raw = readStorageItem(STORAGE_KEYS.stalePreferences)
+  const raw = readStorageItem(STORAGE_KEYS.stalePreferences);
   if (!raw) {
-    return {}
+    return {};
   }
 
   try {
-    const parsed = JSON.parse(raw) as Record<string, string>
-    const next: Record<string, StalePreference> = {}
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    const next: Record<string, StalePreference> = {};
     for (const [key, value] of Object.entries(parsed)) {
-      if (value === 'stale' || value === 'active') {
-        next[key] = value
+      if (value === "stale" || value === "active") {
+        next[key] = value;
       }
     }
-    return next
+    return next;
   } catch {
-    return {}
+    return {};
   }
 }
 
 const DEFAULT_SECTION_SORT: Record<SectionKey, SortPreference> = {
-  needsAttention: 'default',
-  yourPrs: 'default',
-  relatedToYou: 'default',
-  stalePrs: 'default',
-}
+  needsAttention: "default",
+  yourPrs: "default",
+  relatedToYou: "default",
+  stalePrs: "default",
+};
 
 function readMergedCountPreference(): number {
-  const raw = readStorageItem(STORAGE_KEYS.recentlyMergedCount)
+  const raw = readStorageItem(STORAGE_KEYS.recentlyMergedCount);
   if (!raw) {
-    return MERGED_COUNT_DEFAULT
+    return MERGED_COUNT_DEFAULT;
   }
 
-  const parsed = parseInt(raw, 10)
+  const parsed = parseInt(raw, 10);
   if (isNaN(parsed) || parsed < MERGED_COUNT_MIN || parsed > MERGED_COUNT_MAX) {
-    return MERGED_COUNT_DEFAULT
+    return MERGED_COUNT_DEFAULT;
   }
 
-  return parsed
+  return parsed;
 }
 
 function readSectionSortPreferences(): Record<SectionKey, SortPreference> {
-  const raw = readStorageItem(STORAGE_KEYS.sectionSort)
+  const raw = readStorageItem(STORAGE_KEYS.sectionSort);
   if (!raw) {
-    return { ...DEFAULT_SECTION_SORT }
+    return { ...DEFAULT_SECTION_SORT };
   }
 
   try {
-    const parsed = JSON.parse(raw) as Record<string, string>
-    const result = { ...DEFAULT_SECTION_SORT }
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    const result = { ...DEFAULT_SECTION_SORT };
     for (const key of Object.keys(result) as SectionKey[]) {
-      const val = parsed[key]
-      if (val === 'oldest-first' || val === 'newest-first') {
-        result[key] = val
+      const val = parsed[key];
+      if (val === "oldest-first" || val === "newest-first") {
+        result[key] = val;
       }
     }
-    return result
+    return result;
   } catch {
-    return { ...DEFAULT_SECTION_SORT }
+    return { ...DEFAULT_SECTION_SORT };
   }
 }
 
-function applySectionSort(prs: PullRequest[], preference: SortPreference): PullRequest[] {
-  if (preference === 'oldest-first') {
-    return sortByCreatedAt(prs, 'asc')
+function applySectionSort(
+  prs: PullRequest[],
+  preference: SortPreference,
+): PullRequest[] {
+  if (preference === "oldest-first") {
+    return sortByCreatedAt(prs, "asc");
   }
-  if (preference === 'newest-first') {
-    return sortByCreatedAt(prs, 'desc')
+  if (preference === "newest-first") {
+    return sortByCreatedAt(prs, "desc");
   }
-  return prs
+  return prs;
+}
+
+const DEFAULT_SECTION_HIDE_DRAFTS: Record<SectionKey, boolean> = {
+  needsAttention: false,
+  yourPrs: false,
+  relatedToYou: false,
+  stalePrs: false,
+};
+
+function readSectionHideDrafts(): Record<SectionKey, boolean> {
+  const raw = readStorageItem(STORAGE_KEYS.sectionHideDrafts);
+  if (!raw) {
+    return { ...DEFAULT_SECTION_HIDE_DRAFTS };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const result = { ...DEFAULT_SECTION_HIDE_DRAFTS };
+    for (const key of Object.keys(result) as SectionKey[]) {
+      if (parsed[key] === true) {
+        result[key] = true;
+      }
+    }
+    return result;
+  } catch {
+    return { ...DEFAULT_SECTION_HIDE_DRAFTS };
+  }
+}
+
+function applyDraftFilter(
+  pullRequests: PullRequest[],
+  hideDrafts: boolean,
+): PullRequest[] {
+  if (!hideDrafts) {
+    return pullRequests;
+  }
+  return pullRequests.filter((pullRequest) => !pullRequest.isDraft);
 }
 
 function formatRefreshAge(timestampMs: number, nowMs: number): string {
-  const diffSeconds = Math.max(0, Math.floor((nowMs - timestampMs) / 1000))
+  const diffSeconds = Math.max(0, Math.floor((nowMs - timestampMs) / 1000));
 
   if (diffSeconds < 5) {
-    return 'just now'
+    return "just now";
   }
 
   if (diffSeconds < 60) {
-    return `${diffSeconds}s ago`
+    return `${diffSeconds}s ago`;
   }
 
-  const diffMinutes = Math.floor(diffSeconds / 60)
+  const diffMinutes = Math.floor(diffSeconds / 60);
   if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`
+    return `${diffMinutes}m ago`;
   }
 
-  const diffHours = Math.floor(diffMinutes / 60)
-  return `${diffHours}h ago`
+  const diffHours = Math.floor(diffMinutes / 60);
+  return `${diffHours}h ago`;
 }
 
 function sortByPriorityAndUpdated(
@@ -208,15 +259,17 @@ function sortByPriorityAndUpdated(
   priority: Record<string, number>,
 ): PullRequest[] {
   return [...prs].sort((a, b) => {
-    const priorityDiff = (priority[a.stateClass] ?? 99) - (priority[b.stateClass] ?? 99)
+    const priorityDiff =
+      (priority[a.stateClass] ?? 99) - (priority[b.stateClass] ?? 99);
     if (priorityDiff !== 0) {
-      return priorityDiff
+      return priorityDiff;
     }
 
-    return new Date(b.updatedAtIso).getTime() - new Date(a.updatedAtIso).getTime()
-  })
+    return (
+      new Date(b.updatedAtIso).getTime() - new Date(a.updatedAtIso).getTime()
+    );
+  });
 }
-
 
 async function fetchAndClassifyPullRequests(
   org: string,
@@ -224,57 +277,67 @@ async function fetchAndClassifyPullRequests(
   viewedMap: Record<string, number>,
   stalePreferences: Record<string, StalePreference>,
 ): Promise<ClassifiedPullRequests> {
-  const me = await apiFetch<GitHubUser>('https://api.github.com/user', token, etagCache)
+  const me = await apiFetch<GitHubUser>(
+    "https://api.github.com/user",
+    token,
+    etagCache,
+  );
 
   async function searchPullRequestUrls(query: string): Promise<Set<string>> {
-    const urls = new Set<string>()
+    const urls = new Set<string>();
 
     for (let page = 1; page <= SEARCH_MAX_PAGES; page += 1) {
-      const encodedQuery = encodeURIComponent(query)
+      const encodedQuery = encodeURIComponent(query);
       const response = await apiFetch<SearchIssuesResponse>(
         `https://api.github.com/search/issues?q=${encodedQuery}&sort=updated&order=desc&per_page=${SEARCH_PAGE_SIZE}&page=${page}`,
         token,
         etagCache,
-      )
+      );
 
       for (const item of response.items) {
         if (item.pull_request?.url) {
-          urls.add(item.pull_request.url)
+          urls.add(item.pull_request.url);
         }
       }
 
       if (response.items.length < SEARCH_PAGE_SIZE) {
-        break
+        break;
       }
     }
 
-    return urls
+    return urls;
   }
 
-  let teams: Team[] = []
-  let teamSignalsUnavailable: string | null = null
+  let teams: Team[] = [];
+  let teamSignalsUnavailable: string | null = null;
 
   try {
-    teams = await apiFetch<Team[]>('https://api.github.com/user/teams?per_page=100', token, etagCache)
+    teams = await apiFetch<Team[]>(
+      "https://api.github.com/user/teams?per_page=100",
+      token,
+      etagCache,
+    );
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error)
+    const detail = error instanceof Error ? error.message : String(error);
     teamSignalsUnavailable =
       `Could not fetch team memberships (${detail}). ` +
       'Ensure the token has the "Members: Read" organization permission ' +
-      'and that the Resource owner is set to your org.'
+      "and that the Resource owner is set to your org.";
   }
 
   const myTeamSlugs = new Set(
     teams
-      .filter((team) => team.organization.login.toLowerCase() === org.toLowerCase())
+      .filter(
+        (team) => team.organization.login.toLowerCase() === org.toLowerCase(),
+      )
       .map((team) => team.slug),
-  )
+  );
 
   if (!teamSignalsUnavailable && myTeamSlugs.size === 0) {
     teamSignalsUnavailable =
-      'No team memberships found for this org. If you belong to teams, verify ' +
-      'that your token\'s Resource owner is set to the org (not your personal account) ' +
-      'and that it has the "Members: Read" organization permission.'
+      "No team memberships found for this org. If you belong to teams, verify " +
+      "that your token's Resource owner is set to the org (not your personal account) " +
+      'and that it has the "Members: Read" organization permission.';
   }
 
   const candidateQueries = [
@@ -282,35 +345,35 @@ async function fetchAndClassifyPullRequests(
     `is:pr is:open archived:false org:${org} reviewed-by:${me.login}`,
     `is:pr is:open archived:false org:${org} author:${me.login}`,
     `is:pr is:open archived:false org:${org} assignee:${me.login}`,
-  ]
+  ];
 
   for (const teamSlug of myTeamSlugs) {
     candidateQueries.push(
       `is:pr is:open archived:false org:${org} team-review-requested:${org}/${teamSlug}`,
-    )
+    );
   }
 
   const candidateUrlSets = await Promise.all(
     candidateQueries.map((query) => searchPullRequestUrls(query)),
-  )
+  );
 
-  const pullUrls = new Set<string>()
+  const pullUrls = new Set<string>();
   for (const urlSet of candidateUrlSets) {
     for (const url of urlSet) {
-      pullUrls.add(url)
+      pullUrls.add(url);
     }
   }
 
   for (const key of Object.keys(viewedMap)) {
-    const [repository, number] = key.split('#')
+    const [repository, number] = key.split("#");
     if (!repository || !number) {
-      continue
+      continue;
     }
 
     if (!repository.toLowerCase().startsWith(`${org.toLowerCase()}/`)) {
-      continue
+      continue;
     }
-    pullUrls.add(`https://api.github.com/repos/${repository}/pulls/${number}`)
+    pullUrls.add(`https://api.github.com/repos/${repository}/pulls/${number}`);
   }
 
   const pullsWithReviews = await Promise.all(
@@ -318,57 +381,61 @@ async function fetchAndClassifyPullRequests(
       const [pull, reviews, pullComments] = await Promise.all([
         apiFetch<PullDetails>(pullUrl, token, etagCache),
         apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token, etagCache),
-        apiFetch<PullComment[]>(`${pullUrl}/comments?per_page=100`, token, etagCache),
-      ])
+        apiFetch<PullComment[]>(
+          `${pullUrl}/comments?per_page=100`,
+          token,
+          etagCache,
+        ),
+      ]);
 
-      let checkState: PullRequest['checkState'] = 'pending'
-      let policyBotStatus: PolicyBotStatus | undefined
+      let checkState: PullRequest["checkState"] = "pending";
+      let policyBotStatus: PolicyBotStatus | undefined;
 
       try {
         const combinedStatus = await apiFetch<CombinedStatusResponse>(
           `https://api.github.com/repos/${pull.base.repo.full_name}/commits/${pull.head.sha}/status`,
           token,
           etagCache,
-        )
+        );
 
-        if (combinedStatus.state === 'success') {
-          checkState = 'success'
+        if (combinedStatus.state === "success") {
+          checkState = "success";
         } else if (
-          combinedStatus.state === 'failure' ||
-          combinedStatus.state === 'error'
+          combinedStatus.state === "failure" ||
+          combinedStatus.state === "error"
         ) {
-          checkState = 'failure'
+          checkState = "failure";
         }
 
         const policyEntry = combinedStatus.statuses.find((s) =>
-          s.context.toLowerCase().startsWith('policy-bot'),
-        )
+          s.context.toLowerCase().startsWith("policy-bot"),
+        );
         if (policyEntry) {
-          const policyState: PolicyBotStatus['state'] =
-            policyEntry.state === 'success'
-              ? 'success'
-              : policyEntry.state === 'failure' || policyEntry.state === 'error'
-                ? 'failure'
-                : 'pending'
+          const policyState: PolicyBotStatus["state"] =
+            policyEntry.state === "success"
+              ? "success"
+              : policyEntry.state === "failure" || policyEntry.state === "error"
+                ? "failure"
+                : "pending";
           policyBotStatus = {
             state: policyState,
             url: policyEntry.target_url,
             description: policyEntry.description,
-          }
+          };
         }
       } catch {
-        checkState = 'pending'
+        checkState = "pending";
       }
 
-      return { pull, reviews, pullComments, checkState, policyBotStatus }
+      return { pull, reviews, pullComments, checkState, policyBotStatus };
     }),
-  )
+  );
 
-  const yourPrs: PullRequest[] = []
-  const needsAttention: PullRequest[] = []
-  const relatedToYou: PullRequest[] = []
-  const stalePrs: PullRequest[] = []
-  const closedViewedKeys: string[] = []
+  const yourPrs: PullRequest[] = [];
+  const needsAttention: PullRequest[] = [];
+  const relatedToYou: PullRequest[] = [];
+  const stalePrs: PullRequest[] = [];
+  const closedViewedKeys: string[] = [];
   const nowMs = Date.now()
 
   for (const { pull, reviews, pullComments, checkState, policyBotStatus } of pullsWithReviews) {
@@ -387,20 +454,22 @@ async function fetchAndClassifyPullRequests(
     const myLatestReview = reviews
       .filter(
         (review) =>
-          review.user?.login?.toLowerCase() === normalizedLogin && Boolean(review.submitted_at),
+          review.user?.login?.toLowerCase() === normalizedLogin &&
+          Boolean(review.submitted_at),
       )
       .sort(
         (a, b) =>
-          new Date(b.submitted_at ?? 0).getTime() - new Date(a.submitted_at ?? 0).getTime(),
-      )[0]
+          new Date(b.submitted_at ?? 0).getTime() -
+          new Date(a.submitted_at ?? 0).getTime(),
+      )[0];
 
     const lastReviewAtMs = myLatestReview?.submitted_at
       ? new Date(myLatestReview.submitted_at).getTime()
-      : undefined
+      : undefined;
     const hasNewCommitsSinceMyReview =
       lastReviewAtMs !== undefined &&
       Boolean(myLatestReview?.commit_id) &&
-      myLatestReview.commit_id !== pull.head.sha
+      myLatestReview.commit_id !== pull.head.sha;
 
     const hasNewCommentsSinceMyReview =
       lastReviewAtMs !== undefined &&
@@ -414,7 +483,7 @@ async function fetchAndClassifyPullRequests(
           (comment) =>
             comment.user?.login?.toLowerCase() !== normalizedLogin &&
             new Date(comment.created_at).getTime() > lastReviewAtMs,
-        ))
+        ));
 
     const hasNewReviewsSinceViewed =
       viewedAtMs !== undefined &&
@@ -423,7 +492,7 @@ async function fetchAndClassifyPullRequests(
           review.user?.login?.toLowerCase() !== normalizedLogin &&
           Boolean(review.submitted_at) &&
           new Date(review.submitted_at as string).getTime() > viewedAtMs,
-      )
+      );
 
     const hasNewCommentsSinceViewed =
       viewedAtMs !== undefined &&
@@ -431,19 +500,22 @@ async function fetchAndClassifyPullRequests(
         (comment) =>
           comment.user?.login?.toLowerCase() !== normalizedLogin &&
           new Date(comment.created_at).getTime() > viewedAtMs,
-      )
+      );
 
-    const latestReviewVerdict = reviews
-      .filter(
-        (review) =>
-          review.user?.login?.toLowerCase() !== normalizedLogin &&
-          Boolean(review.submitted_at) &&
-          (review.state === 'APPROVED' || review.state === 'CHANGES_REQUESTED'),
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.submitted_at ?? 0).getTime() - new Date(a.submitted_at ?? 0).getTime(),
-      )[0]?.state as 'APPROVED' | 'CHANGES_REQUESTED' | undefined ?? null
+    const latestReviewVerdict =
+      (reviews
+        .filter(
+          (review) =>
+            review.user?.login?.toLowerCase() !== normalizedLogin &&
+            Boolean(review.submitted_at) &&
+            (review.state === "APPROVED" ||
+              review.state === "CHANGES_REQUESTED"),
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.submitted_at ?? 0).getTime() -
+            new Date(a.submitted_at ?? 0).getTime(),
+        )[0]?.state as "APPROVED" | "CHANGES_REQUESTED" | undefined) ?? null;
 
     const activitySignals: ActivitySignals = {
       hasNewCommitsSinceMyReview,
@@ -451,7 +523,7 @@ async function fetchAndClassifyPullRequests(
       hasNewReviewsSinceViewed,
       hasNewCommentsSinceViewed,
       latestReviewVerdict: latestReviewVerdict ?? null,
-    }
+    };
 
     const classification = classifyPullRequest(
       pull,
@@ -460,57 +532,67 @@ async function fetchAndClassifyPullRequests(
       myTeamSlugs,
       viewedAtMs,
       activitySignals,
-    )
+    );
 
-    const stalePreference = stalePreferences[viewKey]
-    const isAutoStale = nowMs - new Date(pull.updated_at).getTime() >= STALE_AFTER_MS
+    const stalePreference = stalePreferences[viewKey];
+    const isAutoStale =
+      nowMs - new Date(pull.updated_at).getTime() >= STALE_AFTER_MS;
     const isStale =
-      stalePreference === 'stale' || (stalePreference !== 'active' && isAutoStale)
-    const staleState = stalePreference === 'stale' ? 'manual' : 'auto'
+      stalePreference === "stale" ||
+      (stalePreference !== "active" && isAutoStale);
+    const staleState = stalePreference === "stale" ? "manual" : "auto";
 
     if (classification.yourPrs) {
-      const nextPr = { ...classification.yourPrs, checkState, policyBotStatus }
+      const nextPr = { ...classification.yourPrs, checkState, policyBotStatus };
       if (isStale) {
-        stalePrs.push({ ...nextPr, staleState })
+        stalePrs.push({ ...nextPr, staleState });
       } else {
-        yourPrs.push(nextPr)
+        yourPrs.push(nextPr);
       }
-      continue
+      continue;
     }
 
     if (classification.needsAttention) {
-      const nextPr = { ...classification.needsAttention, checkState, policyBotStatus }
+      const nextPr = {
+        ...classification.needsAttention,
+        checkState,
+        policyBotStatus,
+      };
       if (isStale) {
-        stalePrs.push({ ...nextPr, staleState })
+        stalePrs.push({ ...nextPr, staleState });
       } else {
-        needsAttention.push(nextPr)
+        needsAttention.push(nextPr);
       }
-      continue
+      continue;
     }
 
     if (classification.relatedToYou) {
-      const nextPr = { ...classification.relatedToYou, checkState, policyBotStatus }
+      const nextPr = {
+        ...classification.relatedToYou,
+        checkState,
+        policyBotStatus,
+      };
       if (isStale) {
-        stalePrs.push({ ...nextPr, staleState })
+        stalePrs.push({ ...nextPr, staleState });
       } else {
-        relatedToYou.push(nextPr)
+        relatedToYou.push(nextPr);
       }
     }
   }
 
   return {
     yourPrs: sortByPriorityAndUpdated(yourPrs, {
-      'your-pr-new-reviews': 0,
-      'your-pr-new-comments': 1,
-      'your-pr-unseen-reviews': 2,
-      'your-pr-changes-requested': 3,
-      'your-pr-approved': 4,
-      'your-pr-no-activity': 5,
+      "your-pr-new-reviews": 0,
+      "your-pr-new-comments": 1,
+      "your-pr-unseen-reviews": 2,
+      "your-pr-changes-requested": 3,
+      "your-pr-approved": 4,
+      "your-pr-no-activity": 5,
     }),
     needsAttention: sortByPriorityAndUpdated(needsAttention, {
-      'new-updates': 0,
-      'new-comments': 1,
-      'review-requested': 2,
+      "new-updates": 0,
+      "new-comments": 1,
+      "review-requested": 2,
     }),
     relatedToYou: sortByUpdatedDesc(relatedToYou),
     stalePrs: sortByUpdatedDesc(stalePrs),
@@ -519,18 +601,21 @@ async function fetchAndClassifyPullRequests(
   }
 }
 
-
 async function fetchRecentlyMergedPRs(
   org: string,
   token: string,
   limit: number,
 ): Promise<MergedPullRequest[]> {
-  const me = await apiFetch<GitHubUser>('https://api.github.com/user', token, etagCache)
+  const me = await apiFetch<GitHubUser>(
+    "https://api.github.com/user",
+    token,
+    etagCache,
+  );
 
-  const authorQuery = `is:pr is:merged archived:false org:${org} author:${me.login}`
-  const reviewerQuery = `is:pr is:merged archived:false org:${org} reviewed-by:${me.login}`
+  const authorQuery = `is:pr is:merged archived:false org:${org} author:${me.login}`;
+  const reviewerQuery = `is:pr is:merged archived:false org:${org} reviewed-by:${me.login}`;
 
-  const perQueryLimit = Math.min(limit * 2, SEARCH_PAGE_SIZE)
+  const perQueryLimit = Math.min(limit * 2, SEARCH_PAGE_SIZE);
 
   const [authorResponse, reviewerResponse] = await Promise.all([
     apiFetch<SearchIssuesResponse>(
@@ -543,26 +628,26 @@ async function fetchRecentlyMergedPRs(
       token,
       etagCache,
     ),
-  ])
+  ]);
 
-  const allUrls = new Map<string, 'author' | 'reviewed'>()
+  const allUrls = new Map<string, "author" | "reviewed">();
   for (const item of authorResponse.items) {
     if (item.pull_request?.url) {
-      allUrls.set(item.pull_request.url, 'author')
+      allUrls.set(item.pull_request.url, "author");
     }
   }
   for (const item of reviewerResponse.items) {
     if (item.pull_request?.url && !allUrls.has(item.pull_request.url)) {
-      allUrls.set(item.pull_request.url, 'reviewed')
+      allUrls.set(item.pull_request.url, "reviewed");
     }
   }
 
   const pulls = await Promise.all(
     Array.from(allUrls.entries()).map(async ([pullUrl, role]) => {
-      const pull = await apiFetch<PullDetails>(pullUrl, token, etagCache)
-      return { pull, role }
+      const pull = await apiFetch<PullDetails>(pullUrl, token, etagCache);
+      return { pull, role };
     }),
-  )
+  );
 
   return pulls
     .filter(({ pull }) => pull.merged_at !== null)
@@ -585,9 +670,8 @@ async function fetchRecentlyMergedPRs(
       mergedAt: formatRelativeTime(pull.merged_at as string),
       mergedAtIso: pull.merged_at as string,
       role,
-    }))
+    }));
 }
-
 
 function SectionHeader({
   title,
@@ -597,35 +681,80 @@ function SectionHeader({
   statusLabel,
   openSectionMenuKey,
   sortPreference,
+  isOpen,
+  onToggleOpen,
+  hideDrafts,
+  onToggleHideDrafts,
   onToggleSectionMenu,
   onSetSort,
-  extraTools,
 }: {
-  title: string
-  sectionKey: SectionKey
-  count: number
-  updatedCount?: number
-  statusLabel?: string
-  openSectionMenuKey: SectionKey | null
-  sortPreference: SortPreference
-  onToggleSectionMenu: (key: SectionKey) => void
-  onSetSort: (key: SectionKey, sort: SortPreference) => void
-  extraTools?: React.ReactNode
+  title: string;
+  sectionKey: SectionKey;
+  count: number;
+  updatedCount?: number;
+  statusLabel?: string;
+  openSectionMenuKey: SectionKey | null;
+  sortPreference: SortPreference;
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  hideDrafts: boolean;
+  onToggleHideDrafts: () => void;
+  onToggleSectionMenu: (key: SectionKey) => void;
+  onSetSort: (key: SectionKey, sort: SortPreference) => void;
 }) {
-  const isMenuOpen = openSectionMenuKey === sectionKey
+  const isMenuOpen = openSectionMenuKey === sectionKey;
 
   return (
     <div className="section-header">
-      <h2>{title}</h2>
+      <button
+        type="button"
+        className="section-title-toggle"
+        onClick={onToggleOpen}
+        aria-expanded={isOpen}
+      >
+        <svg
+          className={`section-chevron${isOpen ? "" : " section-chevron--collapsed"}`}
+          viewBox="0 0 16 16"
+          width="14"
+          height="14"
+          aria-hidden="true"
+          role="presentation"
+        >
+          <path
+            d="M4.5 6L8 9.5 11.5 6"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span className="section-title-text">{title}</span>
+      </button>
       <div className="section-header-tools">
         <span>
           {count}
           {updatedCount != null && updatedCount > 0 ? (
-            <span className="section-count-detail"> · {updatedCount} updated</span>
+            <span className="section-count-detail">
+              {" "}
+              · {updatedCount} updated
+            </span>
           ) : null}
         </span>
-        {statusLabel ? <span className="section-status-label">{statusLabel}</span> : null}
-        {extraTools}
+        {statusLabel ? (
+          <span className="section-status-label">{statusLabel}</span>
+        ) : null}
+        <button
+          type="button"
+          className={`section-action${hideDrafts ? " section-action--active" : ""}`}
+          aria-pressed={hideDrafts}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleHideDrafts();
+          }}
+        >
+          Drafts
+        </button>
         <div className="section-menu-wrap">
           <button
             type="button"
@@ -633,8 +762,8 @@ function SectionHeader({
             aria-label="Sort options"
             aria-expanded={isMenuOpen}
             onClick={(event) => {
-              event.stopPropagation()
-              onToggleSectionMenu(sectionKey)
+              event.stopPropagation();
+              onToggleSectionMenu(sectionKey);
             }}
           >
             <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
@@ -642,35 +771,38 @@ function SectionHeader({
             </svg>
           </button>
           {isMenuOpen ? (
-            <div className="section-menu" onClick={(event) => event.stopPropagation()}>
+            <div
+              className="section-menu"
+              onClick={(event) => event.stopPropagation()}
+            >
               <span className="row-menu-hint">Sort By</span>
               <button
                 type="button"
-                className={`row-menu-item${sortPreference === 'oldest-first' ? ' active-sort' : ''}`}
-                onClick={() => onSetSort(sectionKey, 'oldest-first')}
+                className={`row-menu-item${sortPreference === "oldest-first" ? " active-sort" : ""}`}
+                onClick={() => onSetSort(sectionKey, "oldest-first")}
               >
-                {sortPreference === 'oldest-first' ? '\u2713 ' : ''}Oldest first
+                {sortPreference === "oldest-first" ? "\u2713 " : ""}Oldest first
               </button>
               <button
                 type="button"
-                className={`row-menu-item${sortPreference === 'newest-first' ? ' active-sort' : ''}`}
-                onClick={() => onSetSort(sectionKey, 'newest-first')}
+                className={`row-menu-item${sortPreference === "newest-first" ? " active-sort" : ""}`}
+                onClick={() => onSetSort(sectionKey, "newest-first")}
               >
-                {sortPreference === 'newest-first' ? '\u2713 ' : ''}Newest first
+                {sortPreference === "newest-first" ? "\u2713 " : ""}Newest first
               </button>
               <button
                 type="button"
-                className={`row-menu-item${sortPreference === 'default' ? ' active-sort' : ''}`}
-                onClick={() => onSetSort(sectionKey, 'default')}
+                className={`row-menu-item${sortPreference === "default" ? " active-sort" : ""}`}
+                onClick={() => onSetSort(sectionKey, "default")}
               >
-                {sortPreference === 'default' ? '\u2713 ' : ''}Last updated
+                {sortPreference === "default" ? "\u2713 " : ""}Last updated
               </button>
             </div>
           ) : null}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function PullRequestRow({
@@ -686,42 +818,42 @@ function PullRequestRow({
   onMarkActive,
   onClearStalePreference,
 }: {
-  pr: PullRequest
-  isViewed: boolean
-  onViewed: (repository: string, number: number) => void
-  stalePreference?: StalePreference
-  sectionKind: 'active' | 'stale'
-  openMenuKey: string | null
-  onToggleMenu: (menuKey: string) => void
-  onCloseMenu: () => void
-  onMarkStale: (repository: string, number: number) => void
-  onMarkActive: (repository: string, number: number) => void
-  onClearStalePreference: (repository: string, number: number) => void
+  pr: PullRequest;
+  isViewed: boolean;
+  onViewed: (repository: string, number: number) => void;
+  stalePreference?: StalePreference;
+  sectionKind: "active" | "stale";
+  openMenuKey: string | null;
+  onToggleMenu: (menuKey: string) => void;
+  onCloseMenu: () => void;
+  onMarkStale: (repository: string, number: number) => void;
+  onMarkActive: (repository: string, number: number) => void;
+  onClearStalePreference: (repository: string, number: number) => void;
 }) {
   const checkTitle =
-    pr.checkState === 'success'
-      ? 'Checks passed'
-      : pr.checkState === 'failure'
-        ? 'Checks failing'
-        : 'Checks pending'
+    pr.checkState === "success"
+      ? "Checks passed"
+      : pr.checkState === "failure"
+        ? "Checks failing"
+        : "Checks pending";
 
   const policyTitle = pr.policyBotStatus
-    ? pr.policyBotStatus.state === 'success'
-      ? 'Policy: approved'
-      : pr.policyBotStatus.state === 'failure'
-        ? 'Policy: not satisfied'
-        : 'Policy: pending'
-    : undefined
+    ? pr.policyBotStatus.state === "success"
+      ? "Policy: approved"
+      : pr.policyBotStatus.state === "failure"
+        ? "Policy: not satisfied"
+        : "Policy: pending"
+    : undefined;
 
-  const menuKey = prViewKey(pr.repository, pr.number)
-  const isMenuOpen = openMenuKey === menuKey
+  const menuKey = prViewKey(pr.repository, pr.number);
+  const isMenuOpen = openMenuKey === menuKey;
 
   function handleViewed(): void {
-    onViewed(pr.repository, pr.number)
+    onViewed(pr.repository, pr.number);
   }
 
   return (
-    <article className={`pr-row${isViewed ? ' viewed' : ''}`}>
+    <article className={`pr-row${isViewed ? " viewed" : ""}`}>
       <div className="title-group">
         <a
           href={pr.authorProfileUrl}
@@ -731,7 +863,11 @@ function PullRequestRow({
           title={pr.author}
           aria-label={`Open ${pr.author} profile`}
         >
-          <img src={pr.authorAvatarUrl} className="avatar" alt={`${pr.author} avatar`} />
+          <img
+            src={pr.authorAvatarUrl}
+            className="avatar"
+            alt={`${pr.author} avatar`}
+          />
         </a>
         <div>
           <div className="pr-title-line">
@@ -740,11 +876,11 @@ function PullRequestRow({
               title={checkTitle}
               aria-label={checkTitle}
             >
-              {pr.checkState === 'success' ? (
+              {pr.checkState === "success" ? (
                 <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
                   <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-6.5 6.5a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l2.47 2.47 5.97-5.97a.75.75 0 0 1 1.06 0Z" />
                 </svg>
-              ) : pr.checkState === 'failure' ? (
+              ) : pr.checkState === "failure" ? (
                 <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
                   <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 1 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
                 </svg>
@@ -761,12 +897,12 @@ function PullRequestRow({
               rel="noreferrer"
               onClick={handleViewed}
             >
-              {pr.isDraft ? '[Draft] ' : ''}
+              {pr.isDraft ? "[Draft] " : ""}
               {pr.title}
             </a>
           </div>
           <p className="pr-meta">
-            #{pr.number} opened by{' '}
+            #{pr.number} opened by{" "}
             <a
               href={pr.authorProfileUrl}
               className="meta-link"
@@ -774,8 +910,8 @@ function PullRequestRow({
               rel="noreferrer"
             >
               {pr.author}
-            </a>{' '}
-            in{' '}
+            </a>{" "}
+            in{" "}
             <a
               href={pr.repositoryUrl}
               className="meta-link"
@@ -843,8 +979,8 @@ function PullRequestRow({
           aria-label="Open row actions"
           aria-expanded={isMenuOpen}
           onClick={(event) => {
-            event.stopPropagation()
-            onToggleMenu(menuKey)
+            event.stopPropagation();
+            onToggleMenu(menuKey);
           }}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
@@ -853,30 +989,35 @@ function PullRequestRow({
         </button>
 
         {isMenuOpen ? (
-          <div className="row-menu" onClick={(event) => event.stopPropagation()}>
-            {sectionKind === 'stale' ? (
+          <div
+            className="row-menu"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {sectionKind === "stale" ? (
               <>
                 <span className="row-menu-hint">
-                  {pr.staleState === 'manual' ? 'Manually stale' : 'Auto stale (30d+)'}
+                  {pr.staleState === "manual"
+                    ? "Manually stale"
+                    : "Auto stale (30d+)"}
                 </span>
                 <button
                   type="button"
                   className="row-menu-item"
                   onClick={() => {
-                    onMarkActive(pr.repository, pr.number)
-                    onCloseMenu()
+                    onMarkActive(pr.repository, pr.number);
+                    onCloseMenu();
                   }}
                 >
                   Not stale
                 </button>
               </>
-            ) : stalePreference === 'active' ? (
+            ) : stalePreference === "active" ? (
               <button
                 type="button"
                 className="row-menu-item"
                 onClick={() => {
-                  onClearStalePreference(pr.repository, pr.number)
-                  onCloseMenu()
+                  onClearStalePreference(pr.repository, pr.number);
+                  onCloseMenu();
                 }}
               >
                 Use auto rule
@@ -886,8 +1027,8 @@ function PullRequestRow({
                 type="button"
                 className="row-menu-item danger-item"
                 onClick={() => {
-                  onMarkStale(pr.repository, pr.number)
-                  onCloseMenu()
+                  onMarkStale(pr.repository, pr.number);
+                  onCloseMenu();
                 }}
               >
                 Mark stale
@@ -915,7 +1056,7 @@ function PullRequestRow({
         ) : null}
       </div>
     </article>
-  )
+  );
 }
 
 function MergedPrRow({ pr }: { pr: MergedPullRequest }) {
@@ -930,7 +1071,11 @@ function MergedPrRow({ pr }: { pr: MergedPullRequest }) {
           title={pr.author}
           aria-label={`Open ${pr.author} profile`}
         >
-          <img src={pr.authorAvatarUrl} className="avatar" alt={`${pr.author} avatar`} />
+          <img
+            src={pr.authorAvatarUrl}
+            className="avatar"
+            alt={`${pr.author} avatar`}
+          />
         </a>
         <div>
           <div className="pr-title-line">
@@ -949,7 +1094,7 @@ function MergedPrRow({ pr }: { pr: MergedPullRequest }) {
             </a>
           </div>
           <p className="pr-meta">
-            #{pr.number} by{' '}
+            #{pr.number} by{" "}
             <a
               href={pr.authorProfileUrl}
               className="meta-link"
@@ -957,8 +1102,8 @@ function MergedPrRow({ pr }: { pr: MergedPullRequest }) {
               rel="noreferrer"
             >
               {pr.author}
-            </a>{' '}
-            in{' '}
+            </a>{" "}
+            in{" "}
             <a
               href={pr.repositoryUrl}
               className="meta-link"
@@ -972,246 +1117,272 @@ function MergedPrRow({ pr }: { pr: MergedPullRequest }) {
       </div>
       <div className="status-group">
         <span className="pill-wrap">
-          <span className={`pill merged-pill ${pr.role === 'author' ? 'merged-author' : 'merged-reviewed'}`}>
-            {pr.role === 'author' ? 'Author' : 'Reviewed'}
+          <span
+            className={`pill merged-pill ${pr.role === "author" ? "merged-author" : "merged-reviewed"}`}
+          >
+            {pr.role === "author" ? "Author" : "Reviewed"}
           </span>
         </span>
         <span className="updated-at">Merged {pr.mergedAt}</span>
       </div>
     </article>
-  )
+  );
 }
 
 function App() {
-  const [tokenInput, setTokenInput] = useState(() => readStorageItem(STORAGE_KEYS.token))
-  const [token, setToken] = useState(() => readStorageItem(STORAGE_KEYS.token))
-  const [orgInput, setOrgInput] = useState(() => readStorageItem(STORAGE_KEYS.org) || 'MaintainX')
-  const [org, setOrg] = useState(() => readStorageItem(STORAGE_KEYS.org))
-  const [viewedMap, setViewedMap] = useState<Record<string, number>>(() => readViewedMap())
-  const [stalePreferences, setStalePreferences] = useState<Record<string, StalePreference>>(
-    () => readStalePreferences(),
-  )
-  const [isLoading, setIsLoading] = useState(false)
-  const [errorToast, setErrorToast] = useState<string | null>(null)
-  const [rateLimitWarning, setRateLimitWarning] = useState(false)
-  const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState<string | null>(null)
-  const [stalePrs, setStalePrs] = useState<PullRequest[]>([])
-  const [yourPrs, setYourPrs] = useState<PullRequest[]>([])
-  const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([])
-  const [relatedToYou, setRelatedToYou] = useState<PullRequest[]>([])
+  const [tokenInput, setTokenInput] = useState(() =>
+    readStorageItem(STORAGE_KEYS.token),
+  );
+  const [token, setToken] = useState(() => readStorageItem(STORAGE_KEYS.token));
+  const [orgInput, setOrgInput] = useState(
+    () => readStorageItem(STORAGE_KEYS.org) || "MaintainX",
+  );
+  const [org, setOrg] = useState(() => readStorageItem(STORAGE_KEYS.org));
+  const [viewedMap, setViewedMap] = useState<Record<string, number>>(() =>
+    readViewedMap(),
+  );
+  const [stalePreferences, setStalePreferences] = useState<
+    Record<string, StalePreference>
+  >(() => readStalePreferences());
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
+  const [rateLimitWarning, setRateLimitWarning] = useState(false);
+  const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState<
+    string | null
+  >(null);
+  const [stalePrs, setStalePrs] = useState<PullRequest[]>([]);
+  const [yourPrs, setYourPrs] = useState<PullRequest[]>([]);
+  const [needsAttention, setNeedsAttention] = useState<PullRequest[]>([]);
+  const [relatedToYou, setRelatedToYou] = useState<PullRequest[]>([]);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
     readThemePreference(),
-  )
-  const [isCompact, setIsCompact] = useState(() => readCompactPreference())
+  );
+  const [isCompact, setIsCompact] = useState(() => readCompactPreference());
   const [isConnectionPanelOpen, setIsConnectionPanelOpen] = useState(() => {
-    const savedToken = readStorageItem(STORAGE_KEYS.token)
-    const savedOrg = readStorageItem(STORAGE_KEYS.org)
-    return !(savedToken && savedOrg)
-  })
-  const [recentlyMerged, setRecentlyMerged] = useState<MergedPullRequest[]>([])
-  const [isRecentlyMergedOpen, setIsRecentlyMergedOpen] = useState(false)
-  const [mergedCount, setMergedCount] = useState(() => readMergedCountPreference())
-  const [mergedCountInput, setMergedCountInput] = useState(() => String(readMergedCountPreference()))
-  const [isStaleSectionOpen, setIsStaleSectionOpen] = useState(false)
-  const [isNeedsAttentionOpen, setIsNeedsAttentionOpen] = useState(true)
-  const [isYourPrsOpen, setIsYourPrsOpen] = useState(true)
-  const [isRelatedToYouOpen, setIsRelatedToYouOpen] = useState(true)
-  const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null)
-  const [openSectionMenuKey, setOpenSectionMenuKey] = useState<SectionKey | null>(null)
-  const [sectionSortPreferences, setSectionSortPreferences] = useState<Record<SectionKey, SortPreference>>(
-    readSectionSortPreferences,
-  )
-  const [refreshTick, setRefreshTick] = useState(0)
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null)
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  const isLoadingRef = useRef(false)
-  const viewedMapRef = useRef<Record<string, number>>(viewedMap)
-  const lastVisibilityRefreshAtRef = useRef(0)
+    const savedToken = readStorageItem(STORAGE_KEYS.token);
+    const savedOrg = readStorageItem(STORAGE_KEYS.org);
+    return !(savedToken && savedOrg);
+  });
+  const [recentlyMerged, setRecentlyMerged] = useState<MergedPullRequest[]>([]);
+  const [isRecentlyMergedOpen, setIsRecentlyMergedOpen] = useState(false);
+  const [mergedCount, setMergedCount] = useState(() =>
+    readMergedCountPreference(),
+  );
+  const [mergedCountInput, setMergedCountInput] = useState(() =>
+    String(readMergedCountPreference()),
+  );
+  const [isStaleSectionOpen, setIsStaleSectionOpen] = useState(false);
+  const [isNeedsAttentionOpen, setIsNeedsAttentionOpen] = useState(true);
+  const [isYourPrsOpen, setIsYourPrsOpen] = useState(true);
+  const [isRelatedToYouOpen, setIsRelatedToYouOpen] = useState(true);
+  const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null);
+  const [openSectionMenuKey, setOpenSectionMenuKey] =
+    useState<SectionKey | null>(null);
+  const [sectionSortPreferences, setSectionSortPreferences] = useState<
+    Record<SectionKey, SortPreference>
+  >(readSectionSortPreferences);
+  const [sectionHideDrafts, setSectionHideDrafts] = useState<
+    Record<SectionKey, boolean>
+  >(readSectionHideDrafts);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const isLoadingRef = useRef(false);
+  const viewedMapRef = useRef<Record<string, number>>(viewedMap);
+  const lastVisibilityRefreshAtRef = useRef(0);
 
-  function resolveTheme(preference: ThemePreference): 'dark' | 'light' {
-    if (preference === 'dark') {
-      return 'dark'
+  function resolveTheme(preference: ThemePreference): "dark" | "light" {
+    if (preference === "dark") {
+      return "dark";
     }
 
-    if (preference === 'light') {
-      return 'light'
+    if (preference === "light") {
+      return "light";
     }
 
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
   }
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
     function applyTheme(): void {
-      document.documentElement.dataset.theme = resolveTheme(themePreference)
+      document.documentElement.dataset.theme = resolveTheme(themePreference);
     }
 
-    applyTheme()
+    applyTheme();
 
-    if (themePreference !== 'system') {
-      return
+    if (themePreference !== "system") {
+      return;
     }
 
-    mediaQuery.addEventListener('change', applyTheme)
+    mediaQuery.addEventListener("change", applyTheme);
     return () => {
-      mediaQuery.removeEventListener('change', applyTheme)
-    }
-  }, [themePreference])
+      mediaQuery.removeEventListener("change", applyTheme);
+    };
+  }, [themePreference]);
 
   useEffect(() => {
-    document.documentElement.dataset.compact = String(isCompact)
-  }, [isCompact])
+    document.documentElement.dataset.compact = String(isCompact);
+  }, [isCompact]);
 
   useEffect(() => {
-    isLoadingRef.current = isLoading
-  }, [isLoading])
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   useEffect(() => {
-    viewedMapRef.current = viewedMap
-  }, [viewedMap])
+    viewedMapRef.current = viewedMap;
+  }, [viewedMap]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setNowMs(Date.now())
-    }, 30 * 1000)
+      setNowMs(Date.now());
+    }, 30 * 1000);
 
     return () => {
-      window.clearInterval(intervalId)
-    }
-  }, [])
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isConnectionPanelOpen) {
-      return
+      return;
     }
 
     function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        setIsConnectionPanelOpen(false)
+      if (event.key === "Escape") {
+        setIsConnectionPanelOpen(false);
       }
     }
 
-    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [isConnectionPanelOpen])
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isConnectionPanelOpen]);
 
   useEffect(() => {
     if (!token || !org) {
-      return
+      return;
     }
 
     const controller = new SmartRefreshController({
       token,
       org,
       onRefresh: () => {
-        if (document.visibilityState !== 'visible' || isLoadingRef.current) {
-          return
+        if (document.visibilityState !== "visible" || isLoadingRef.current) {
+          return;
         }
 
-        setRefreshTick((current) => current + 1)
+        setRefreshTick((current) => current + 1);
       },
       fallbackIntervalMs: FALLBACK_REFRESH_MS,
       degradedIntervalMs: NOTIFICATION_FALLBACK_MS,
-    })
+    });
 
-    controller.start()
+    controller.start();
 
     return () => {
-      controller.stop()
-    }
-  }, [org, token])
+      controller.stop();
+    };
+  }, [org, token]);
 
   useEffect(() => {
     if (!token || !org) {
-      return
+      return;
     }
 
     function triggerFocusRefresh(): void {
-      if (document.visibilityState !== 'visible' || isLoadingRef.current) {
-        return
+      if (document.visibilityState !== "visible" || isLoadingRef.current) {
+        return;
       }
 
-      const now = Date.now()
-      if (now - lastVisibilityRefreshAtRef.current < REFRESH_FOCUS_COOLDOWN_MS) {
-        return
+      const now = Date.now();
+      if (
+        now - lastVisibilityRefreshAtRef.current <
+        REFRESH_FOCUS_COOLDOWN_MS
+      ) {
+        return;
       }
 
-      lastVisibilityRefreshAtRef.current = now
-      setRefreshTick((current) => current + 1)
+      lastVisibilityRefreshAtRef.current = now;
+      setRefreshTick((current) => current + 1);
     }
 
     function handleVisibilityChange(): void {
-      if (document.visibilityState === 'visible') {
-        triggerFocusRefresh()
+      if (document.visibilityState === "visible") {
+        triggerFocusRefresh();
       }
     }
 
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', triggerFocusRefresh)
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", triggerFocusRefresh);
 
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', triggerFocusRefresh)
-    }
-  }, [org, token])
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", triggerFocusRefresh);
+    };
+  }, [org, token]);
 
   useEffect(() => {
     function handleGlobalClick(event: MouseEvent): void {
-      const target = event.target as HTMLElement | null
+      const target = event.target as HTMLElement | null;
       if (!target) {
-        return
+        return;
       }
 
-      if (!target.closest('.row-menu') && !target.closest('.row-menu-toggle')) {
-        setOpenRowMenuKey(null)
+      if (!target.closest(".row-menu") && !target.closest(".row-menu-toggle")) {
+        setOpenRowMenuKey(null);
       }
 
-      if (!target.closest('.section-menu') && !target.closest('.section-menu-toggle')) {
-        setOpenSectionMenuKey(null)
+      if (
+        !target.closest(".section-menu") &&
+        !target.closest(".section-menu-toggle")
+      ) {
+        setOpenSectionMenuKey(null);
       }
     }
 
     function handleEscape(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        setOpenRowMenuKey(null)
-        setOpenSectionMenuKey(null)
+      if (event.key === "Escape") {
+        setOpenRowMenuKey(null);
+        setOpenSectionMenuKey(null);
       }
     }
 
-    document.addEventListener('click', handleGlobalClick)
-    window.addEventListener('keydown', handleEscape)
+    document.addEventListener("click", handleGlobalClick);
+    window.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.removeEventListener('click', handleGlobalClick)
-      window.removeEventListener('keydown', handleEscape)
-    }
-  }, [])
+      document.removeEventListener("click", handleGlobalClick);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
 
   useEffect(() => {
     if (!token || !org) {
-      setIsConnectionPanelOpen(true)
+      setIsConnectionPanelOpen(true);
     }
-  }, [org, token])
+  }, [org, token]);
 
   useEffect(() => {
     if (!token || !org) {
-      setStalePrs([])
-      setYourPrs([])
-      setNeedsAttention([])
-      setRelatedToYou([])
-      setRecentlyMerged([])
-      setTeamSignalsUnavailable(null)
-      return
+      setStalePrs([]);
+      setYourPrs([]);
+      setNeedsAttention([]);
+      setRelatedToYou([]);
+      setRecentlyMerged([]);
+      setTeamSignalsUnavailable(null);
+      return;
     }
 
-    let ignore = false
+    let ignore = false;
 
     async function loadAndClassifyPulls(): Promise<void> {
-      setIsLoading(true)
-      setErrorToast(null)
+      setIsLoading(true);
+      setErrorToast(null);
 
       try {
         const [classified, merged] = await Promise.all([
@@ -1222,16 +1393,16 @@ function App() {
             stalePreferences,
           ),
           fetchRecentlyMergedPRs(org, token, mergedCount),
-        ])
+        ]);
         if (!ignore) {
-          setStalePrs(classified.stalePrs)
-          setYourPrs(classified.yourPrs)
-          setNeedsAttention(classified.needsAttention)
-          setRelatedToYou(classified.relatedToYou)
-          setTeamSignalsUnavailable(classified.teamSignalsUnavailable)
-          setRecentlyMerged(merged)
-          setLastRefreshedAt(Date.now())
-          setRateLimitWarning(false)
+          setStalePrs(classified.stalePrs);
+          setYourPrs(classified.yourPrs);
+          setNeedsAttention(classified.needsAttention);
+          setRelatedToYou(classified.relatedToYou);
+          setTeamSignalsUnavailable(classified.teamSignalsUnavailable);
+          setRecentlyMerged(merged);
+          setLastRefreshedAt(Date.now());
+          setRateLimitWarning(false);
 
           if (classified.closedViewedKeys.length > 0) {
             setViewedMap((current) => {
@@ -1247,56 +1418,63 @@ function App() {
       } catch (loadError) {
         if (!ignore) {
           if (loadError instanceof RateLimitError) {
-            setRateLimitWarning(true)
+            setRateLimitWarning(true);
           } else {
             const message =
-              loadError instanceof Error ? loadError.message : 'Failed to load pull requests.'
-            setErrorToast(message)
+              loadError instanceof Error
+                ? loadError.message
+                : "Failed to load pull requests.";
+            setErrorToast(message);
           }
         }
       } finally {
         if (!ignore) {
-          setIsLoading(false)
+          setIsLoading(false);
         }
       }
     }
 
-    void loadAndClassifyPulls()
+    void loadAndClassifyPulls();
 
     return () => {
-      ignore = true
-    }
-  }, [mergedCount, org, refreshTick, stalePreferences, token])
+      ignore = true;
+    };
+  }, [mergedCount, org, refreshTick, stalePreferences, token]);
 
   function handleSaveConfig(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault()
-    const nextToken = tokenInput.trim()
-    const nextOrg = orgInput.trim()
+    event.preventDefault();
+    const nextToken = tokenInput.trim();
+    const nextOrg = orgInput.trim();
 
-    const parsedCount = parseInt(mergedCountInput, 10)
+    const parsedCount = parseInt(mergedCountInput, 10);
     const nextMergedCount =
-      isNaN(parsedCount) || parsedCount < MERGED_COUNT_MIN || parsedCount > MERGED_COUNT_MAX
+      isNaN(parsedCount) ||
+      parsedCount < MERGED_COUNT_MIN ||
+      parsedCount > MERGED_COUNT_MAX
         ? MERGED_COUNT_DEFAULT
-        : parsedCount
+        : parsedCount;
 
-    localStorage.setItem(STORAGE_KEYS.token, nextToken)
-    localStorage.setItem(STORAGE_KEYS.org, nextOrg)
-    localStorage.setItem(STORAGE_KEYS.recentlyMergedCount, String(nextMergedCount))
-    setToken(nextToken)
-    setOrg(nextOrg)
-    setMergedCount(nextMergedCount)
-    setMergedCountInput(String(nextMergedCount))
-    setIsConnectionPanelOpen(false)
+    localStorage.setItem(STORAGE_KEYS.token, nextToken);
+    localStorage.setItem(STORAGE_KEYS.org, nextOrg);
+    localStorage.setItem(
+      STORAGE_KEYS.recentlyMergedCount,
+      String(nextMergedCount),
+    );
+    setToken(nextToken);
+    setOrg(nextOrg);
+    setMergedCount(nextMergedCount);
+    setMergedCountInput(String(nextMergedCount));
+    setIsConnectionPanelOpen(false);
   }
 
   function handleViewed(repository: string, number: number): void {
-    const key = prViewKey(repository, number)
-    const now = Date.now()
+    const key = prViewKey(repository, number);
+    const now = Date.now();
     setViewedMap((current) => {
-      const next = { ...current, [key]: now }
-      localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next))
-      return next
-    })
+      const next = { ...current, [key]: now };
+      localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next));
+      return next;
+    });
   }
 
   function updateStalePreference(
@@ -1304,85 +1482,123 @@ function App() {
     number: number,
     nextValue?: StalePreference,
   ): void {
-    const key = prViewKey(repository, number)
+    const key = prViewKey(repository, number);
 
     setStalePreferences((current) => {
-      const next = { ...current }
+      const next = { ...current };
       if (nextValue) {
-        next[key] = nextValue
+        next[key] = nextValue;
       } else {
-        delete next[key]
+        delete next[key];
       }
 
-      localStorage.setItem(STORAGE_KEYS.stalePreferences, JSON.stringify(next))
-      return next
-    })
+      localStorage.setItem(STORAGE_KEYS.stalePreferences, JSON.stringify(next));
+      return next;
+    });
   }
 
   function handleMarkStale(repository: string, number: number): void {
-    updateStalePreference(repository, number, 'stale')
+    updateStalePreference(repository, number, "stale");
   }
 
   function handleMarkActive(repository: string, number: number): void {
-    updateStalePreference(repository, number, 'active')
+    updateStalePreference(repository, number, "active");
   }
 
-  function handleClearStalePreference(repository: string, number: number): void {
-    updateStalePreference(repository, number)
+  function handleClearStalePreference(
+    repository: string,
+    number: number,
+  ): void {
+    updateStalePreference(repository, number);
   }
 
   function handleToggleRowMenu(menuKey: string): void {
-    setOpenRowMenuKey((current) => (current === menuKey ? null : menuKey))
+    setOpenRowMenuKey((current) => (current === menuKey ? null : menuKey));
   }
 
   function handleCloseRowMenu(): void {
-    setOpenRowMenuKey(null)
+    setOpenRowMenuKey(null);
   }
 
   function handleToggleSectionMenu(sectionKey: SectionKey): void {
-    setOpenSectionMenuKey((current) => (current === sectionKey ? null : sectionKey))
+    setOpenSectionMenuKey((current) =>
+      current === sectionKey ? null : sectionKey,
+    );
   }
 
-  function handleSetSectionSort(sectionKey: SectionKey, sort: SortPreference): void {
+  function handleSetSectionSort(
+    sectionKey: SectionKey,
+    sort: SortPreference,
+  ): void {
     setSectionSortPreferences((current) => {
-      const next = { ...current, [sectionKey]: sort }
-      localStorage.setItem(STORAGE_KEYS.sectionSort, JSON.stringify(next))
-      return next
-    })
-    setOpenSectionMenuKey(null)
+      const next = { ...current, [sectionKey]: sort };
+      localStorage.setItem(STORAGE_KEYS.sectionSort, JSON.stringify(next));
+      return next;
+    });
+    setOpenSectionMenuKey(null);
+  }
+
+  function handleToggleSectionHideDrafts(sectionKey: SectionKey): void {
+    setSectionHideDrafts((current) => {
+      const next = { ...current, [sectionKey]: !current[sectionKey] };
+      localStorage.setItem(
+        STORAGE_KEYS.sectionHideDrafts,
+        JSON.stringify(next),
+      );
+      return next;
+    });
   }
 
   function toggleTheme(): void {
-    const activeTheme = resolveTheme(themePreference)
-    const nextPreference: ThemePreference = activeTheme === 'dark' ? 'light' : 'dark'
-    setThemePreference(nextPreference)
-    localStorage.setItem(STORAGE_KEYS.theme, nextPreference)
+    const activeTheme = resolveTheme(themePreference);
+    const nextPreference: ThemePreference =
+      activeTheme === "dark" ? "light" : "dark";
+    setThemePreference(nextPreference);
+    localStorage.setItem(STORAGE_KEYS.theme, nextPreference);
   }
 
   function toggleCompact(): void {
     setIsCompact((current) => {
-      const next = !current
-      localStorage.setItem(STORAGE_KEYS.compact, String(next))
-      return next
-    })
+      const next = !current;
+      localStorage.setItem(STORAGE_KEYS.compact, String(next));
+      return next;
+    });
   }
 
-  const activeTheme = resolveTheme(themePreference)
-  const hasSavedConnection = Boolean(token && org)
-  const displayNeedsAttention = applySectionSort(needsAttention, sectionSortPreferences.needsAttention)
-  const displayYourPrs = applySectionSort(yourPrs, sectionSortPreferences.yourPrs)
-  const displayRelatedToYou = applySectionSort(relatedToYou, sectionSortPreferences.relatedToYou)
+  const activeTheme = resolveTheme(themePreference);
+  const hasSavedConnection = Boolean(token && org);
+  const displayNeedsAttention = applyDraftFilter(
+    applySectionSort(needsAttention, sectionSortPreferences.needsAttention),
+    sectionHideDrafts.needsAttention,
+  );
+  const displayYourPrs = applyDraftFilter(
+    applySectionSort(yourPrs, sectionSortPreferences.yourPrs),
+    sectionHideDrafts.yourPrs,
+  );
+  const displayRelatedToYou = applyDraftFilter(
+    applySectionSort(relatedToYou, sectionSortPreferences.relatedToYou),
+    sectionHideDrafts.relatedToYou,
+  );
 
-  const needsAttentionUpdatedCount = displayNeedsAttention.filter((pr) => pr.stateLabel).length
-  const yourPrsUpdatedCount = displayYourPrs.filter((pr) => pr.stateLabel).length
-  const relatedToYouUpdatedCount = displayRelatedToYou.filter((pr) => pr.stateLabel).length
-  const displayStalePrs = applySectionSort(stalePrs, sectionSortPreferences.stalePrs)
+  const needsAttentionUpdatedCount = displayNeedsAttention.filter(
+    (pr) => pr.stateLabel,
+  ).length;
+  const yourPrsUpdatedCount = displayYourPrs.filter(
+    (pr) => pr.stateLabel,
+  ).length;
+  const relatedToYouUpdatedCount = displayRelatedToYou.filter(
+    (pr) => pr.stateLabel,
+  ).length;
+  const displayStalePrs = applyDraftFilter(
+    applySectionSort(stalePrs, sectionSortPreferences.stalePrs),
+    sectionHideDrafts.stalePrs,
+  );
 
   const refreshLabel = isLoading
-    ? 'Refreshing...'
+    ? "Refreshing..."
     : lastRefreshedAt
       ? `Last updated ${formatRefreshAge(lastRefreshedAt, nowMs)}`
-      : 'Not refreshed yet'
+      : "Not refreshed yet";
 
   return (
     <main className="app-shell">
@@ -1408,40 +1624,50 @@ function App() {
           sectionKey="needsAttention"
           count={displayNeedsAttention.length}
           updatedCount={needsAttentionUpdatedCount}
-          statusLabel={isLoading && !lastRefreshedAt ? 'Classifying...' : undefined}
+          statusLabel={
+            isLoading && !lastRefreshedAt ? "Classifying..." : undefined
+          }
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.needsAttention}
+          isOpen={isNeedsAttentionOpen}
+          onToggleOpen={() => setIsNeedsAttentionOpen((current) => !current)}
+          hideDrafts={sectionHideDrafts.needsAttention}
+          onToggleHideDrafts={() =>
+            handleToggleSectionHideDrafts("needsAttention")
+          }
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
-          extraTools={
-            <button
-              type="button"
-              className="section-action"
-              onClick={() => setIsNeedsAttentionOpen((current) => !current)}
-            >
-              {isNeedsAttentionOpen ? 'Hide' : 'Show'}
-            </button>
-          }
         />
         {isNeedsAttentionOpen ? (
           <div>
-            {!isLoading && token && org && displayNeedsAttention.length === 0 ? (
-              <p className="empty-state">Nothing currently needs your immediate attention.</p>
+            {!isLoading &&
+            token &&
+            org &&
+            displayNeedsAttention.length === 0 ? (
+              <p className="empty-state">
+                Nothing currently needs your immediate attention.
+              </p>
             ) : null}
             {!isLoading && (!token || !org) ? (
-              <p className="empty-state">Add org + PAT above to classify pull requests.</p>
+              <p className="empty-state">
+                Add org + PAT above to classify pull requests.
+              </p>
             ) : null}
             {displayNeedsAttention.map((pr) => (
               <PullRequestRow
                 key={pr.id}
                 pr={pr}
-                isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
+                isViewed={Boolean(
+                  viewedMap[prViewKey(pr.repository, pr.number)],
+                )}
                 onViewed={handleViewed}
                 sectionKind="active"
                 openMenuKey={openRowMenuKey}
                 onToggleMenu={handleToggleRowMenu}
                 onCloseMenu={handleCloseRowMenu}
-                stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+                stalePreference={
+                  stalePreferences[prViewKey(pr.repository, pr.number)]
+                }
                 onMarkStale={handleMarkStale}
                 onMarkActive={handleMarkActive}
                 onClearStalePreference={handleClearStalePreference}
@@ -1449,7 +1675,9 @@ function App() {
             ))}
           </div>
         ) : (
-          <p className="collapsed-hint">Section collapsed. Click Show to expand.</p>
+          <p className="collapsed-hint">
+            Section collapsed — click the title to expand.
+          </p>
         )}
       </section>
 
@@ -1459,40 +1687,43 @@ function App() {
           sectionKey="yourPrs"
           count={displayYourPrs.length}
           updatedCount={yourPrsUpdatedCount}
-          statusLabel={isLoading && !lastRefreshedAt ? 'Loading...' : undefined}
+          statusLabel={isLoading && !lastRefreshedAt ? "Loading..." : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.yourPrs}
+          isOpen={isYourPrsOpen}
+          onToggleOpen={() => setIsYourPrsOpen((current) => !current)}
+          hideDrafts={sectionHideDrafts.yourPrs}
+          onToggleHideDrafts={() => handleToggleSectionHideDrafts("yourPrs")}
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
-          extraTools={
-            <button
-              type="button"
-              className="section-action"
-              onClick={() => setIsYourPrsOpen((current) => !current)}
-            >
-              {isYourPrsOpen ? 'Hide' : 'Show'}
-            </button>
-          }
         />
         {isYourPrsOpen ? (
           <div>
             {!isLoading && token && org && displayYourPrs.length === 0 ? (
-              <p className="empty-state">No assigned or authored pull requests right now.</p>
+              <p className="empty-state">
+                No assigned or authored pull requests right now.
+              </p>
             ) : null}
             {!isLoading && (!token || !org) ? (
-              <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
+              <p className="empty-state">
+                Add org + PAT above to load pull requests from GitHub.
+              </p>
             ) : null}
             {displayYourPrs.map((pr) => (
               <PullRequestRow
                 key={pr.id}
                 pr={pr}
-                isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
+                isViewed={Boolean(
+                  viewedMap[prViewKey(pr.repository, pr.number)],
+                )}
                 onViewed={handleViewed}
                 sectionKind="active"
                 openMenuKey={openRowMenuKey}
                 onToggleMenu={handleToggleRowMenu}
                 onCloseMenu={handleCloseRowMenu}
-                stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+                stalePreference={
+                  stalePreferences[prViewKey(pr.repository, pr.number)]
+                }
                 onMarkStale={handleMarkStale}
                 onMarkActive={handleMarkActive}
                 onClearStalePreference={handleClearStalePreference}
@@ -1500,7 +1731,9 @@ function App() {
             ))}
           </div>
         ) : (
-          <p className="collapsed-hint">Section collapsed. Click Show to expand.</p>
+          <p className="collapsed-hint">
+            Section collapsed — click the title to expand.
+          </p>
         )}
       </section>
 
@@ -1510,40 +1743,45 @@ function App() {
           sectionKey="relatedToYou"
           count={displayRelatedToYou.length}
           updatedCount={relatedToYouUpdatedCount}
-          statusLabel={isLoading && !lastRefreshedAt ? 'Loading...' : undefined}
+          statusLabel={isLoading && !lastRefreshedAt ? "Loading..." : undefined}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.relatedToYou}
+          isOpen={isRelatedToYouOpen}
+          onToggleOpen={() => setIsRelatedToYouOpen((current) => !current)}
+          hideDrafts={sectionHideDrafts.relatedToYou}
+          onToggleHideDrafts={() =>
+            handleToggleSectionHideDrafts("relatedToYou")
+          }
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
-          extraTools={
-            <button
-              type="button"
-              className="section-action"
-              onClick={() => setIsRelatedToYouOpen((current) => !current)}
-            >
-              {isRelatedToYouOpen ? 'Hide' : 'Show'}
-            </button>
-          }
         />
         {isRelatedToYouOpen ? (
           <div>
             {!isLoading && token && org && displayRelatedToYou.length === 0 ? (
-              <p className="empty-state">No non-urgent related pull requests right now.</p>
+              <p className="empty-state">
+                No non-urgent related pull requests right now.
+              </p>
             ) : null}
             {!isLoading && (!token || !org) ? (
-              <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
+              <p className="empty-state">
+                Add org + PAT above to load pull requests from GitHub.
+              </p>
             ) : null}
             {displayRelatedToYou.map((pr) => (
               <PullRequestRow
                 key={pr.id}
                 pr={pr}
-                isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
+                isViewed={Boolean(
+                  viewedMap[prViewKey(pr.repository, pr.number)],
+                )}
                 onViewed={handleViewed}
                 sectionKind="active"
                 openMenuKey={openRowMenuKey}
                 onToggleMenu={handleToggleRowMenu}
                 onCloseMenu={handleCloseRowMenu}
-                stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+                stalePreference={
+                  stalePreferences[prViewKey(pr.repository, pr.number)]
+                }
                 onMarkStale={handleMarkStale}
                 onMarkActive={handleMarkActive}
                 onClearStalePreference={handleClearStalePreference}
@@ -1551,39 +1789,57 @@ function App() {
             ))}
           </div>
         ) : (
-          <p className="collapsed-hint">Section collapsed. Click Show to expand.</p>
+          <p className="collapsed-hint">
+            Section collapsed — click the title to expand.
+          </p>
         )}
       </section>
 
       <section className="section-card">
         <div className="section-header">
-          <h2>Recently merged</h2>
+          <button
+            type="button"
+            className="section-title-toggle"
+            onClick={() => setIsRecentlyMergedOpen((current) => !current)}
+            aria-expanded={isRecentlyMergedOpen}
+          >
+            <svg
+              className={`section-chevron${isRecentlyMergedOpen ? "" : " section-chevron--collapsed"}`}
+              viewBox="0 0 16 16"
+              width="14"
+              height="14"
+              aria-hidden="true"
+              role="presentation"
+            >
+              <path d="M4.5 6L8 9.5 11.5 6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="section-title-text">Recently merged</span>
+          </button>
           <div className="section-header-tools">
             <span>{recentlyMerged.length}</span>
-            {isLoading && !lastRefreshedAt ? <span className="section-status-label">Loading...</span> : null}
-            <button
-              type="button"
-              className="section-action"
-              onClick={() => setIsRecentlyMergedOpen((current) => !current)}
-            >
-              {isRecentlyMergedOpen ? 'Hide' : 'Show'}
-            </button>
+            {isLoading && !lastRefreshedAt ? (
+              <span className="section-status-label">Loading...</span>
+            ) : null}
           </div>
         </div>
         {isRecentlyMergedOpen ? (
           <div>
             {!isLoading && token && org && recentlyMerged.length === 0 ? (
-              <p className="empty-state">No recently merged pull requests found.</p>
+              <p className="empty-state">
+                No recently merged pull requests found.
+              </p>
             ) : null}
             {!isLoading && (!token || !org) ? (
-              <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
+              <p className="empty-state">
+                Add org + PAT above to load pull requests from GitHub.
+              </p>
             ) : null}
             {recentlyMerged.map((pr) => (
               <MergedPrRow key={pr.id} pr={pr} />
             ))}
           </div>
         ) : (
-          <p className="collapsed-hint">Collapsed by default. Click Show to browse recently merged PRs.</p>
+          <p className="collapsed-hint">Section collapsed — click the title to expand.</p>
         )}
       </section>
 
@@ -1594,17 +1850,12 @@ function App() {
           count={displayStalePrs.length}
           openSectionMenuKey={openSectionMenuKey}
           sortPreference={sectionSortPreferences.stalePrs}
+          isOpen={isStaleSectionOpen}
+          onToggleOpen={() => setIsStaleSectionOpen((current) => !current)}
+          hideDrafts={sectionHideDrafts.stalePrs}
+          onToggleHideDrafts={() => handleToggleSectionHideDrafts("stalePrs")}
           onToggleSectionMenu={handleToggleSectionMenu}
           onSetSort={handleSetSectionSort}
-          extraTools={
-            <button
-              type="button"
-              className="section-action"
-              onClick={() => setIsStaleSectionOpen((current) => !current)}
-            >
-              {isStaleSectionOpen ? 'Hide' : 'Show'}
-            </button>
-          }
         />
         {isStaleSectionOpen ? (
           <div>
@@ -1612,19 +1863,25 @@ function App() {
               <p className="empty-state">No stale pull requests right now.</p>
             ) : null}
             {!isLoading && (!token || !org) ? (
-              <p className="empty-state">Add org + PAT above to load pull requests from GitHub.</p>
+              <p className="empty-state">
+                Add org + PAT above to load pull requests from GitHub.
+              </p>
             ) : null}
             {displayStalePrs.map((pr) => (
               <PullRequestRow
                 key={pr.id}
                 pr={pr}
-                isViewed={Boolean(viewedMap[prViewKey(pr.repository, pr.number)])}
+                isViewed={Boolean(
+                  viewedMap[prViewKey(pr.repository, pr.number)],
+                )}
                 onViewed={handleViewed}
                 sectionKind="stale"
                 openMenuKey={openRowMenuKey}
                 onToggleMenu={handleToggleRowMenu}
                 onCloseMenu={handleCloseRowMenu}
-                stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+                stalePreference={
+                  stalePreferences[prViewKey(pr.repository, pr.number)]
+                }
                 onMarkStale={handleMarkStale}
                 onMarkActive={handleMarkActive}
                 onClearStalePreference={handleClearStalePreference}
@@ -1632,7 +1889,9 @@ function App() {
             ))}
           </div>
         ) : (
-          <p className="collapsed-hint">Hidden by default to keep active triage focused.</p>
+          <p className="collapsed-hint">
+            Section collapsed — click the title to expand.
+          </p>
         )}
       </section>
 
@@ -1656,7 +1915,9 @@ function App() {
               </button>
             </div>
             {hasSavedConnection ? (
-              <p className="connection-summary">Connected to {org} with saved PAT.</p>
+              <p className="connection-summary">
+                Connected to {org} with saved PAT.
+              </p>
             ) : null}
             <form className="config-form" onSubmit={handleSaveConfig}>
               <label>
@@ -1693,36 +1954,50 @@ function App() {
               <button type="submit">Save and refresh</button>
             </form>
             <div className="helper-copy">
+              <p>PAT is stored in local storage for this browser profile.</p>
               <p>
-                PAT is stored in local storage for this browser profile.
-              </p>
-              <p>
-                <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">
+                <a
+                  href="https://github.com/settings/personal-access-tokens/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   Create a fine-grained PAT
-                </a>
-                {' '}and set <strong>Resource owner</strong> to <strong>MaintainX</strong> (the
-                Resource owner cannot be changed after creation — if your existing token uses
-                your personal account, you need to generate a new one). Then select{' '}
+                </a>{" "}
+                and set <strong>Resource owner</strong> to{" "}
+                <strong>MaintainX</strong> (the Resource owner cannot be changed
+                after creation — if your existing token uses your personal
+                account, you need to generate a new one). Then select{" "}
                 <strong>All repositories</strong> and grant these permissions:
               </p>
               <ul>
                 <li>Pull requests: Read (required)</li>
-                <li>Commit statuses: Read (required for PR check status icons)</li>
-                <li>Members: Read — organization permission (optional, enables team-assigned PR signals)</li>
+                <li>
+                  Commit statuses: Read (required for PR check status icons)
+                </li>
+                <li>
+                  Members: Read — organization permission (optional, enables
+                  team-assigned PR signals)
+                </li>
               </ul>
               <p>
-                For <strong>live refresh</strong> (~60s), use a{' '}
-                <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer">
+                For <strong>live refresh</strong> (~60s), use a{" "}
+                <a
+                  href="https://github.com/settings/tokens/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   classic token
-                </a>
-                {' '}with <strong>repo</strong> and <strong>notifications</strong> scopes, then
-                authorize it for <strong>MaintainX SSO</strong>. Fine-grained tokens use
-                2-minute polling instead (still efficient via ETag caching).
+                </a>{" "}
+                with <strong>repo</strong> and <strong>notifications</strong>{" "}
+                scopes, then authorize it for <strong>MaintainX SSO</strong>.
+                Fine-grained tokens use 2-minute polling instead (still
+                efficient via ETag caching).
               </p>
             </div>
             {teamSignalsUnavailable ? (
               <p className="helper-copy warning-copy">
-                {teamSignalsUnavailable} Showing direct-review and activity-based signals only.
+                {teamSignalsUnavailable} Showing direct-review and
+                activity-based signals only.
               </p>
             ) : null}
           </aside>
@@ -1746,9 +2021,13 @@ function App() {
         type="button"
         className="compact-fab"
         onClick={toggleCompact}
-        aria-label={isCompact ? 'Switch to comfortable view' : 'Switch to compact view'}
+        aria-label={
+          isCompact ? "Switch to comfortable view" : "Switch to compact view"
+        }
       >
-        <span className="fab-tooltip">{isCompact ? 'Comfortable view' : 'Compact view'}</span>
+        <span className="fab-tooltip">
+          {isCompact ? "Comfortable view" : "Compact view"}
+        </span>
         {isCompact ? (
           <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
             <path d="M20.25 3a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V5.56l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97h-2.69a.75.75 0 0 1 0-1.5h4.5Z" />
@@ -1759,7 +2038,11 @@ function App() {
         ) : (
           <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
             <rect x="10" y="10" width="4" height="4" rx="0.5" />
-            <path fillRule="evenodd" clipRule="evenodd" d="M3.22 3.22a.75.75 0 0 1 1.06 0l3.97 3.97V4.5a.75.75 0 0 1 1.5 0V9a.75.75 0 0 1-.75.75H4.5a.75.75 0 0 1 0-1.5h2.69L3.22 4.28a.75.75 0 0 1 0-1.06Zm17.56 0a.75.75 0 0 1 0 1.06l-3.97 3.97h2.69a.75.75 0 0 1 0 1.5H15a.75.75 0 0 1-.75-.75V4.5a.75.75 0 0 1 1.5 0v2.69l3.97-3.97a.75.75 0 0 1 1.06 0ZM3.75 15a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-2.69l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97H4.5a.75.75 0 0 1-.75-.75Zm10.5 0a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-2.69l3.97 3.97a.75.75 0 1 1-1.06 1.06l-3.97-3.97v2.69a.75.75 0 0 1-1.5 0V15Z" />
+            <path
+              fillRule="evenodd"
+              clipRule="evenodd"
+              d="M3.22 3.22a.75.75 0 0 1 1.06 0l3.97 3.97V4.5a.75.75 0 0 1 1.5 0V9a.75.75 0 0 1-.75.75H4.5a.75.75 0 0 1 0-1.5h2.69L3.22 4.28a.75.75 0 0 1 0-1.06Zm17.56 0a.75.75 0 0 1 0 1.06l-3.97 3.97h2.69a.75.75 0 0 1 0 1.5H15a.75.75 0 0 1-.75-.75V4.5a.75.75 0 0 1 1.5 0v2.69l3.97-3.97a.75.75 0 0 1 1.06 0ZM3.75 15a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-2.69l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97H4.5a.75.75 0 0 1-.75-.75Zm10.5 0a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-2.69l3.97 3.97a.75.75 0 1 1-1.06 1.06l-3.97-3.97v2.69a.75.75 0 0 1-1.5 0V15Z"
+            />
           </svg>
         )}
       </button>
@@ -1768,9 +2051,13 @@ function App() {
         type="button"
         className="compact-fab"
         onClick={toggleCompact}
-        aria-label={isCompact ? 'Switch to comfortable view' : 'Switch to compact view'}
+        aria-label={
+          isCompact ? "Switch to comfortable view" : "Switch to compact view"
+        }
       >
-        <span className="fab-tooltip">{isCompact ? 'Comfortable view' : 'Compact view'}</span>
+        <span className="fab-tooltip">
+          {isCompact ? "Comfortable view" : "Compact view"}
+        </span>
         {isCompact ? (
           <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
             <path d="M20.25 3a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V5.56l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97h-2.69a.75.75 0 0 1 0-1.5h4.5Z" />
@@ -1781,7 +2068,11 @@ function App() {
         ) : (
           <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
             <rect x="10" y="10" width="4" height="4" rx="0.5" />
-            <path fillRule="evenodd" clipRule="evenodd" d="M3.22 3.22a.75.75 0 0 1 1.06 0l3.97 3.97V4.5a.75.75 0 0 1 1.5 0V9a.75.75 0 0 1-.75.75H4.5a.75.75 0 0 1 0-1.5h2.69L3.22 4.28a.75.75 0 0 1 0-1.06Zm17.56 0a.75.75 0 0 1 0 1.06l-3.97 3.97h2.69a.75.75 0 0 1 0 1.5H15a.75.75 0 0 1-.75-.75V4.5a.75.75 0 0 1 1.5 0v2.69l3.97-3.97a.75.75 0 0 1 1.06 0ZM3.75 15a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-2.69l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97H4.5a.75.75 0 0 1-.75-.75Zm10.5 0a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-2.69l3.97 3.97a.75.75 0 1 1-1.06 1.06l-3.97-3.97v2.69a.75.75 0 0 1-1.5 0V15Z" />
+            <path
+              fillRule="evenodd"
+              clipRule="evenodd"
+              d="M3.22 3.22a.75.75 0 0 1 1.06 0l3.97 3.97V4.5a.75.75 0 0 1 1.5 0V9a.75.75 0 0 1-.75.75H4.5a.75.75 0 0 1 0-1.5h2.69L3.22 4.28a.75.75 0 0 1 0-1.06Zm17.56 0a.75.75 0 0 1 0 1.06l-3.97 3.97h2.69a.75.75 0 0 1 0 1.5H15a.75.75 0 0 1-.75-.75V4.5a.75.75 0 0 1 1.5 0v2.69l3.97-3.97a.75.75 0 0 1 1.06 0ZM3.75 15a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-2.69l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97H4.5a.75.75 0 0 1-.75-.75Zm10.5 0a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-2.69l3.97 3.97a.75.75 0 1 1-1.06 1.06l-3.97-3.97v2.69a.75.75 0 0 1-1.5 0V15Z"
+            />
           </svg>
         )}
       </button>
@@ -1790,10 +2081,12 @@ function App() {
         type="button"
         className="theme-fab"
         onClick={toggleTheme}
-        aria-label={`Switch to ${activeTheme === 'dark' ? 'light' : 'dark'} mode`}
+        aria-label={`Switch to ${activeTheme === "dark" ? "light" : "dark"} mode`}
       >
-        <span className="fab-tooltip">{activeTheme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
-        {activeTheme === 'dark' ? (
+        <span className="fab-tooltip">
+          {activeTheme === "dark" ? "Light mode" : "Dark mode"}
+        </span>
+        {activeTheme === "dark" ? (
           <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
             <path d="M12 17.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11Zm0-13a.75.75 0 0 1-.75-.75v-2a.75.75 0 0 1 1.5 0v2A.75.75 0 0 1 12 4.5Zm0 17a.75.75 0 0 1-.75-.75v-2a.75.75 0 0 1 1.5 0v2a.75.75 0 0 1-.75.75ZM4.5 12a.75.75 0 0 1-.75.75h-2a.75.75 0 0 1 0-1.5h2A.75.75 0 0 1 4.5 12Zm17 0a.75.75 0 0 1-.75.75h-2a.75.75 0 0 1 0-1.5h2a.75.75 0 0 1 .75.75ZM6.165 6.165a.75.75 0 0 1-1.06 0L3.69 4.75a.75.75 0 0 1 1.06-1.06l1.415 1.414a.75.75 0 0 1 0 1.06Zm12.73 12.73a.75.75 0 0 1-1.06 0l-1.415-1.414a.75.75 0 0 1 1.06-1.061l1.415 1.414a.75.75 0 0 1 0 1.061ZM6.165 17.835a.75.75 0 0 1 0 1.06L4.75 20.31a.75.75 0 0 1-1.06-1.06l1.414-1.415a.75.75 0 0 1 1.06 0Zm12.73-12.73a.75.75 0 0 1 0 1.06l-1.414 1.415a.75.75 0 0 1-1.061-1.06l1.414-1.415a.75.75 0 0 1 1.061 0Z" />
           </svg>
@@ -1815,7 +2108,7 @@ function App() {
         </div>
       ) : null}
     </main>
-  )
+  );
 }
 
-export default App
+export default App;
