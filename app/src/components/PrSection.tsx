@@ -33,6 +33,8 @@ export function PrSection({
   onMarkStale,
   onMarkActive,
   onClearStalePreference,
+  showLineChanges,
+  showLabels,
 }: {
   title: string;
   sectionKey: SectionKey;
@@ -62,6 +64,8 @@ export function PrSection({
   onMarkStale: (repository: string, number: number) => void;
   onMarkActive: (repository: string, number: number) => void;
   onClearStalePreference: (repository: string, number: number) => void;
+  showLineChanges: boolean;
+  showLabels: boolean;
 }) {
   return (
     <section className="section-card">
@@ -105,6 +109,8 @@ export function PrSection({
               onMarkStale={onMarkStale}
               onMarkActive={onMarkActive}
               onClearStalePreference={onClearStalePreference}
+              showLineChanges={showLineChanges}
+              showLabels={showLabels}
             />
           ))}
         </div>

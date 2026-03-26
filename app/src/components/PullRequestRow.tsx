@@ -2,6 +2,15 @@ import type { PullRequest } from "../lib/classification";
 import type { StalePreference } from "../types";
 import { prViewKey } from "../lib/classification";
 
+function getContrastColor(hexColor: string): string {
+  const r = parseInt(hexColor.slice(0, 2), 16);
+  const g = parseInt(hexColor.slice(2, 4), 16);
+  const b = parseInt(hexColor.slice(4, 6), 16);
+  // W3C relative luminance formula
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? "#000000" : "#ffffff";
+}
+
 export function PullRequestRow({
   pr,
   isViewed,
@@ -14,6 +23,8 @@ export function PullRequestRow({
   onMarkStale,
   onMarkActive,
   onClearStalePreference,
+  showLineChanges,
+  showLabels,
 }: {
   pr: PullRequest;
   isViewed: boolean;
@@ -26,6 +37,8 @@ export function PullRequestRow({
   onMarkStale: (repository: string, number: number) => void;
   onMarkActive: (repository: string, number: number) => void;
   onClearStalePreference: (repository: string, number: number) => void;
+  showLineChanges: boolean;
+  showLabels: boolean;
 }) {
   const checkTitle =
     pr.checkState === "success"
@@ -139,9 +152,31 @@ export function PullRequestRow({
               ))}
             </div>
           ) : null}
+          {showLabels && pr.labels && pr.labels.length > 0 ? (
+            <div className="label-list">
+              {pr.labels.map((label) => (
+                <span
+                  key={label.name}
+                  className="pr-label"
+                  style={{
+                    backgroundColor: `#${label.color}`,
+                    color: getContrastColor(label.color),
+                  }}
+                >
+                  {label.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
       <div className="status-group">
+        {showLineChanges && pr.additions !== undefined ? (
+          <span className="line-changes">
+            <span className="line-additions">+{pr.additions}</span>
+            <span className="line-deletions">-{pr.deletions ?? 0}</span>
+          </span>
+        ) : null}
         <div className="status-row">
           {pr.policyBotStatus ? (
             <a

@@ -29,6 +29,9 @@ export type PullRequest = {
   stateClass: string
   reason: string
   isDraft?: boolean
+  additions?: number
+  deletions?: number
+  labels?: Array<{ name: string; color: string }>
 }
 
 export type PullDetails = {
@@ -66,6 +69,9 @@ export type PullDetails = {
     url: string
   } | null
   headRefOid: string
+  additions?: number
+  deletions?: number
+  labels?: { nodes: Array<{ name: string; color: string }> }
 }
 
 export type Review = {
@@ -206,6 +212,9 @@ export function classifyPullRequest(
     url: pull.url,
     checkState: 'pending',
     isDraft: pull.isDraft,
+    additions: pull.additions,
+    deletions: pull.deletions,
+    labels: pull.labels?.nodes.map((l) => ({ name: l.name, color: l.color })),
   }
 
   if (isAuthoredByMe || isAssignedToMe) {
