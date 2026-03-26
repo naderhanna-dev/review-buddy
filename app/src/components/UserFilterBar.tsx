@@ -7,12 +7,12 @@ type FilterUser = {
 
 export function UserFilterBar({
   users,
-  selectedLogin,
-  onSelect,
+  selectedLogins,
+  onToggle,
 }: {
   users: FilterUser[];
-  selectedLogin: string | null;
-  onSelect: (login: string | null) => void;
+  selectedLogins: ReadonlySet<string>;
+  onToggle: (login: string) => void;
 }) {
   if (users.length === 0) {
     return null;
@@ -20,19 +20,24 @@ export function UserFilterBar({
 
   const visible = users.slice(0, MAX_VISIBLE);
   const overflow = users.length - MAX_VISIBLE;
+  const hasSelection = selectedLogins.size > 0;
 
   return (
-    <div className="user-filter-bar" role="toolbar" aria-label="Filter by user">
+    <div
+      className={`user-filter-bar${hasSelection ? " user-filter-bar--active" : ""}`}
+      role="toolbar"
+      aria-label="Filter by user"
+    >
       {visible.map((user) => {
-        const isSelected = selectedLogin === user.login;
+        const isSelected = selectedLogins.has(user.login);
         return (
           <button
             key={user.login}
             type="button"
             className={`user-filter-avatar-btn${isSelected ? " user-filter-avatar--selected" : ""}`}
-            title={isSelected ? `Clear filter (${user.login})` : `Filter by ${user.login}`}
+            title={isSelected ? `Remove ${user.login} from filter` : `Filter by ${user.login}`}
             aria-pressed={isSelected}
-            onClick={() => onSelect(isSelected ? null : user.login)}
+            onClick={() => onToggle(user.login)}
           >
             <img
               src={user.avatarUrl}

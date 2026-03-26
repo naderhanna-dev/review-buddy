@@ -622,12 +622,8 @@
   border-color: var(--link);
 }
 
-.user-filter-avatar-btn:not(.user-filter-avatar--selected) {
-  opacity: 0.65;
-}
-
-.user-filter-bar:not(:has(.user-filter-avatar--selected)) .user-filter-avatar-btn {
-  opacity: 1;
+.user-filter-bar--active .user-filter-avatar-btn:not(.user-filter-avatar--selected) {
+  opacity: 0.5;
 }
 
 .user-filter-overflow {

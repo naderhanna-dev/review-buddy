@@ -63,7 +63,7 @@ function App() {
   >(readSectionHideDrafts);
   const [refreshTick, setRefreshTick] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [needsAttentionUserFilter, setNeedsAttentionUserFilter] = useState<string | null>(null);
+  const [needsAttentionUserFilter, setNeedsAttentionUserFilter] = useState<ReadonlySet<string>>(new Set());
 
   const handleRefresh = useCallback(() => {
     setRefreshTick((current) => current + 1);
@@ -238,20 +238,12 @@ function App() {
   }, [displayNeedsAttention]);
 
   const filteredNeedsAttention = useMemo(() => {
-    if (!needsAttentionUserFilter) return displayNeedsAttention;
+    if (needsAttentionUserFilter.size === 0) return displayNeedsAttention;
     return displayNeedsAttention.filter(
-      (pr) => pr.author === needsAttentionUserFilter,
+      (pr) => needsAttentionUserFilter.has(pr.author),
     );
   }, [displayNeedsAttention, needsAttentionUserFilter]);
 
-  useEffect(() => {
-    if (
-      needsAttentionUserFilter &&
-      !needsAttentionUsers.some((u) => u.login === needsAttentionUserFilter)
-    ) {
-      setNeedsAttentionUserFilter(null);
-    }
-  }, [needsAttentionUsers, needsAttentionUserFilter]);
 
   const displayYourPrs = applyDraftFilter(
     applySectionSort(prData.yourPrs, sectionSortPreferences.yourPrs),
@@ -329,8 +321,18 @@ function App() {
           needsAttentionUsers.length > 1 ? (
             <UserFilterBar
               users={needsAttentionUsers}
-              selectedLogin={needsAttentionUserFilter}
-              onSelect={setNeedsAttentionUserFilter}
+              selectedLogins={needsAttentionUserFilter}
+              onToggle={(login) =>
+                setNeedsAttentionUserFilter((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(login)) {
+                    next.delete(login);
+                  } else {
+                    next.add(login);
+                  }
+                  return next;
+                })
+              }
             />
           ) : undefined
         }
