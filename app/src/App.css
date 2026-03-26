@@ -580,6 +580,47 @@
   opacity: 1;
 }
 
+.label-list {
+  margin-top: 0.25rem;
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.pr-label {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.line-changes {
+  font-size: 0.75rem;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  display: inline-flex;
+  gap: 0.4rem;
+  white-space: nowrap;
+  justify-self: end;
+}
+
+.line-additions {
+  color: #1a7f37;
+}
+
+.line-deletions {
+  color: #cf222e;
+}
+
+[data-theme="dark"] .line-additions {
+  color: #3fb950;
+}
+
+[data-theme="dark"] .line-deletions {
+  color: #f85149;
+}
+
 .pr-meta,
 .updated-at {
   margin: 0;
@@ -986,6 +1027,20 @@
 :root[data-compact='true'] .empty-state {
   padding: 0.5rem 0.75rem;
   font-size: 0.82rem;
+}
+
+:root[data-compact='true'] .label-list {
+  margin-top: 0.15rem;
+  gap: 0.15rem;
+}
+
+:root[data-compact='true'] .pr-label {
+  font-size: 0.58rem;
+  padding: 0.05rem 0.3rem;
+}
+
+:root[data-compact='true'] .line-changes {
+  font-size: 0.65rem;
 }
 
 @media (max-width: 760px) {

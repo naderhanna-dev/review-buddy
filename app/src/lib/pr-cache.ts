@@ -16,7 +16,7 @@ type CachedMergedPR = {
   role: 'author' | 'reviewed'
 }
 
-export const CACHE_SCHEMA_VERSION = 2
+export const CACHE_SCHEMA_VERSION = 3
 export const CACHE_REVALIDATION_TTL_MS = 5 * 60 * 1000
 export const CACHE_MAX_AGE_MS = 60 * 60 * 1000
 export const PR_CACHE_STORAGE_KEY = 'review-radar.prCache'

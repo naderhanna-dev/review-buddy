@@ -20,7 +20,9 @@ export const STORAGE_KEYS: Record<
   | "prCache"
   | "recentlyMergedCount"
   | "sectionHideDrafts"
-  | "dimViewed",
+  | "dimViewed"
+  | "showLineChanges"
+  | "showLabels",
   string
 > = {
   token: "review-radar.pat",
@@ -34,4 +36,6 @@ export const STORAGE_KEYS: Record<
   recentlyMergedCount: "review-radar.recentlyMergedCount",
   sectionHideDrafts: "review-radar.sectionHideDrafts",
   dimViewed: "review-radar.dimViewed",
+  showLineChanges: "review-radar.showLineChanges",
+  showLabels: "review-radar.showLabels",
 };

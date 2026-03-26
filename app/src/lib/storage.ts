@@ -131,3 +131,19 @@ export function readDimViewedPreference(): boolean {
   }
   return true;
 }
+
+export function readShowLineChangesPreference(): boolean {
+  const raw = readStorageItem(STORAGE_KEYS.showLineChanges);
+  if (raw === "false") {
+    return false;
+  }
+  return true;
+}
+
+export function readShowLabelsPreference(): boolean {
+  const raw = readStorageItem(STORAGE_KEYS.showLabels);
+  if (raw === "false") {
+    return false;
+  }
+  return true;
+}

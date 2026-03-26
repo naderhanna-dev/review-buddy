@@ -94,6 +94,11 @@ export type GqlPullRequestNode = {
     nameWithOwner: string
     url: string
   } | null
+  additions: number
+  deletions: number
+  labels: {
+    nodes: Array<{ name: string; color: string }>
+  }
 }
 
 export type GqlSearchResponse<T> = {
@@ -190,6 +195,11 @@ export const PR_DETAILS_FRAGMENT = `
   baseRepository {
     nameWithOwner
     url
+  }
+  additions
+  deletions
+  labels(first: 20) {
+    nodes { name color }
   }
 `
 
