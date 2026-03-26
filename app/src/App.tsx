@@ -68,6 +68,7 @@ function App() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [needsAttentionUserFilter, setNeedsAttentionUserFilter] = useState<ReadonlySet<string>>(new Set());
+  const [relatedToYouUserFilter, setRelatedToYouUserFilter] = useState<ReadonlySet<string>>(new Set());
 
   const handleRefresh = useCallback(() => {
     setRefreshTick((current) => current + 1);
@@ -273,6 +274,23 @@ function App() {
     applySectionSort(prData.relatedToYou, sectionSortPreferences.relatedToYou),
     sectionHideDrafts.relatedToYou,
   );
+
+  const relatedToYouUsers = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const pr of displayRelatedToYou) {
+      if (!seen.has(pr.author)) {
+        seen.set(pr.author, pr.authorAvatarUrl);
+      }
+    }
+    return Array.from(seen, ([login, avatarUrl]) => ({ login, avatarUrl }));
+  }, [displayRelatedToYou]);
+
+  const filteredRelatedToYou = useMemo(() => {
+    if (relatedToYouUserFilter.size === 0) return displayRelatedToYou;
+    return displayRelatedToYou.filter(
+      (pr) => relatedToYouUserFilter.has(pr.author),
+    );
+  }, [displayRelatedToYou, relatedToYouUserFilter]);
   const displayStalePrs = applyDraftFilter(
     applySectionSort(prData.stalePrs, sectionSortPreferences.stalePrs),
     sectionHideDrafts.stalePrs,
@@ -382,16 +400,35 @@ function App() {
         title="Related to you"
         sectionKey="relatedToYou"
         sectionKind="active"
-        prs={displayRelatedToYou}
+        prs={filteredRelatedToYou}
         isOpen={isRelatedToYouOpen}
         onToggleOpen={() => setIsRelatedToYouOpen((current) => !current)}
         emptyConnectedMessage="No non-urgent related pull requests right now."
         emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
-        updatedCount={displayRelatedToYou.filter((pr) => pr.stateLabel).length}
+        updatedCount={filteredRelatedToYou.filter((pr) => pr.stateLabel).length}
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Loading..." : undefined}
         sortPreference={sectionSortPreferences.relatedToYou}
         hideDrafts={sectionHideDrafts.relatedToYou}
         onToggleHideDrafts={() => handleToggleSectionHideDrafts("relatedToYou")}
+        filterBar={
+          relatedToYouUsers.length > 1 ? (
+            <UserFilterBar
+              users={relatedToYouUsers}
+              selectedLogins={relatedToYouUserFilter}
+              onToggle={(login) =>
+                setRelatedToYouUserFilter((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(login)) {
+                    next.delete(login);
+                  } else {
+                    next.add(login);
+                  }
+                  return next;
+                })
+              }
+            />
+          ) : undefined
+        }
       />
 
       <RecentlyMergedSection
