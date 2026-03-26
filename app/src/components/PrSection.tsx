@@ -108,11 +108,7 @@ export function PrSection({
             />
           ))}
         </div>
-      ) : (
-        <p className="collapsed-hint">
-          Section collapsed — click the title to expand.
-        </p>
-      )}
+      ) : null}
     </section>
   );
 }
