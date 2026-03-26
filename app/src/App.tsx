@@ -1365,6 +1365,7 @@ function App() {
       setYourPrs(crossTabData.yourPrs)
       setNeedsAttention(crossTabData.needsAttention)
       setRelatedToYou(crossTabData.relatedToYou)
+      setRecentlyMerged(crossTabData.recentlyMerged)
       setTeamSignalsUnavailable(crossTabData.teamSignalsUnavailable)
       const crossTabTimestamp = getCacheTimestamp(org)
       if (crossTabTimestamp) {
@@ -1440,6 +1441,7 @@ function App() {
       setYourPrs(cachedData.yourPrs)
       setNeedsAttention(cachedData.needsAttention)
       setRelatedToYou(cachedData.relatedToYou)
+      setRecentlyMerged(cachedData.recentlyMerged)
       setTeamSignalsUnavailable(cachedData.teamSignalsUnavailable)
       const cachedTimestamp = getCacheTimestamp(org)
       if (cachedTimestamp) {
@@ -1496,6 +1498,7 @@ function App() {
             needsAttention: classified.needsAttention,
             relatedToYou: classified.relatedToYou,
             stalePrs: classified.stalePrs,
+            recentlyMerged: merged,
             teamSignalsUnavailable: classified.teamSignalsUnavailable,
           });
         }

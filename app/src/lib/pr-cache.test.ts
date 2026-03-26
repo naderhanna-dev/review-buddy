@@ -60,11 +60,27 @@ const samplePullRequest: PullRequest = {
   isDraft: false,
 }
 
+const sampleMergedPR = {
+  id: 2,
+  number: 43,
+  title: 'Merged PR',
+  repository: 'maintainx/review-radar',
+  repositoryUrl: 'https://github.com/maintainx/review-radar',
+  author: 'bob',
+  authorAvatarUrl: 'https://avatars.githubusercontent.com/u/3',
+  authorProfileUrl: 'https://github.com/bob',
+  url: 'https://github.com/maintainx/review-radar/pull/43',
+  mergedAt: '2h ago',
+  mergedAtIso: '2026-03-25T08:00:00.000Z',
+  role: 'author' as const,
+}
+
 const sampleData = {
   yourPrs: [samplePullRequest],
   needsAttention: [samplePullRequest],
   relatedToYou: [samplePullRequest],
   stalePrs: [],
+  recentlyMerged: [sampleMergedPR],
   teamSignalsUnavailable: null,
 }
 
@@ -131,6 +147,37 @@ describe('pr-cache', () => {
         timestamp: fixedNow,
         org,
         data: sampleData,
+      })
+
+      const result = readCachedPRData(org)
+
+      expect(result).toBeNull()
+    })
+
+    it('should round-trip recentlyMerged data', () => {
+      vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
+
+      writeCachedPRData(org, sampleData)
+      const result = readCachedPRData(org)
+
+      expect(result?.recentlyMerged).toEqual([sampleMergedPR])
+      expect(result?.recentlyMerged[0].role).toBe('author')
+      expect(result?.recentlyMerged[0].mergedAtIso).toBe('2026-03-25T08:00:00.000Z')
+    })
+
+    it('should reject old schema version 1 caches missing recentlyMerged', () => {
+      vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
+      setRawCache({
+        version: 1,
+        timestamp: fixedNow,
+        org,
+        data: {
+          yourPrs: [samplePullRequest],
+          needsAttention: [],
+          relatedToYou: [],
+          stalePrs: [],
+          teamSignalsUnavailable: null,
+        },
       })
 
       const result = readCachedPRData(org)

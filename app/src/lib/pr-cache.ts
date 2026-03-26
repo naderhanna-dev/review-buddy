@@ -1,6 +1,22 @@
 import type { PullRequest } from './classification'
 
-export const CACHE_SCHEMA_VERSION = 1
+// Mirrors MergedPullRequest from App.tsx — duplicated to avoid circular dependency
+type CachedMergedPR = {
+  id: number
+  number: number
+  title: string
+  repository: string
+  repositoryUrl: string
+  author: string
+  authorAvatarUrl: string
+  authorProfileUrl: string
+  url: string
+  mergedAt: string
+  mergedAtIso: string
+  role: 'author' | 'reviewed'
+}
+
+export const CACHE_SCHEMA_VERSION = 2
 export const CACHE_REVALIDATION_TTL_MS = 5 * 60 * 1000
 export const CACHE_MAX_AGE_MS = 60 * 60 * 1000
 export const PR_CACHE_STORAGE_KEY = 'review-radar.prCache'
@@ -14,6 +30,7 @@ type CachedPRData = {
     needsAttention: PullRequest[]
     relatedToYou: PullRequest[]
     stalePrs: PullRequest[]
+    recentlyMerged: CachedMergedPR[]
     teamSignalsUnavailable: string | null
   }
 }
