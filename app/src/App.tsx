@@ -233,11 +233,6 @@ function App() {
       if (!seen.has(pr.author)) {
         seen.set(pr.author, pr.authorAvatarUrl);
       }
-      for (const r of pr.requestedReviewers) {
-        if (!seen.has(r.login)) {
-          seen.set(r.login, r.avatarUrl);
-        }
-      }
     }
     return Array.from(seen, ([login, avatarUrl]) => ({ login, avatarUrl }));
   }, [displayNeedsAttention]);
@@ -245,9 +240,7 @@ function App() {
   const filteredNeedsAttention = useMemo(() => {
     if (!needsAttentionUserFilter) return displayNeedsAttention;
     return displayNeedsAttention.filter(
-      (pr) =>
-        pr.author === needsAttentionUserFilter ||
-        pr.requestedReviewers.some((r) => r.login === needsAttentionUserFilter),
+      (pr) => pr.author === needsAttentionUserFilter,
     );
   }, [displayNeedsAttention, needsAttentionUserFilter]);
 
