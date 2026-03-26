@@ -32,6 +32,7 @@ type ClassifiedPullRequests = {
   relatedToYou: PullRequest[]
   stalePrs: PullRequest[]
   teamSignalsUnavailable: string | null
+  closedViewedKeys: string[]
 }
 
 type MergedPullRequest = {
@@ -367,10 +368,19 @@ async function fetchAndClassifyPullRequests(
   const needsAttention: PullRequest[] = []
   const relatedToYou: PullRequest[] = []
   const stalePrs: PullRequest[] = []
+  const closedViewedKeys: string[] = []
   const nowMs = Date.now()
 
   for (const { pull, reviews, pullComments, checkState, policyBotStatus } of pullsWithReviews) {
     const viewKey = prViewKey(pull.base.repo.full_name, pull.number)
+
+    if (pull.state !== 'open' || pull.merged_at !== null) {
+      if (viewedMap[viewKey] !== undefined) {
+        closedViewedKeys.push(viewKey)
+      }
+      continue
+    }
+
     const viewedAtMs = viewedMap[viewKey]
     const normalizedLogin = me.login.toLowerCase()
 
@@ -505,6 +515,7 @@ async function fetchAndClassifyPullRequests(
     relatedToYou: sortByUpdatedDesc(relatedToYou),
     stalePrs: sortByUpdatedDesc(stalePrs),
     teamSignalsUnavailable,
+    closedViewedKeys,
   }
 }
 
@@ -1221,6 +1232,17 @@ function App() {
           setRecentlyMerged(merged)
           setLastRefreshedAt(Date.now())
           setRateLimitWarning(false)
+
+          if (classified.closedViewedKeys.length > 0) {
+            setViewedMap((current) => {
+              const next = { ...current }
+              for (const key of classified.closedViewedKeys) {
+                delete next[key]
+              }
+              localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next))
+              return next
+            })
+          }
         }
       } catch (loadError) {
         if (!ignore) {
