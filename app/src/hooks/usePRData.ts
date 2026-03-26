@@ -10,7 +10,11 @@ import {
   readCachedPRData,
   writeCachedPRData,
 } from "../lib/pr-cache";
-import { fetchAndClassifyPullRequests, fetchRecentlyMergedPRs } from "../lib/fetch-prs";
+import {
+  fetchAndClassifyPullRequests,
+  fetchRecentlyMergedPRs,
+  fetchViewerLogin,
+} from "../lib/fetch-prs";
 import { readStalePreferences, readViewedMap } from "../lib/storage";
 import type { MergedPullRequest, StalePreference } from "../types";
 import { STORAGE_KEYS } from "../constants";
@@ -63,6 +67,7 @@ export function usePRData({
 
   const isLoadingRef = useRef(false);
   const viewedMapRef = useRef<Record<string, number>>(viewedMap);
+  const refreshTickRef = useRef(refreshTick);
 
   useEffect(() => {
     isLoadingRef.current = isLoading;
@@ -117,6 +122,8 @@ export function usePRData({
 
     // Read cache immediately — hydrate state before any network fetch
     const cachedData = readCachedPRData(org);
+    const refreshTickChanged = refreshTickRef.current !== refreshTick;
+    refreshTickRef.current = refreshTick;
     if (cachedData && !ignore) {
       setStalePrs(cachedData.stalePrs);
       setYourPrs(cachedData.yourPrs);
@@ -131,7 +138,7 @@ export function usePRData({
     }
 
     // If cache is fresh, skip the network fetch — SmartRefreshController will trigger refreshTick when stale
-    if (cachedData && !isCacheStale(org)) {
+    if (cachedData && !isCacheStale(org) && !refreshTickChanged) {
       return () => { ignore = true; };
     }
 
@@ -144,9 +151,16 @@ export function usePRData({
       setErrorToast(null);
 
       try {
+        const viewerLogin = await fetchViewerLogin(token);
         const [classified, merged] = await Promise.all([
-          fetchAndClassifyPullRequests(org, token, viewedMapRef.current, stalePreferences),
-          fetchRecentlyMergedPRs(org, token, mergedCount),
+          fetchAndClassifyPullRequests(
+            org,
+            token,
+            viewerLogin,
+            viewedMapRef.current,
+            stalePreferences,
+          ),
+          fetchRecentlyMergedPRs(org, token, mergedCount, viewerLogin),
         ]);
         if (!ignore) {
           setStalePrs(classified.stalePrs);

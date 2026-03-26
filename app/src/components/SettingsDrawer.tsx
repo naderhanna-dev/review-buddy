@@ -11,7 +11,6 @@ export function SettingsDrawer({
   onSubmit,
   mergedCountInput,
   onMergedCountChange,
-  mergedCount,
   onMergedCountBlur,
   dimViewed,
   onToggleDimViewed,

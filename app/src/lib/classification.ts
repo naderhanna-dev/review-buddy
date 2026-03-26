@@ -32,51 +32,52 @@ export type PullRequest = {
 }
 
 export type PullDetails = {
-  id: number
+  databaseId: number
   number: number
   title: string
-  html_url: string
-  updated_at: string
-  created_at: string
-  state: 'open' | 'closed'
-  merged_at: string | null
-  draft?: boolean
-  user: {
+  url: string
+  updatedAt: string
+  createdAt: string
+  state: string
+  mergedAt: string | null
+  isDraft: boolean
+  author: {
     login: string
-    avatar_url: string
-    html_url: string
+    avatarUrl: string
+    url: string
+  } | null
+  assignees: {
+    nodes: Array<{
+      login: string
+      avatarUrl: string
+      url: string
+    }>
   }
-  assignees: Array<{
-    login: string
-    avatar_url: string
-    html_url: string
-  }>
-  requested_reviewers: Array<{
-    login: string
-    avatar_url: string
-    html_url: string
-  }>
-  requested_teams: Array<{
-    slug: string
-  }>
-  base: {
-    repo: {
-      full_name: string
-      html_url: string
-    }
+  reviewRequests: {
+    nodes: Array<{
+      requestedReviewer:
+        | { __typename: 'User'; login: string; avatarUrl: string; url: string }
+        | { __typename: 'Team'; slug: string }
+        | null
+    }>
   }
-  head: {
-    sha: string
-  }
+  baseRepository: {
+    nameWithOwner: string
+    url: string
+  } | null
+  headRefOid: string
 }
 
 export type Review = {
   state: string
-  commit_id?: string
-  submitted_at?: string
-  user?: {
-    login: string
-  }
+  submittedAt: string | null
+  commit: { oid: string } | null
+  author: { login: string } | null
+}
+
+export type PullComment = {
+  createdAt: string
+  author: { login: string } | null
 }
 
 export type ReviewVerdict = 'APPROVED' | 'CHANGES_REQUESTED' | null
@@ -142,26 +143,30 @@ export function classifyPullRequest(
   const myReviews = reviews
     .filter(
       (review) =>
-        review.user?.login?.toLowerCase() === normalizedLogin && Boolean(review.submitted_at),
+        review.author?.login?.toLowerCase() === normalizedLogin && Boolean(review.submittedAt),
     )
     .sort(
       (a, b) =>
-        new Date(b.submitted_at ?? 0).getTime() - new Date(a.submitted_at ?? 0).getTime(),
+        new Date(b.submittedAt ?? 0).getTime() - new Date(a.submittedAt ?? 0).getTime(),
     )
 
   const lastReview = myReviews[0]
   const hasSubmittedReview = Boolean(lastReview)
-  const pullUpdatedAtMs = new Date(pull.updated_at).getTime()
-  const lastReviewAtMs = lastReview?.submitted_at
-    ? new Date(lastReview.submitted_at).getTime()
+  const pullUpdatedAtMs = new Date(pull.updatedAt).getTime()
+  const lastReviewAtMs = lastReview?.submittedAt
+    ? new Date(lastReview.submittedAt).getTime()
     : undefined
-  const requestedReviewerLogins = pull.requested_reviewers.map((reviewer) =>
-    reviewer.login.toLowerCase(),
+  const requestedReviewerLogins = pull.reviewRequests.nodes.flatMap((node) =>
+    node.requestedReviewer?.__typename === 'User'
+      ? [node.requestedReviewer.login.toLowerCase()]
+      : [],
   )
-  const assigneeLogins = pull.assignees.map((assignee) => assignee.login.toLowerCase())
-  const requestedTeamSlugs = pull.requested_teams.map((team) => team.slug)
+  const assigneeLogins = pull.assignees.nodes.map((assignee) => assignee.login.toLowerCase())
+  const requestedTeamSlugs = pull.reviewRequests.nodes.flatMap((node) =>
+    node.requestedReviewer?.__typename === 'Team' ? [node.requestedReviewer.slug] : [],
+  )
 
-  const isAuthoredByMe = pull.user.login.toLowerCase() === normalizedLogin
+  const isAuthoredByMe = (pull.author?.login ?? '').toLowerCase() === normalizedLogin
   const isAssignedToMe = assigneeLogins.includes(normalizedLogin)
   const isRequiredReviewer = requestedReviewerLogins.includes(normalizedLogin)
   const hasUpdateSinceMyReview =
@@ -176,25 +181,31 @@ export function classifyPullRequest(
     viewedAtMs !== undefined && !hasSubmittedReview && pullUpdatedAtMs > viewedAtMs
 
   const basePr: Omit<PullRequest, 'stateLabel' | 'stateClass' | 'reason'> = {
-    id: pull.id,
+    id: pull.databaseId,
     number: pull.number,
     title: pull.title,
-    repository: pull.base.repo.full_name,
-    repositoryUrl: pull.base.repo.html_url,
-    author: pull.user.login,
-    authorAvatarUrl: pull.user.avatar_url,
-    authorProfileUrl: pull.user.html_url,
-    requestedReviewers: pull.requested_reviewers.map((reviewer) => ({
-      login: reviewer.login,
-      avatarUrl: reviewer.avatar_url,
-      profileUrl: reviewer.html_url,
-    })),
-    updatedAt: formatRelativeTime(pull.updated_at),
-    updatedAtIso: pull.updated_at,
-    createdAtIso: pull.created_at,
-    url: pull.html_url,
+    repository: pull.baseRepository?.nameWithOwner ?? '',
+    repositoryUrl: pull.baseRepository?.url ?? '',
+    author: pull.author?.login ?? '',
+    authorAvatarUrl: pull.author?.avatarUrl ?? '',
+    authorProfileUrl: pull.author?.url ?? '',
+    requestedReviewers: pull.reviewRequests.nodes.flatMap((node) => {
+      const reviewer = node.requestedReviewer
+      if (reviewer?.__typename !== 'User') return []
+      return [
+        {
+          login: reviewer.login,
+          avatarUrl: reviewer.avatarUrl,
+          profileUrl: reviewer.url,
+        },
+      ]
+    }),
+    updatedAt: formatRelativeTime(pull.updatedAt),
+    updatedAtIso: pull.updatedAt,
+    createdAtIso: pull.createdAt,
+    url: pull.url,
     checkState: 'pending',
-    isDraft: pull.draft,
+    isDraft: pull.isDraft,
   }
 
   if (isAuthoredByMe || isAssignedToMe) {
