@@ -33,6 +33,7 @@ export function PrSection({
   onMarkStale,
   onMarkActive,
   onClearStalePreference,
+  filterBar,
   showLineChanges,
   showLabels,
 }: {
@@ -64,6 +65,7 @@ export function PrSection({
   onMarkStale: (repository: string, number: number) => void;
   onMarkActive: (repository: string, number: number) => void;
   onClearStalePreference: (repository: string, number: number) => void;
+  filterBar?: React.ReactNode;
   showLineChanges: boolean;
   showLabels: boolean;
 }) {
@@ -84,6 +86,7 @@ export function PrSection({
         onToggleSectionMenu={onToggleSectionMenu}
         onSetSort={onSetSort}
       />
+      {isOpen && filterBar ? filterBar : null}
       {isOpen ? (
         <div>
           {!isLoading && hasCredentials && prs.length === 0 ? (
