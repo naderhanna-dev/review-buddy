@@ -74,7 +74,8 @@ const STORAGE_KEYS: Record<
   | "stalePreferences"
   | "sectionSort"
   | "recentlyMergedCount"
-  | "sectionHideDrafts",
+  | "sectionHideDrafts"
+  | "dimViewed",
   string
 > = {
   token: "review-radar.pat",
@@ -86,6 +87,7 @@ const STORAGE_KEYS: Record<
   sectionSort: "review-radar.sectionSort",
   recentlyMergedCount: "review-radar.recentlyMergedCount",
   sectionHideDrafts: "review-radar.sectionHideDrafts",
+  dimViewed: "review-radar.dimViewed",
 };
 
 function readStorageItem(key: string): string {
@@ -222,6 +224,12 @@ function readSectionHideDrafts(): Record<SectionKey, boolean> {
   } catch {
     return { ...DEFAULT_SECTION_HIDE_DRAFTS };
   }
+}
+
+function readDimViewedPreference(): boolean {
+  const raw = readStorageItem(STORAGE_KEYS.dimViewed);
+  if (raw === "false") return false;
+  return true;
 }
 
 function applyDraftFilter(
@@ -1161,6 +1169,7 @@ function App() {
     readThemePreference(),
   );
   const [isCompact, setIsCompact] = useState(() => readCompactPreference());
+  const [dimViewed, setDimViewed] = useState(() => readDimViewedPreference());
   const [isConnectionPanelOpen, setIsConnectionPanelOpen] = useState(() => {
     const savedToken = readStorageItem(STORAGE_KEYS.token);
     const savedOrg = readStorageItem(STORAGE_KEYS.org);
@@ -1448,25 +1457,10 @@ function App() {
     event.preventDefault();
     const nextToken = tokenInput.trim();
     const nextOrg = orgInput.trim();
-
-    const parsedCount = parseInt(mergedCountInput, 10);
-    const nextMergedCount =
-      isNaN(parsedCount) ||
-      parsedCount < MERGED_COUNT_MIN ||
-      parsedCount > MERGED_COUNT_MAX
-        ? MERGED_COUNT_DEFAULT
-        : parsedCount;
-
     localStorage.setItem(STORAGE_KEYS.token, nextToken);
     localStorage.setItem(STORAGE_KEYS.org, nextOrg);
-    localStorage.setItem(
-      STORAGE_KEYS.recentlyMergedCount,
-      String(nextMergedCount),
-    );
     setToken(nextToken);
     setOrg(nextOrg);
-    setMergedCount(nextMergedCount);
-    setMergedCountInput(String(nextMergedCount));
     setIsConnectionPanelOpen(false);
   }
 
@@ -1568,6 +1562,27 @@ function App() {
     });
   }
 
+  function toggleDimViewed(): void {
+    setDimViewed((current) => {
+      const next = !current;
+      localStorage.setItem(STORAGE_KEYS.dimViewed, String(next));
+      return next;
+    });
+  }
+
+  function handleMergedCountChange(rawValue: string): void {
+    setMergedCountInput(rawValue);
+    const parsed = parseInt(rawValue, 10);
+    if (
+      !isNaN(parsed) &&
+      parsed >= MERGED_COUNT_MIN &&
+      parsed <= MERGED_COUNT_MAX
+    ) {
+      setMergedCount(parsed);
+      localStorage.setItem(STORAGE_KEYS.recentlyMergedCount, String(parsed));
+    }
+  }
+
   const activeTheme = resolveTheme(themePreference);
   const hasSavedConnection = Boolean(token && org);
   const displayNeedsAttention = applyDraftFilter(
@@ -1660,9 +1675,10 @@ function App() {
               <PullRequestRow
                 key={pr.id}
                 pr={pr}
-                isViewed={Boolean(
-                  viewedMap[prViewKey(pr.repository, pr.number)],
-                )}
+                isViewed={
+                  dimViewed &&
+                  Boolean(viewedMap[prViewKey(pr.repository, pr.number)])
+                }
                 onViewed={handleViewed}
                 sectionKind="active"
                 openMenuKey={openRowMenuKey}
@@ -1716,9 +1732,10 @@ function App() {
               <PullRequestRow
                 key={pr.id}
                 pr={pr}
-                isViewed={Boolean(
-                  viewedMap[prViewKey(pr.repository, pr.number)],
-                )}
+                isViewed={
+                  dimViewed &&
+                  Boolean(viewedMap[prViewKey(pr.repository, pr.number)])
+                }
                 onViewed={handleViewed}
                 sectionKind="active"
                 openMenuKey={openRowMenuKey}
@@ -1774,9 +1791,10 @@ function App() {
               <PullRequestRow
                 key={pr.id}
                 pr={pr}
-                isViewed={Boolean(
-                  viewedMap[prViewKey(pr.repository, pr.number)],
-                )}
+                isViewed={
+                  dimViewed &&
+                  Boolean(viewedMap[prViewKey(pr.repository, pr.number)])
+                }
                 onViewed={handleViewed}
                 sectionKind="active"
                 openMenuKey={openRowMenuKey}
@@ -1874,9 +1892,10 @@ function App() {
               <PullRequestRow
                 key={pr.id}
                 pr={pr}
-                isViewed={Boolean(
-                  viewedMap[prViewKey(pr.repository, pr.number)],
-                )}
+                isViewed={
+                  dimViewed &&
+                  Boolean(viewedMap[prViewKey(pr.repository, pr.number)])
+                }
                 onViewed={handleViewed}
                 sectionKind="stale"
                 openMenuKey={openRowMenuKey}
@@ -1943,17 +1962,6 @@ function App() {
                   autoComplete="off"
                 />
               </label>
-              <label>
-                Recently merged count
-                <input
-                  type="number"
-                  value={mergedCountInput}
-                  onChange={(event) => setMergedCountInput(event.target.value)}
-                  min={MERGED_COUNT_MIN}
-                  max={MERGED_COUNT_MAX}
-                  autoComplete="off"
-                />
-              </label>
               <button type="submit">Save and refresh</button>
             </form>
             <div className="helper-copy">
@@ -1996,6 +2004,42 @@ function App() {
                 Fine-grained tokens use 2-minute polling instead (still
                 efficient via ETag caching).
               </p>
+            </div>
+            <div className="user-preferences">
+              <h3 className="user-preferences-heading">User preferences</h3>
+              <div className="user-preferences-group">
+                <h4 className="user-preferences-subheading">
+                  Recently merged count
+                </h4>
+                <p className="user-preferences-description">
+                  Number of recently merged PRs to show.
+                </p>
+                <input
+                  type="number"
+                  className="user-preferences-number"
+                  value={mergedCountInput}
+                  onChange={(event) =>
+                    handleMergedCountChange(event.target.value)
+                  }
+                  onBlur={() => setMergedCountInput(String(mergedCount))}
+                  min={MERGED_COUNT_MIN}
+                  max={MERGED_COUNT_MAX}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="user-preferences-group">
+                <h4 className="user-preferences-subheading">Dim viewed PRs</h4>
+                <label className="user-preferences-toggle">
+                  <span className="user-preferences-description">
+                    Reduce opacity of PRs you have already clicked.
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={dimViewed}
+                    onChange={toggleDimViewed}
+                  />
+                </label>
+              </div>
             </div>
             {teamSignalsUnavailable ? (
               <p className="helper-copy warning-copy">
