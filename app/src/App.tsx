@@ -22,6 +22,15 @@ import {
   type Team,
 } from "./lib/github";
 import { etagCache } from "./lib/etag-cache";
+import { withRetry } from "./lib/retry";
+import {
+  getCacheTimestamp,
+  invalidatePRCache,
+  isCacheStale,
+  PR_CACHE_STORAGE_KEY,
+  readCachedPRData,
+  writeCachedPRData,
+} from "./lib/pr-cache";
 import { SmartRefreshController } from "./lib/smart-refresh";
 import "./App.css";
 
@@ -73,6 +82,7 @@ const STORAGE_KEYS: Record<
   | "compact"
   | "stalePreferences"
   | "sectionSort"
+  | "prCache"
   | "recentlyMergedCount"
   | "sectionHideDrafts"
   | "dimViewed",
@@ -85,6 +95,7 @@ const STORAGE_KEYS: Record<
   compact: "review-radar.compact",
   stalePreferences: "review-radar.stalePreferences",
   sectionSort: "review-radar.sectionSort",
+  prCache: "review-radar.prCache",
   recentlyMergedCount: "review-radar.recentlyMergedCount",
   sectionHideDrafts: "review-radar.sectionHideDrafts",
   dimViewed: "review-radar.dimViewed",
@@ -387,12 +398,12 @@ async function fetchAndClassifyPullRequests(
   const pullsWithReviews = await Promise.all(
     Array.from(pullUrls).map(async (pullUrl) => {
       const [pull, reviews, pullComments] = await Promise.all([
-        apiFetch<PullDetails>(pullUrl, token, etagCache),
-        apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token, etagCache),
-        apiFetch<PullComment[]>(
-          `${pullUrl}/comments?per_page=100`,
-          token,
-          etagCache,
+        withRetry(() => apiFetch<PullDetails>(pullUrl, token, etagCache)),
+        withRetry(() =>
+          apiFetch<Review[]>(`${pullUrl}/reviews?per_page=100`, token, etagCache),
+        ),
+        withRetry(() =>
+          apiFetch<PullComment[]>(`${pullUrl}/comments?per_page=100`, token, etagCache),
         ),
       ]);
 
@@ -400,11 +411,11 @@ async function fetchAndClassifyPullRequests(
       let policyBotStatus: PolicyBotStatus | undefined;
 
       try {
-        const combinedStatus = await apiFetch<CombinedStatusResponse>(
+        const combinedStatus = await withRetry(() => apiFetch<CombinedStatusResponse>(
           `https://api.github.com/repos/${pull.base.repo.full_name}/commits/${pull.head.sha}/status`,
           token,
           etagCache,
-        );
+        ));
 
         if (combinedStatus.state === "success") {
           checkState = "success";
@@ -1156,6 +1167,7 @@ function App() {
     Record<string, StalePreference>
   >(() => readStalePreferences());
   const [isLoading, setIsLoading] = useState(false);
+  const [isRevalidating, setIsRevalidating] = useState(false);
   const [errorToast, setErrorToast] = useState<string | null>(null);
   const [rateLimitWarning, setRateLimitWarning] = useState(false);
   const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState<
@@ -1339,6 +1351,35 @@ function App() {
   }, [org, token]);
 
   useEffect(() => {
+    function handleStorageEvent(event: StorageEvent): void {
+      if (event.key !== PR_CACHE_STORAGE_KEY || event.newValue === null) {
+        return
+      }
+
+      const crossTabData = readCachedPRData(org)
+      if (!crossTabData) {
+        return
+      }
+
+      setStalePrs(crossTabData.stalePrs)
+      setYourPrs(crossTabData.yourPrs)
+      setNeedsAttention(crossTabData.needsAttention)
+      setRelatedToYou(crossTabData.relatedToYou)
+      setRecentlyMerged(crossTabData.recentlyMerged)
+      setTeamSignalsUnavailable(crossTabData.teamSignalsUnavailable)
+      const crossTabTimestamp = getCacheTimestamp(org)
+      if (crossTabTimestamp) {
+        setLastRefreshedAt(crossTabTimestamp)
+      }
+    }
+
+    window.addEventListener('storage', handleStorageEvent)
+    return () => {
+      window.removeEventListener('storage', handleStorageEvent)
+    }
+  }, [org])
+
+  useEffect(() => {
     function handleGlobalClick(event: MouseEvent): void {
       const target = event.target as HTMLElement | null;
       if (!target) {
@@ -1387,13 +1428,38 @@ function App() {
       setRelatedToYou([]);
       setRecentlyMerged([]);
       setTeamSignalsUnavailable(null);
+      invalidatePRCache();
       return;
     }
 
     let ignore = false;
 
+    // Read cache immediately — hydrate state before any network fetch
+    const cachedData = readCachedPRData(org)
+    if (cachedData && !ignore) {
+      setStalePrs(cachedData.stalePrs)
+      setYourPrs(cachedData.yourPrs)
+      setNeedsAttention(cachedData.needsAttention)
+      setRelatedToYou(cachedData.relatedToYou)
+      setRecentlyMerged(cachedData.recentlyMerged)
+      setTeamSignalsUnavailable(cachedData.teamSignalsUnavailable)
+      const cachedTimestamp = getCacheTimestamp(org)
+      if (cachedTimestamp) {
+        setLastRefreshedAt(cachedTimestamp)
+      }
+    }
+
+    // If cache is fresh, skip the network fetch — SmartRefreshController will trigger refreshTick when stale
+    if (cachedData && !isCacheStale(org)) {
+      return () => { ignore = true }
+    }
+
     async function loadAndClassifyPulls(): Promise<void> {
-      setIsLoading(true);
+      if (cachedData) {
+        setIsRevalidating(true);
+      } else {
+        setIsLoading(true);
+      }
       setErrorToast(null);
 
       try {
@@ -1418,14 +1484,23 @@ function App() {
 
           if (classified.closedViewedKeys.length > 0) {
             setViewedMap((current) => {
-              const next = { ...current }
+              const next = { ...current };
               for (const key of classified.closedViewedKeys) {
-                delete next[key]
+                delete next[key];
               }
-              localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next))
-              return next
-            })
+              localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next));
+              return next;
+            });
           }
+
+          writeCachedPRData(org, {
+            yourPrs: classified.yourPrs,
+            needsAttention: classified.needsAttention,
+            relatedToYou: classified.relatedToYou,
+            stalePrs: classified.stalePrs,
+            recentlyMerged: merged,
+            teamSignalsUnavailable: classified.teamSignalsUnavailable,
+          });
         }
       } catch (loadError) {
         if (!ignore) {
@@ -1442,6 +1517,7 @@ function App() {
       } finally {
         if (!ignore) {
           setIsLoading(false);
+          setIsRevalidating(false);
         }
       }
     }
@@ -1457,10 +1533,31 @@ function App() {
     event.preventDefault();
     const nextToken = tokenInput.trim();
     const nextOrg = orgInput.trim();
+
+    const parsedCount = parseInt(mergedCountInput, 10);
+    const nextMergedCount =
+      isNaN(parsedCount) ||
+      parsedCount < MERGED_COUNT_MIN ||
+      parsedCount > MERGED_COUNT_MAX
+        ? MERGED_COUNT_DEFAULT
+        : parsedCount;
+
     localStorage.setItem(STORAGE_KEYS.token, nextToken);
     localStorage.setItem(STORAGE_KEYS.org, nextOrg);
+    localStorage.setItem(
+      STORAGE_KEYS.recentlyMergedCount,
+      String(nextMergedCount),
+    );
+
+    if (nextToken !== token || nextOrg !== org) {
+      invalidatePRCache();
+      etagCache.clear();
+    }
+
     setToken(nextToken);
     setOrg(nextOrg);
+    setMergedCount(nextMergedCount);
+    setMergedCountInput(String(nextMergedCount));
     setIsConnectionPanelOpen(false);
   }
 
@@ -1612,11 +1709,13 @@ function App() {
     sectionHideDrafts.stalePrs,
   );
 
-  const refreshLabel = isLoading
-    ? "Refreshing..."
-    : lastRefreshedAt
-      ? `Last updated ${formatRefreshAge(lastRefreshedAt, nowMs)}`
-      : "Not refreshed yet";
+  const refreshLabel = isRevalidating
+    ? `Updating... (${lastRefreshedAt ? formatRefreshAge(lastRefreshedAt, nowMs) : "loading"})`
+    : isLoading
+      ? "Refreshing..."
+      : lastRefreshedAt
+        ? `Last updated ${formatRefreshAge(lastRefreshedAt, nowMs)}`
+        : "Not refreshed yet";
 
   return (
     <main className="app-shell">
@@ -2120,6 +2219,28 @@ function App() {
               clipRule="evenodd"
               d="M3.22 3.22a.75.75 0 0 1 1.06 0l3.97 3.97V4.5a.75.75 0 0 1 1.5 0V9a.75.75 0 0 1-.75.75H4.5a.75.75 0 0 1 0-1.5h2.69L3.22 4.28a.75.75 0 0 1 0-1.06Zm17.56 0a.75.75 0 0 1 0 1.06l-3.97 3.97h2.69a.75.75 0 0 1 0 1.5H15a.75.75 0 0 1-.75-.75V4.5a.75.75 0 0 1 1.5 0v2.69l3.97-3.97a.75.75 0 0 1 1.06 0ZM3.75 15a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-2.69l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97H4.5a.75.75 0 0 1-.75-.75Zm10.5 0a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-2.69l3.97 3.97a.75.75 0 1 1-1.06 1.06l-3.97-3.97v2.69a.75.75 0 0 1-1.5 0V15Z"
             />
+          </svg>
+        )}
+      </button>
+
+      <button
+        type="button"
+        className="compact-fab"
+        onClick={toggleCompact}
+        aria-label={isCompact ? 'Switch to comfortable view' : 'Switch to compact view'}
+      >
+        <span className="fab-tooltip">{isCompact ? 'Comfortable view' : 'Compact view'}</span>
+        {isCompact ? (
+          <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
+            <path d="M20.25 3a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V5.56l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97h-2.69a.75.75 0 0 1 0-1.5h4.5Z" />
+            <path d="M3.75 3a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0V5.56l3.97 3.97a.75.75 0 0 0 1.06-1.06L5.56 4.5h2.69a.75.75 0 0 0 0-1.5h-4.5Z" />
+            <path d="M20.25 21a.75.75 0 0 0 .75-.75v-4.5a.75.75 0 0 0-1.5 0v2.69l-3.97-3.97a.75.75 0 0 0-1.06 1.06l3.97 3.97h-2.69a.75.75 0 0 0 0 1.5h4.5Z" />
+            <path d="M3.75 21a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 1 1.5 0v2.69l3.97-3.97a.75.75 0 0 1 1.06 1.06L5.56 19.5h2.69a.75.75 0 0 1 0 1.5h-4.5Z" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
+            <rect x="10" y="10" width="4" height="4" rx="0.5" />
+            <path fillRule="evenodd" clipRule="evenodd" d="M3.22 3.22a.75.75 0 0 1 1.06 0l3.97 3.97V4.5a.75.75 0 0 1 1.5 0V9a.75.75 0 0 1-.75.75H4.5a.75.75 0 0 1 0-1.5h2.69L3.22 4.28a.75.75 0 0 1 0-1.06Zm17.56 0a.75.75 0 0 1 0 1.06l-3.97 3.97h2.69a.75.75 0 0 1 0 1.5H15a.75.75 0 0 1-.75-.75V4.5a.75.75 0 0 1 1.5 0v2.69l3.97-3.97a.75.75 0 0 1 1.06 0ZM3.75 15a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-2.69l-3.97 3.97a.75.75 0 0 1-1.06-1.06l3.97-3.97H4.5a.75.75 0 0 1-.75-.75Zm10.5 0a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-2.69l3.97 3.97a.75.75 0 1 1-1.06 1.06l-3.97-3.97v2.69a.75.75 0 0 1-1.5 0V15Z" />
           </svg>
         )}
       </button>
