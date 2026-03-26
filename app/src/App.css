@@ -681,13 +681,6 @@
   padding: 0.2rem 0.45rem;
 }
 
-.collapsed-hint {
-  margin: 0;
-  padding: 0.8rem 1rem;
-  color: var(--muted);
-  font-size: 0.84rem;
-}
-
 .pill {
   border-radius: 999px;
   border: 1px solid;
@@ -993,11 +986,6 @@
 :root[data-compact='true'] .empty-state {
   padding: 0.5rem 0.75rem;
   font-size: 0.82rem;
-}
-
-:root[data-compact='true'] .collapsed-hint {
-  padding: 0.45rem 0.75rem;
-  font-size: 0.78rem;
 }
 
 @media (max-width: 760px) {

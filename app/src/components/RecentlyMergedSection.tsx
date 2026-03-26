@@ -66,11 +66,7 @@ export function RecentlyMergedSection({
             <MergedPrRow key={pr.id} pr={pr} />
           ))}
         </div>
-      ) : (
-        <p className="collapsed-hint">
-          Section collapsed — click the title to expand.
-        </p>
-      )}
+      ) : null}
     </section>
   );
 }
