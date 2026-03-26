@@ -89,7 +89,7 @@ export type GqlPullRequestNode = {
         } | null
       }
     }>
-  }
+  } | null
   baseRepository: {
     nameWithOwner: string
     url: string
@@ -295,7 +295,14 @@ export async function graphqlFetch<T>(
     if (errorMessage.toLowerCase().includes('rate limit')) {
       throw new RateLimitError()
     }
-    throw new Error(errorMessage)
+
+    // If data is present alongside errors, treat as a partial success.
+    // This is standard GraphQL behaviour: fields the token cannot access
+    // (e.g. commits on fine-grained PATs) are nulled out with FORBIDDEN
+    // errors while the rest of the response remains valid.
+    if (!responseBody.data) {
+      throw new Error(errorMessage)
+    }
   }
 
   return responseBody.data as T

@@ -252,7 +252,7 @@ export async function fetchAndClassifyPullRequests(
     let checkState: PullRequest["checkState"] = "pending";
     let policyBotStatus: PolicyBotStatus | undefined;
 
-    const latestCommit = pull.commits.nodes[0]?.commit;
+    const latestCommit = pull.commits?.nodes[0]?.commit;
     if (latestCommit?.statusCheckRollup) {
       const rollup = latestCommit.statusCheckRollup;
       if (rollup.state === "SUCCESS") {
