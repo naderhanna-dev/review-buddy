@@ -744,17 +744,20 @@ function SectionHeader({
         {statusLabel ? (
           <span className="section-status-label">{statusLabel}</span>
         ) : null}
-        <button
-          type="button"
-          className={`section-action${hideDrafts ? " section-action--active" : ""}`}
-          aria-pressed={hideDrafts}
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleHideDrafts();
-          }}
-        >
-          Drafts
-        </button>
+        <span className="section-count-detail"> · </span>
+        <label className="draft-toggle" onClick={(event) => event.stopPropagation()}>
+          <input
+            type="checkbox"
+            className="draft-toggle-input"
+            checked={!hideDrafts}
+            onChange={() => onToggleHideDrafts()}
+          />
+          <span className="draft-toggle-track">
+            <span className="draft-toggle-knob" />
+          </span>
+          Show drafts
+        </label>
+        <span className="section-count-detail"> · </span>
         <div className="section-menu-wrap">
           <button
             type="button"
