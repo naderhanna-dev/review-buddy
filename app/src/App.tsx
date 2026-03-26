@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { etagCache } from "./lib/etag-cache";
 import { invalidatePRCache } from "./lib/pr-cache";
@@ -18,6 +18,7 @@ import { useMenuDismiss } from "./hooks/useMenuDismiss";
 import { PrSection } from "./components/PrSection";
 import { RecentlyMergedSection } from "./components/RecentlyMergedSection";
 import { SettingsDrawer } from "./components/SettingsDrawer";
+import { UserFilterBar } from "./components/UserFilterBar";
 import type { SectionKey, SortPreference, ThemePreference } from "./types";
 import {
   MERGED_COUNT_DEFAULT,
@@ -62,6 +63,7 @@ function App() {
   >(readSectionHideDrafts);
   const [refreshTick, setRefreshTick] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [needsAttentionUserFilter, setNeedsAttentionUserFilter] = useState<string | null>(null);
 
   const handleRefresh = useCallback(() => {
     setRefreshTick((current) => current + 1);
@@ -224,6 +226,40 @@ function App() {
     applySectionSort(prData.needsAttention, sectionSortPreferences.needsAttention),
     sectionHideDrafts.needsAttention,
   );
+
+  const needsAttentionUsers = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const pr of displayNeedsAttention) {
+      if (!seen.has(pr.author)) {
+        seen.set(pr.author, pr.authorAvatarUrl);
+      }
+      for (const r of pr.requestedReviewers) {
+        if (!seen.has(r.login)) {
+          seen.set(r.login, r.avatarUrl);
+        }
+      }
+    }
+    return Array.from(seen, ([login, avatarUrl]) => ({ login, avatarUrl }));
+  }, [displayNeedsAttention]);
+
+  const filteredNeedsAttention = useMemo(() => {
+    if (!needsAttentionUserFilter) return displayNeedsAttention;
+    return displayNeedsAttention.filter(
+      (pr) =>
+        pr.author === needsAttentionUserFilter ||
+        pr.requestedReviewers.some((r) => r.login === needsAttentionUserFilter),
+    );
+  }, [displayNeedsAttention, needsAttentionUserFilter]);
+
+  useEffect(() => {
+    if (
+      needsAttentionUserFilter &&
+      !needsAttentionUsers.some((u) => u.login === needsAttentionUserFilter)
+    ) {
+      setNeedsAttentionUserFilter(null);
+    }
+  }, [needsAttentionUsers, needsAttentionUserFilter]);
+
   const displayYourPrs = applyDraftFilter(
     applySectionSort(prData.yourPrs, sectionSortPreferences.yourPrs),
     sectionHideDrafts.yourPrs,
@@ -286,16 +322,25 @@ function App() {
         title="Needs your attention"
         sectionKey="needsAttention"
         sectionKind="active"
-        prs={displayNeedsAttention}
+        prs={filteredNeedsAttention}
         isOpen={isNeedsAttentionOpen}
         onToggleOpen={() => setIsNeedsAttentionOpen((current) => !current)}
         emptyConnectedMessage="Nothing currently needs your immediate attention."
         emptyDisconnectedMessage="Add org + PAT above to classify pull requests."
-        updatedCount={displayNeedsAttention.filter((pr) => pr.stateLabel).length}
+        updatedCount={filteredNeedsAttention.filter((pr) => pr.stateLabel).length}
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Classifying..." : undefined}
         sortPreference={sectionSortPreferences.needsAttention}
         hideDrafts={sectionHideDrafts.needsAttention}
         onToggleHideDrafts={() => handleToggleSectionHideDrafts("needsAttention")}
+        filterBar={
+          needsAttentionUsers.length > 1 ? (
+            <UserFilterBar
+              users={needsAttentionUsers}
+              selectedLogin={needsAttentionUserFilter}
+              onSelect={setNeedsAttentionUserFilter}
+            />
+          ) : undefined
+        }
       />
 
       <PrSection
