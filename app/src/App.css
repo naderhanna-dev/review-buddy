@@ -476,6 +476,20 @@
   white-space: nowrap;
 }
 
+.filter-option-count {
+  color: var(--muted);
+  font-size: 0.7rem;
+  margin-left: 2px;
+}
+
+.filter-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .filter-label-swatch {
   display: inline-block;
   width: 10px;
@@ -1086,6 +1100,24 @@
   color: var(--muted);
   border-bottom: 1px solid var(--border);
   font-size: 0.9rem;
+}
+
+.empty-state-filtered {
+  text-align: center;
+}
+
+.filter-clear-inline {
+  background: none;
+  border: none;
+  color: var(--link);
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.filter-clear-inline:hover {
+  color: var(--text);
 }
 
 .theme-fab {

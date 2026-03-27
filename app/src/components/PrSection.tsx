@@ -39,6 +39,7 @@ export function PrSection({
   onMarkStale,
   onMarkActive,
   onClearStalePreference,
+  onClearFilters,
   filterBar,
   showLineChanges,
   showLabels,
@@ -77,6 +78,7 @@ export function PrSection({
   onMarkStale: (repository: string, number: number) => void;
   onMarkActive: (repository: string, number: number) => void;
   onClearStalePreference: (repository: string, number: number) => void;
+  onClearFilters?: () => void;
   filterBar?: React.ReactNode;
   showLineChanges: boolean;
   showLabels: boolean;
@@ -87,6 +89,7 @@ export function PrSection({
         title={title}
         sectionKey={sectionKey}
         count={prs.length}
+        unfilteredCount={unfilteredPrs.length}
         updatedCount={updatedCount}
         statusLabel={statusLabel}
         openSectionMenuKey={openSectionMenuKey}
@@ -107,7 +110,14 @@ export function PrSection({
       {isOpen && filterBar ? filterBar : null}
       {isOpen ? (
         <div>
-          {!isLoading && hasCredentials && prs.length === 0 ? (
+          {!isLoading && hasCredentials && prs.length === 0 && unfilteredPrs.length > 0 ? (
+            <p className="empty-state empty-state-filtered">
+              No PRs match current filters ·{" "}
+              <button type="button" className="filter-clear-inline" onClick={onClearFilters}>
+                Clear filters
+              </button>
+            </p>
+          ) : !isLoading && hasCredentials && prs.length === 0 ? (
             <p className="empty-state">{emptyConnectedMessage}</p>
           ) : null}
           {!isLoading && !hasCredentials ? (

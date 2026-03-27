@@ -6,6 +6,7 @@ export function SectionHeader({
   title,
   sectionKey,
   count,
+  unfilteredCount,
   updatedCount,
   statusLabel,
   openSectionMenuKey,
@@ -26,6 +27,7 @@ export function SectionHeader({
   title: string;
   sectionKey: SectionKey;
   count: number;
+  unfilteredCount: number;
   updatedCount?: number;
   statusLabel?: string;
   openSectionMenuKey: SectionKey | null;
@@ -81,6 +83,9 @@ export function SectionHeader({
       <div className="section-header-tools">
         <span>
           {count}
+          {isFilterActive && unfilteredCount > count ? (
+            <span className="section-count-detail"> of {unfilteredCount}</span>
+          ) : null}
           {updatedCount != null && updatedCount > 0 ? (
             <span className="section-count-detail">
               {" "}

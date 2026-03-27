@@ -24,6 +24,7 @@ import { RecentlyMergedSection } from "./components/RecentlyMergedSection";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { UserFilterBar } from "./components/UserFilterBar";
 import type { SectionFilterState, SectionKey, SortPreference, ThemePreference } from "./types";
+import { EMPTY_FILTER_STATE } from "./types";
 import {
   MERGED_COUNT_DEFAULT,
   MERGED_COUNT_MAX,
@@ -385,6 +386,7 @@ function App() {
         hideAuthorFilter={true}
         isOpen={isNeedsAttentionOpen}
         onToggleOpen={() => setIsNeedsAttentionOpen((current) => !current)}
+        onClearFilters={() => handleSetSectionFilter("needsAttention", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="Nothing currently needs your immediate attention."
         emptyDisconnectedMessage="Add org + PAT above to classify pull requests."
         updatedCount={filteredNeedsAttention.filter((pr) => pr.stateLabel).length}
@@ -423,6 +425,7 @@ function App() {
         unfilteredPrs={displayYourPrs}
         isOpen={isYourPrsOpen}
         onToggleOpen={() => setIsYourPrsOpen((current) => !current)}
+        onClearFilters={() => handleSetSectionFilter("yourPrs", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No assigned or authored pull requests right now."
         emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
         updatedCount={displayYourPrs.filter((pr) => pr.stateLabel).length}
@@ -443,6 +446,7 @@ function App() {
         hideAuthorFilter={true}
         isOpen={isRelatedToYouOpen}
         onToggleOpen={() => setIsRelatedToYouOpen((current) => !current)}
+        onClearFilters={() => handleSetSectionFilter("relatedToYou", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No non-urgent related pull requests right now."
         emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
         updatedCount={filteredRelatedToYou.filter((pr) => pr.stateLabel).length}
@@ -488,6 +492,7 @@ function App() {
         unfilteredPrs={displayStalePrs}
         isOpen={isStaleSectionOpen}
         onToggleOpen={() => setIsStaleSectionOpen((current) => !current)}
+        onClearFilters={() => handleSetSectionFilter("stalePrs", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No stale pull requests right now."
         emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
         sortPreference={sectionSortPreferences.stalePrs}
