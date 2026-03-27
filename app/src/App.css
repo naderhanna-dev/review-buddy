@@ -411,7 +411,8 @@
 
 .pr-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(7rem, auto);
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
   gap: 0.25rem 1rem;
   padding: 0.85rem 2.6rem 0.85rem 1rem;
   border-bottom: 1px solid var(--border);
@@ -517,13 +518,20 @@
 }
 
 .title-group {
-  display: flex;
-  gap: 0.6rem;
-  align-items: flex-start;
+  grid-row: 1 / -1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: subgrid;
+  column-gap: 0.6rem;
+  align-items: start;
   min-width: 0;
 }
 
-.title-group > div {
+.title-group > .avatar-link {
+  grid-row: 1 / -1;
+}
+
+.pr-detail {
   min-width: 0;
 }
 
@@ -603,6 +611,7 @@
 }
 
 .line-changes {
+  grid-row: 1;
   font-size: 0.75rem;
   font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
   display: inline-flex;
@@ -698,16 +707,17 @@
 }
 
 .status-group {
-  justify-self: end;
-  text-align: right;
+  grid-row: 1 / -1;
   display: grid;
-  gap: 0.25rem;
-  align-self: start;
+  grid-template-rows: subgrid;
+  justify-self: end;
   justify-items: end;
-  position: relative;
+  align-items: start;
+  text-align: right;
 }
 
-.status-row {
+.status-detail {
+  grid-row: 2;
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -1048,7 +1058,7 @@
 }
 
 :root[data-compact="true"] .title-group {
-  gap: 0.4rem;
+  column-gap: 0.4rem;
 }
 
 :root[data-compact="true"] .pr-title {
@@ -1129,14 +1139,6 @@
 
 :root[data-compact="true"] .line-changes {
   font-size: 0.65rem;
-  grid-column: 1 / -1;
-  justify-self: end;
-}
-
-:root[data-compact="true"] .status-group {
-  grid-template-columns: auto auto;
-  gap: 0.1rem 0.4rem;
-  align-items: center;
 }
 
 @media (max-width: 760px) {
@@ -1153,10 +1155,25 @@
     grid-template-columns: 1fr;
   }
 
+  .title-group,
+  .status-group {
+    grid-row: auto;
+    grid-template-rows: auto auto;
+  }
+
   .status-group {
     justify-self: start;
     text-align: left;
     justify-items: start;
+  }
+
+  .line-changes {
+    grid-row: auto;
+  }
+
+  .status-detail {
+    grid-row: auto;
+    justify-content: flex-start;
   }
 
   .row-menu-wrap {

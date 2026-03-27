@@ -79,38 +79,38 @@ export function PullRequestRow({
             alt={`${pr.author} avatar`}
           />
         </a>
-        <div>
-          <div className="pr-title-line">
-            <span
-              className={`check-indicator ${pr.checkState}`}
-              title={checkTitle}
-              aria-label={checkTitle}
-            >
-              {pr.checkState === "success" ? (
-                <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
-                  <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-6.5 6.5a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l2.47 2.47 5.97-5.97a.75.75 0 0 1 1.06 0Z" />
-                </svg>
-              ) : pr.checkState === "failure" ? (
-                <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
-                  <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 1 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
-                  <circle cx="8" cy="8" r="3.5" />
-                </svg>
-              )}
-            </span>
-            <a
-              href={pr.url}
-              className="pr-title"
-              target="_blank"
-              rel="noreferrer"
-              onClick={handleViewed}
-            >
-              {pr.isDraft ? "[Draft] " : ""}
-              {pr.title}
-            </a>
-          </div>
+        <div className="pr-title-line">
+          <span
+            className={`check-indicator ${pr.checkState}`}
+            title={checkTitle}
+            aria-label={checkTitle}
+          >
+            {pr.checkState === "success" ? (
+              <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-6.5 6.5a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l2.47 2.47 5.97-5.97a.75.75 0 0 1 1.06 0Z" />
+              </svg>
+            ) : pr.checkState === "failure" ? (
+              <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+                <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 1 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+                <circle cx="8" cy="8" r="3.5" />
+              </svg>
+            )}
+          </span>
+          <a
+            href={pr.url}
+            className="pr-title"
+            target="_blank"
+            rel="noreferrer"
+            onClick={handleViewed}
+          >
+            {pr.isDraft ? "[Draft] " : ""}
+            {pr.title}
+          </a>
+        </div>
+        <div className="pr-detail">
           <p className="pr-meta">
             #{pr.number} opened by{" "}
             <a
@@ -177,7 +177,7 @@ export function PullRequestRow({
             <span className="line-deletions">-{pr.deletions ?? 0}</span>
           </span>
         ) : null}
-        <div className="status-row">
+        <div className="status-detail">
           {pr.policyBotStatus ? (
             <a
               href={pr.policyBotStatus.url ?? undefined}
@@ -201,8 +201,8 @@ export function PullRequestRow({
               </span>
             </span>
           ) : null}
+          <span className="updated-at">{pr.updatedAt}</span>
         </div>
-        <span className="updated-at">{pr.updatedAt}</span>
       </div>
       <div className="row-menu-wrap">
         <button
