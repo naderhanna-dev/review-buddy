@@ -45,6 +45,11 @@ export function SectionHeader({
 }) {
   const isMenuOpen = openSectionMenuKey === sectionKey;
   const isFilterMenuOpen = openSectionFilterKey === sectionKey;
+  const isFilterActive =
+    filterPreference.repository.size > 0 ||
+    filterPreference.checkStatus.size > 0 ||
+    filterPreference.labels.size > 0 ||
+    filterPreference.author.size > 0;
 
   return (
     <div className="section-header">
@@ -101,11 +106,11 @@ export function SectionHeader({
           Show drafts
         </label>
         <span className="section-count-detail"> · </span>
-        <div className="filter-menu-wrap">
-          <button
-            type="button"
-            className="filter-menu-toggle"
-            aria-label="Filter options"
+         <div className="filter-menu-wrap">
+           <button
+             type="button"
+             className={`filter-menu-toggle${isFilterActive ? " filter-active" : ""}`}
+             aria-label="Filter options"
             aria-expanded={isFilterMenuOpen}
             onClick={(event) => {
               event.stopPropagation();

@@ -1294,3 +1294,20 @@
     width: calc(100vw - 0.5rem);
   }
 }
+
+/* Filter active indicator */
+.filter-menu-toggle.filter-active {
+  position: relative;
+}
+
+.filter-menu-toggle.filter-active::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--accent-fg, #0969da);
+  pointer-events: none;
+}
