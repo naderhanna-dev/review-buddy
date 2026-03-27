@@ -27,4 +27,4 @@ export type MergedPullRequest = {
 export type ThemePreference = "system" | "dark" | "light";
 export type StalePreference = "stale" | "active";
 export type SectionKey = "needsAttention" | "yourPrs" | "relatedToYou" | "stalePrs";
-export type SortPreference = "default" | "oldest-first" | "newest-first";
+export type SortPreference = "default" | "oldest-first" | "newest-first" | "author-az" | "repo-az" | "line-changes-desc";
