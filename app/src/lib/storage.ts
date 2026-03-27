@@ -1,5 +1,6 @@
-import type { ThemePreference, StalePreference, SectionKey, SortPreference } from "../types";
+import type { ThemePreference, StalePreference, SectionKey, SortPreference, SectionFilterState } from "../types";
 import { STORAGE_KEYS, MERGED_COUNT_DEFAULT, MERGED_COUNT_MIN, MERGED_COUNT_MAX } from "../constants";
+import { EMPTY_FILTER_STATE } from "../types";
 
 const VALID_SORT_VALUES: ReadonlySet<string> = new Set([
   "oldest-first",
@@ -158,4 +159,66 @@ export function readShowLabelsPreference(): boolean {
     return false;
   }
   return true;
+}
+
+export function readSectionFilterPreferences(): Record<SectionKey, SectionFilterState> {
+  const raw = readStorageItem(STORAGE_KEYS.sectionFilters);
+  if (!raw) {
+    return {
+      needsAttention: { ...EMPTY_FILTER_STATE },
+      yourPrs: { ...EMPTY_FILTER_STATE },
+      relatedToYou: { ...EMPTY_FILTER_STATE },
+      stalePrs: { ...EMPTY_FILTER_STATE },
+    };
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, {
+      repository?: string[];
+      checkStatus?: string[];
+      labels?: string[];
+      author?: string[];
+    }>;
+    const result: Record<SectionKey, SectionFilterState> = {
+      needsAttention: { ...EMPTY_FILTER_STATE },
+      yourPrs: { ...EMPTY_FILTER_STATE },
+      relatedToYou: { ...EMPTY_FILTER_STATE },
+      stalePrs: { ...EMPTY_FILTER_STATE },
+    };
+    for (const key of Object.keys(result) as SectionKey[]) {
+      const raw = parsed[key];
+      if (raw && typeof raw === "object") {
+        result[key] = {
+          repository: new Set(Array.isArray(raw.repository) ? raw.repository : []),
+          checkStatus: new Set(Array.isArray(raw.checkStatus) ? raw.checkStatus : []),
+          labels: new Set(Array.isArray(raw.labels) ? raw.labels : []),
+          author: new Set(Array.isArray(raw.author) ? raw.author : []),
+        };
+      }
+    }
+    return result;
+  } catch {
+    return {
+      needsAttention: { ...EMPTY_FILTER_STATE },
+      yourPrs: { ...EMPTY_FILTER_STATE },
+      relatedToYou: { ...EMPTY_FILTER_STATE },
+      stalePrs: { ...EMPTY_FILTER_STATE },
+    };
+  }
+}
+
+export function writeSectionFilterPreferences(
+  prefs: Record<SectionKey, SectionFilterState>,
+): void {
+  if (typeof window === "undefined") return;
+  const serializable: Record<string, { repository: string[]; checkStatus: string[]; labels: string[]; author: string[] }> = {};
+  for (const key of Object.keys(prefs) as SectionKey[]) {
+    const f = prefs[key];
+    serializable[key] = {
+      repository: Array.from(f.repository),
+      checkStatus: Array.from(f.checkStatus),
+      labels: Array.from(f.labels),
+      author: Array.from(f.author),
+    };
+  }
+  localStorage.setItem(STORAGE_KEYS.sectionFilters, JSON.stringify(serializable));
 }
