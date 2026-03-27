@@ -562,9 +562,10 @@
 
 .reviewer-list {
   margin-top: 0.35rem;
-  display: flex;
+  display: inline-flex;
   gap: 0.28rem;
   flex-wrap: wrap;
+  vertical-align: middle;
 }
 
 .reviewer-avatar {
@@ -582,9 +583,14 @@
 
 .label-list {
   margin-top: 0.25rem;
-  display: flex;
+  display: inline-flex;
   gap: 0.25rem;
   flex-wrap: wrap;
+  vertical-align: middle;
+}
+
+.reviewer-list + .label-list {
+  margin-left: 0.4rem;
 }
 
 .pr-label {
@@ -1050,6 +1056,7 @@
 }
 
 :root[data-compact="true"] .pr-meta {
+  display: inline;
   font-size: 0.75rem;
 }
 
@@ -1106,7 +1113,12 @@
 }
 
 :root[data-compact="true"] .label-list {
-  margin-top: 0.15rem;
+  display: inline-flex;
+  margin-top: 0;
+  margin-left: 0.35rem;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  vertical-align: middle;
   gap: 0.15rem;
 }
 
@@ -1117,6 +1129,14 @@
 
 :root[data-compact="true"] .line-changes {
   font-size: 0.65rem;
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
+:root[data-compact="true"] .status-group {
+  grid-template-columns: auto auto;
+  gap: 0.1rem 0.4rem;
+  align-items: center;
 }
 
 @media (max-width: 760px) {
