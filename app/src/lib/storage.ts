@@ -1,6 +1,14 @@
 import type { ThemePreference, StalePreference, SectionKey, SortPreference } from "../types";
 import { STORAGE_KEYS, MERGED_COUNT_DEFAULT, MERGED_COUNT_MIN, MERGED_COUNT_MAX } from "../constants";
 
+const VALID_SORT_VALUES: ReadonlySet<string> = new Set([
+  "oldest-first",
+  "newest-first",
+  "author-az",
+  "repo-az",
+  "line-changes-desc",
+]);
+
 const DEFAULT_SECTION_SORT: Record<SectionKey, SortPreference> = {
   needsAttention: "default",
   yourPrs: "default",
@@ -94,8 +102,8 @@ export function readSectionSortPreferences(): Record<SectionKey, SortPreference>
     const result = { ...DEFAULT_SECTION_SORT };
     for (const key of Object.keys(result) as SectionKey[]) {
       const val = parsed[key];
-      if (val === "oldest-first" || val === "newest-first") {
-        result[key] = val;
+      if (VALID_SORT_VALUES.has(val)) {
+        result[key] = val as SortPreference;
       }
     }
     return result;
