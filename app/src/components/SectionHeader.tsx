@@ -1,4 +1,6 @@
-import type { SectionKey, SortPreference } from "../types";
+import type { SectionFilterState, SectionKey, SortPreference } from "../types";
+import type { PullRequest } from "../lib/classification";
+import { FilterMenu } from "./FilterMenu";
 
 export function SectionHeader({
   title,
@@ -7,13 +9,19 @@ export function SectionHeader({
   updatedCount,
   statusLabel,
   openSectionMenuKey,
+  openSectionFilterKey,
   sortPreference,
+  filterPreference,
+  unfilteredPrs,
+  hideAuthorFilter,
   isOpen,
   onToggleOpen,
   hideDrafts,
   onToggleHideDrafts,
   onToggleSectionMenu,
+  onToggleSectionFilter,
   onSetSort,
+  onSetFilter,
 }: {
   title: string;
   sectionKey: SectionKey;
@@ -21,15 +29,22 @@ export function SectionHeader({
   updatedCount?: number;
   statusLabel?: string;
   openSectionMenuKey: SectionKey | null;
+  openSectionFilterKey: SectionKey | null;
   sortPreference: SortPreference;
+  filterPreference: SectionFilterState;
+  onSetFilter: (key: SectionKey, filter: SectionFilterState) => void;
+  unfilteredPrs: PullRequest[];
+  hideAuthorFilter?: boolean;
   isOpen: boolean;
   onToggleOpen: () => void;
   hideDrafts: boolean;
   onToggleHideDrafts: () => void;
   onToggleSectionMenu: (key: SectionKey) => void;
+  onToggleSectionFilter: (key: SectionKey) => void;
   onSetSort: (key: SectionKey, sort: SortPreference) => void;
 }) {
   const isMenuOpen = openSectionMenuKey === sectionKey;
+  const isFilterMenuOpen = openSectionFilterKey === sectionKey;
 
   return (
     <div className="section-header">
@@ -72,11 +87,12 @@ export function SectionHeader({
           <span className="section-status-label">{statusLabel}</span>
         ) : null}
         <span className="section-count-detail"> · </span>
-        <label className="draft-toggle" onClick={(event) => event.stopPropagation()}>
+        <label className="draft-toggle">
           <input
             type="checkbox"
             className="draft-toggle-input"
             checked={!hideDrafts}
+            onClick={(event) => event.stopPropagation()}
             onChange={() => onToggleHideDrafts()}
           />
           <span className="draft-toggle-track">
@@ -85,6 +101,37 @@ export function SectionHeader({
           Show drafts
         </label>
         <span className="section-count-detail"> · </span>
+        <div className="filter-menu-wrap">
+          <button
+            type="button"
+            className="filter-menu-toggle"
+            aria-label="Filter options"
+            aria-expanded={isFilterMenuOpen}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSectionFilter(sectionKey);
+            }}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+              <path
+                d="M1.5 2.5h13l-5 5.5v4l-3 2v-6L1.5 2.5z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          {isFilterMenuOpen ? (
+            <FilterMenu
+              prs={unfilteredPrs}
+              filter={filterPreference}
+              onSetFilter={(f) => onSetFilter(sectionKey, f)}
+              hideAuthor={hideAuthorFilter}
+            />
+          ) : null}
+        </div>
         <div className="section-menu-wrap">
           <button
             type="button"
@@ -102,10 +149,7 @@ export function SectionHeader({
             </svg>
           </button>
           {isMenuOpen ? (
-            <div
-              className="section-menu"
-              onClick={(event) => event.stopPropagation()}
-            >
+            <div className="section-menu">
               <span className="row-menu-hint">Sort By</span>
               <button
                 type="button"

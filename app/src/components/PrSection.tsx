@@ -1,6 +1,6 @@
 import { prViewKey } from "../lib/classification";
 import type { PullRequest } from "../lib/classification";
-import type { SectionKey, SortPreference, StalePreference } from "../types";
+import type { SectionFilterState, SectionKey, SortPreference, StalePreference } from "../types";
 import { SectionHeader } from "./SectionHeader";
 import { PullRequestRow } from "./PullRequestRow";
 
@@ -18,11 +18,17 @@ export function PrSection({
   updatedCount,
   statusLabel,
   openSectionMenuKey,
+  openSectionFilterKey,
   sortPreference,
+  filterPreference,
+  unfilteredPrs,
+  hideAuthorFilter,
   hideDrafts,
   onToggleHideDrafts,
   onToggleSectionMenu,
+  onToggleSectionFilter,
   onSetSort,
+  onSetFilter,
   dimViewed,
   viewedMap,
   stalePreferences,
@@ -50,11 +56,17 @@ export function PrSection({
   updatedCount?: number;
   statusLabel?: string;
   openSectionMenuKey: SectionKey | null;
+  openSectionFilterKey: SectionKey | null;
   sortPreference: SortPreference;
+  filterPreference: SectionFilterState;
+  unfilteredPrs: PullRequest[];
+  hideAuthorFilter?: boolean;
   hideDrafts: boolean;
   onToggleHideDrafts: () => void;
   onToggleSectionMenu: (key: SectionKey) => void;
+  onToggleSectionFilter: (key: SectionKey) => void;
   onSetSort: (key: SectionKey, sort: SortPreference) => void;
+  onSetFilter: (key: SectionKey, filter: SectionFilterState) => void;
   dimViewed: boolean;
   viewedMap: Record<string, number>;
   stalePreferences: Record<string, StalePreference>;
@@ -78,13 +90,19 @@ export function PrSection({
         updatedCount={updatedCount}
         statusLabel={statusLabel}
         openSectionMenuKey={openSectionMenuKey}
+        openSectionFilterKey={openSectionFilterKey}
         sortPreference={sortPreference}
+        filterPreference={filterPreference}
+        unfilteredPrs={unfilteredPrs}
+        hideAuthorFilter={hideAuthorFilter}
         isOpen={isOpen}
         onToggleOpen={onToggleOpen}
         hideDrafts={hideDrafts}
         onToggleHideDrafts={onToggleHideDrafts}
         onToggleSectionMenu={onToggleSectionMenu}
+        onToggleSectionFilter={onToggleSectionFilter}
         onSetSort={onSetSort}
+        onSetFilter={onSetFilter}
       />
       {isOpen && filterBar ? filterBar : null}
       {isOpen ? (
