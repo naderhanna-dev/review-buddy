@@ -92,24 +92,28 @@ export function readMergedCountPreference(): number {
 }
 
 export function readSectionSortPreferences(): Record<SectionKey, SortPreference> {
-  const raw = readStorageItem(STORAGE_KEYS.sectionSort);
-  if (!raw) {
-    return { ...DEFAULT_SECTION_SORT };
-  }
+   const raw = readStorageItem(STORAGE_KEYS.sectionSort);
+   if (!raw) {
+     return { ...DEFAULT_SECTION_SORT };
+   }
 
-  try {
-    const parsed = JSON.parse(raw) as Record<string, string>;
-    const result = { ...DEFAULT_SECTION_SORT };
-    for (const key of Object.keys(result) as SectionKey[]) {
-      const val = parsed[key];
-      if (VALID_SORT_VALUES.has(val)) {
-        result[key] = val as SortPreference;
-      }
-    }
-    return result;
-  } catch {
-    return { ...DEFAULT_SECTION_SORT };
-  }
+   try {
+     const parsed = JSON.parse(raw) as Record<string, string>;
+     const result = { ...DEFAULT_SECTION_SORT };
+     for (const key of Object.keys(result) as SectionKey[]) {
+       const val = parsed[key];
+       if (VALID_SORT_VALUES.has(val)) {
+         result[key] = val as SortPreference;
+       }
+     }
+     // "author-az" sort was removed from "Your PRs" section
+     if (result.yourPrs === "author-az") {
+       result.yourPrs = "default";
+     }
+     return result;
+   } catch {
+     return { ...DEFAULT_SECTION_SORT };
+   }
 }
 
 export function readSectionHideDrafts(): Record<SectionKey, boolean> {

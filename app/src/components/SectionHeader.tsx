@@ -129,13 +129,15 @@ export function SectionHeader({
                  {sortPreference === "default" ? "\u2713 " : ""}Last updated
                </button>
                <div className="section-menu-divider" />
-               <button
-                 type="button"
-                 className={`row-menu-item${sortPreference === "author-az" ? " active-sort" : ""}`}
-                 onClick={() => onSetSort(sectionKey, "author-az")}
-               >
-                 {sortPreference === "author-az" ? "\u2713 " : ""}Author (A–Z)
-               </button>
+                {sectionKey !== "yourPrs" ? (
+                  <button
+                    type="button"
+                    className={`row-menu-item${sortPreference === "author-az" ? " active-sort" : ""}`}
+                    onClick={() => onSetSort(sectionKey, "author-az")}
+                  >
+                    {sortPreference === "author-az" ? "\u2713 " : ""}Author (A–Z)
+                  </button>
+                ) : null}
                <button
                  type="button"
                  className={`row-menu-item${sortPreference === "repo-az" ? " active-sort" : ""}`}
