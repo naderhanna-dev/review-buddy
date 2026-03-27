@@ -15,7 +15,6 @@ export function PrSection({
   emptyDisconnectedMessage,
   isLoading,
   hasCredentials,
-  updatedCount,
   statusLabel,
   openSectionMenuKey,
   openSectionFilterKey,
@@ -54,7 +53,6 @@ export function PrSection({
   emptyDisconnectedMessage: string;
   isLoading: boolean;
   hasCredentials: boolean;
-  updatedCount?: number;
   statusLabel?: string;
   openSectionMenuKey: SectionKey | null;
   openSectionFilterKey: SectionKey | null;
@@ -90,7 +88,6 @@ export function PrSection({
         sectionKey={sectionKey}
         count={prs.length}
         unfilteredCount={unfilteredPrs.length}
-        updatedCount={updatedCount}
         statusLabel={statusLabel}
         openSectionMenuKey={openSectionMenuKey}
         openSectionFilterKey={openSectionFilterKey}

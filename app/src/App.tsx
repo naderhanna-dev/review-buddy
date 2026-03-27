@@ -389,7 +389,6 @@ function App() {
         onClearFilters={() => handleSetSectionFilter("needsAttention", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="Nothing currently needs your immediate attention."
         emptyDisconnectedMessage="Add org + PAT above to classify pull requests."
-        updatedCount={filteredNeedsAttention.filter((pr) => pr.stateLabel).length}
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Classifying..." : undefined}
         sortPreference={sectionSortPreferences.needsAttention}
         hideDrafts={sectionHideDrafts.needsAttention}
@@ -428,7 +427,6 @@ function App() {
         onClearFilters={() => handleSetSectionFilter("yourPrs", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No assigned or authored pull requests right now."
         emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
-        updatedCount={displayYourPrs.filter((pr) => pr.stateLabel).length}
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Loading..." : undefined}
         sortPreference={sectionSortPreferences.yourPrs}
         hideDrafts={sectionHideDrafts.yourPrs}
@@ -449,7 +447,6 @@ function App() {
         onClearFilters={() => handleSetSectionFilter("relatedToYou", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No non-urgent related pull requests right now."
         emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
-        updatedCount={filteredRelatedToYou.filter((pr) => pr.stateLabel).length}
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Loading..." : undefined}
         sortPreference={sectionSortPreferences.relatedToYou}
         hideDrafts={sectionHideDrafts.relatedToYou}
