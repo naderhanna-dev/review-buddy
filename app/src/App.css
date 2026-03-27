@@ -334,6 +334,12 @@
   font-weight: 700;
 }
 
+.section-menu-divider {
+  border: none;
+  border-top: 1px solid var(--border-muted, rgba(128, 128, 128, 0.2));
+  margin: 4px 0;
+}
+
 .connection-summary {
   margin: 0;
   padding: 0.9rem 1rem;

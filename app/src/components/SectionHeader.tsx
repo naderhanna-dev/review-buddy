@@ -120,15 +120,37 @@ export function SectionHeader({
               >
                 {sortPreference === "newest-first" ? "\u2713 " : ""}Newest first
               </button>
-              <button
-                type="button"
-                className={`row-menu-item${sortPreference === "default" ? " active-sort" : ""}`}
-                onClick={() => onSetSort(sectionKey, "default")}
-              >
-                {sortPreference === "default" ? "\u2713 " : ""}Last updated
-              </button>
-            </div>
-          ) : null}
+               <button
+                 type="button"
+                 className={`row-menu-item${sortPreference === "default" ? " active-sort" : ""}`}
+                 onClick={() => onSetSort(sectionKey, "default")}
+               >
+                 {sortPreference === "default" ? "\u2713 " : ""}Last updated
+               </button>
+               <div className="section-menu-divider" />
+               <button
+                 type="button"
+                 className={`row-menu-item${sortPreference === "author-az" ? " active-sort" : ""}`}
+                 onClick={() => onSetSort(sectionKey, "author-az")}
+               >
+                 {sortPreference === "author-az" ? "\u2713 " : ""}Author (A–Z)
+               </button>
+               <button
+                 type="button"
+                 className={`row-menu-item${sortPreference === "repo-az" ? " active-sort" : ""}`}
+                 onClick={() => onSetSort(sectionKey, "repo-az")}
+               >
+                 {sortPreference === "repo-az" ? "\u2713 " : ""}Repository (A–Z)
+               </button>
+               <button
+                 type="button"
+                 className={`row-menu-item${sortPreference === "line-changes-desc" ? " active-sort" : ""}`}
+                 onClick={() => onSetSort(sectionKey, "line-changes-desc")}
+               >
+                 {sortPreference === "line-changes-desc" ? "\u2713 " : ""}Most changed
+               </button>
+             </div>
+           ) : null}
         </div>
       </div>
     </div>
