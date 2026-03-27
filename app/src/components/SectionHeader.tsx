@@ -97,7 +97,8 @@ export function SectionHeader({
             }}
           >
             <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
-              <path d="M8 3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 6.5A1.5 1.5 0 1 1 8 6.5a1.5 1.5 0 0 1 0 3Zm0 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
+              <path d="M2 3.5h8M2 8h5.5M2 12.5h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+              <path d="M12 4v8m0 0l-2-2m2 2l2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </svg>
           </button>
           {isMenuOpen ? (
