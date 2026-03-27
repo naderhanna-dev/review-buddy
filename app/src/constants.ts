@@ -22,7 +22,8 @@ export const STORAGE_KEYS: Record<
   | "sectionHideDrafts"
   | "dimViewed"
   | "showLineChanges"
-  | "showLabels",
+  | "showLabels"
+  | "sectionFilters",
   string
 > = {
   token: "review-radar.pat",
@@ -38,4 +39,5 @@ export const STORAGE_KEYS: Record<
   dimViewed: "review-radar.dimViewed",
   showLineChanges: "review-radar.showLineChanges",
   showLabels: "review-radar.showLabels",
+  sectionFilters: "review-radar.sectionFilters",
 };

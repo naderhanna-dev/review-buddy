@@ -1,6 +1,6 @@
 import { prViewKey } from "../lib/classification";
 import type { PullRequest } from "../lib/classification";
-import type { SectionKey, SortPreference, StalePreference } from "../types";
+import type { SectionFilterState, SectionKey, SortPreference, StalePreference } from "../types";
 import { SectionHeader } from "./SectionHeader";
 import { PullRequestRow } from "./PullRequestRow";
 
@@ -15,14 +15,19 @@ export function PrSection({
   emptyDisconnectedMessage,
   isLoading,
   hasCredentials,
-  updatedCount,
   statusLabel,
   openSectionMenuKey,
+  openSectionFilterKey,
   sortPreference,
+  filterPreference,
+  unfilteredPrs,
+  hideAuthorFilter,
   hideDrafts,
   onToggleHideDrafts,
   onToggleSectionMenu,
+  onToggleSectionFilter,
   onSetSort,
+  onSetFilter,
   dimViewed,
   viewedMap,
   stalePreferences,
@@ -33,6 +38,7 @@ export function PrSection({
   onMarkStale,
   onMarkActive,
   onClearStalePreference,
+  onClearFilters,
   filterBar,
   showLineChanges,
   showLabels,
@@ -47,14 +53,19 @@ export function PrSection({
   emptyDisconnectedMessage: string;
   isLoading: boolean;
   hasCredentials: boolean;
-  updatedCount?: number;
   statusLabel?: string;
   openSectionMenuKey: SectionKey | null;
+  openSectionFilterKey: SectionKey | null;
   sortPreference: SortPreference;
+  filterPreference: SectionFilterState;
+  unfilteredPrs: PullRequest[];
+  hideAuthorFilter?: boolean;
   hideDrafts: boolean;
   onToggleHideDrafts: () => void;
   onToggleSectionMenu: (key: SectionKey) => void;
+  onToggleSectionFilter: (key: SectionKey) => void;
   onSetSort: (key: SectionKey, sort: SortPreference) => void;
+  onSetFilter: (key: SectionKey, filter: SectionFilterState) => void;
   dimViewed: boolean;
   viewedMap: Record<string, number>;
   stalePreferences: Record<string, StalePreference>;
@@ -65,6 +76,7 @@ export function PrSection({
   onMarkStale: (repository: string, number: number) => void;
   onMarkActive: (repository: string, number: number) => void;
   onClearStalePreference: (repository: string, number: number) => void;
+  onClearFilters?: () => void;
   filterBar?: React.ReactNode;
   showLineChanges: boolean;
   showLabels: boolean;
@@ -75,21 +87,34 @@ export function PrSection({
         title={title}
         sectionKey={sectionKey}
         count={prs.length}
-        updatedCount={updatedCount}
+        unfilteredCount={unfilteredPrs.length}
         statusLabel={statusLabel}
         openSectionMenuKey={openSectionMenuKey}
+        openSectionFilterKey={openSectionFilterKey}
         sortPreference={sortPreference}
+        filterPreference={filterPreference}
+        unfilteredPrs={unfilteredPrs}
+        hideAuthorFilter={hideAuthorFilter}
         isOpen={isOpen}
         onToggleOpen={onToggleOpen}
         hideDrafts={hideDrafts}
         onToggleHideDrafts={onToggleHideDrafts}
         onToggleSectionMenu={onToggleSectionMenu}
+        onToggleSectionFilter={onToggleSectionFilter}
         onSetSort={onSetSort}
+        onSetFilter={onSetFilter}
       />
       {isOpen && filterBar ? filterBar : null}
       {isOpen ? (
         <div>
-          {!isLoading && hasCredentials && prs.length === 0 ? (
+          {!isLoading && hasCredentials && prs.length === 0 && unfilteredPrs.length > 0 ? (
+            <p className="empty-state empty-state-filtered">
+              No PRs match current filters ·{" "}
+              <button type="button" className="filter-clear-inline" onClick={onClearFilters}>
+                Clear filters
+              </button>
+            </p>
+          ) : !isLoading && hasCredentials && prs.length === 0 ? (
             <p className="empty-state">{emptyConnectedMessage}</p>
           ) : null}
           {!isLoading && !hasCredentials ? (

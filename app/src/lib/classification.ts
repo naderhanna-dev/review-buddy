@@ -137,6 +137,44 @@ export function sortByCreatedAt(prs: PullRequest[], direction: 'asc' | 'desc'): 
   })
 }
 
+export function sortByAuthor(prs: PullRequest[]): PullRequest[] {
+  return [...prs].sort((a, b) => {
+    const aAuthor = a.author.toLowerCase()
+    const bAuthor = b.author.toLowerCase()
+    if (aAuthor === '' && bAuthor === '') return 0
+    if (aAuthor === '') return 1
+    if (bAuthor === '') return -1
+    if (aAuthor !== bAuthor) return aAuthor.localeCompare(bAuthor)
+    return new Date(b.updatedAtIso).getTime() - new Date(a.updatedAtIso).getTime()
+  })
+}
+
+export function sortByRepository(prs: PullRequest[]): PullRequest[] {
+  return [...prs].sort((a, b) => {
+    const aRepo = a.repository.toLowerCase()
+    const bRepo = b.repository.toLowerCase()
+    if (aRepo === '' && bRepo === '') return 0
+    if (aRepo === '') return 1
+    if (bRepo === '') return -1
+    if (aRepo !== bRepo) return aRepo.localeCompare(bRepo)
+    return new Date(b.updatedAtIso).getTime() - new Date(a.updatedAtIso).getTime()
+  })
+}
+
+export function sortByLineChanges(prs: PullRequest[]): PullRequest[] {
+  return [...prs].sort((a, b) => {
+    const aUndefined = a.additions === undefined && a.deletions === undefined
+    const bUndefined = b.additions === undefined && b.deletions === undefined
+    if (aUndefined && bUndefined) return 0
+    if (aUndefined) return 1
+    if (bUndefined) return -1
+    const aTotal = (a.additions ?? 0) + (a.deletions ?? 0)
+    const bTotal = (b.additions ?? 0) + (b.deletions ?? 0)
+    if (aTotal !== bTotal) return bTotal - aTotal
+    return new Date(b.updatedAtIso).getTime() - new Date(a.updatedAtIso).getTime()
+  })
+}
+
 export function classifyPullRequest(
   pull: PullDetails,
   reviews: Review[],

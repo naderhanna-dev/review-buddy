@@ -6,14 +6,16 @@ import {
   readCompactPreference,
   readDimViewedPreference,
   readMergedCountPreference,
+  readSectionFilterPreferences,
   readSectionHideDrafts,
   readSectionSortPreferences,
   readShowLabelsPreference,
   readShowLineChangesPreference,
   readStorageItem,
   readThemePreference,
+  writeSectionFilterPreferences,
 } from "./lib/storage";
-import { applySectionSort, applyDraftFilter, formatRefreshAge } from "./lib/pr-utils";
+import { applySectionSort, applySectionFilter, applyDraftFilter, formatRefreshAge } from "./lib/pr-utils";
 import { usePRData } from "./hooks/usePRData";
 import { useRefreshTick } from "./hooks/useRefreshTick";
 import { useMenuDismiss } from "./hooks/useMenuDismiss";
@@ -21,7 +23,8 @@ import { PrSection } from "./components/PrSection";
 import { RecentlyMergedSection } from "./components/RecentlyMergedSection";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { UserFilterBar } from "./components/UserFilterBar";
-import type { SectionKey, SortPreference, ThemePreference } from "./types";
+import type { SectionFilterState, SectionKey, SortPreference, ThemePreference } from "./types";
+import { EMPTY_FILTER_STATE } from "./types";
 import {
   MERGED_COUNT_DEFAULT,
   MERGED_COUNT_MAX,
@@ -29,6 +32,18 @@ import {
   STORAGE_KEYS,
 } from "./constants";
 import "./App.css";
+
+function resolveTheme(preference: ThemePreference): "dark" | "light" {
+  if (preference === "dark") {
+    return "dark";
+  }
+  if (preference === "light") {
+    return "light";
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
 
 function App() {
   const [tokenInput, setTokenInput] = useState(() =>
@@ -65,6 +80,9 @@ function App() {
   const [sectionHideDrafts, setSectionHideDrafts] = useState<
     Record<SectionKey, boolean>
   >(readSectionHideDrafts);
+  const [sectionFilterPreferences, setSectionFilterPreferences] = useState<
+    Record<SectionKey, SectionFilterState>
+  >(readSectionFilterPreferences);
   const [refreshTick, setRefreshTick] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [needsAttentionUserFilter, setNeedsAttentionUserFilter] = useState<ReadonlySet<string>>(new Set());
@@ -84,18 +102,6 @@ function App() {
   });
 
   const menu = useMenuDismiss();
-
-  function resolveTheme(preference: ThemePreference): "dark" | "light" {
-    if (preference === "dark") {
-      return "dark";
-    }
-    if (preference === "light") {
-      return "light";
-    }
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  }
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -193,6 +199,14 @@ function App() {
     menu.handleCloseSectionMenu();
   }
 
+  function handleSetSectionFilter(sectionKey: SectionKey, filter: SectionFilterState): void {
+    setSectionFilterPreferences((current) => {
+      const next = { ...current, [sectionKey]: filter };
+      writeSectionFilterPreferences(next);
+      return next;
+    });
+  }
+
   function handleToggleSectionHideDrafts(sectionKey: SectionKey): void {
     setSectionHideDrafts((current) => {
       const next = { ...current, [sectionKey]: !current[sectionKey] };
@@ -247,6 +261,10 @@ function App() {
     applySectionSort(prData.needsAttention, sectionSortPreferences.needsAttention),
     sectionHideDrafts.needsAttention,
   );
+  const funnelFilteredNeedsAttention = applySectionFilter(
+    displayNeedsAttention,
+    sectionFilterPreferences.needsAttention,
+  );
 
   const needsAttentionUsers = useMemo(() => {
     const seen = new Map<string, string>();
@@ -259,20 +277,28 @@ function App() {
   }, [displayNeedsAttention]);
 
   const filteredNeedsAttention = useMemo(() => {
-    if (needsAttentionUserFilter.size === 0) return displayNeedsAttention;
-    return displayNeedsAttention.filter(
+    if (needsAttentionUserFilter.size === 0) return funnelFilteredNeedsAttention;
+    return funnelFilteredNeedsAttention.filter(
       (pr) => needsAttentionUserFilter.has(pr.author),
     );
-  }, [displayNeedsAttention, needsAttentionUserFilter]);
+  }, [funnelFilteredNeedsAttention, needsAttentionUserFilter]);
 
 
   const displayYourPrs = applyDraftFilter(
     applySectionSort(prData.yourPrs, sectionSortPreferences.yourPrs),
     sectionHideDrafts.yourPrs,
   );
+  const filteredYourPrs = applySectionFilter(
+    displayYourPrs,
+    sectionFilterPreferences.yourPrs,
+  );
   const displayRelatedToYou = applyDraftFilter(
     applySectionSort(prData.relatedToYou, sectionSortPreferences.relatedToYou),
     sectionHideDrafts.relatedToYou,
+  );
+  const funnelFilteredRelatedToYou = applySectionFilter(
+    displayRelatedToYou,
+    sectionFilterPreferences.relatedToYou,
   );
 
   const relatedToYouUsers = useMemo(() => {
@@ -286,14 +312,18 @@ function App() {
   }, [displayRelatedToYou]);
 
   const filteredRelatedToYou = useMemo(() => {
-    if (relatedToYouUserFilter.size === 0) return displayRelatedToYou;
-    return displayRelatedToYou.filter(
+    if (relatedToYouUserFilter.size === 0) return funnelFilteredRelatedToYou;
+    return funnelFilteredRelatedToYou.filter(
       (pr) => relatedToYouUserFilter.has(pr.author),
     );
-  }, [displayRelatedToYou, relatedToYouUserFilter]);
+  }, [funnelFilteredRelatedToYou, relatedToYouUserFilter]);
   const displayStalePrs = applyDraftFilter(
     applySectionSort(prData.stalePrs, sectionSortPreferences.stalePrs),
     sectionHideDrafts.stalePrs,
+  );
+  const filteredStalePrs = applySectionFilter(
+    displayStalePrs,
+    sectionFilterPreferences.stalePrs,
   );
 
   const refreshLabel = prData.isRevalidating
@@ -306,8 +336,11 @@ function App() {
 
   const sharedSectionProps = {
     openSectionMenuKey: menu.openSectionMenuKey,
+    openSectionFilterKey: menu.openSectionFilterKey,
     onToggleSectionMenu: menu.handleToggleSectionMenu,
+    onToggleSectionFilter: menu.handleToggleSectionFilter,
     onSetSort: handleSetSectionSort,
+    onSetFilter: handleSetSectionFilter,
     dimViewed,
     viewedMap: prData.viewedMap,
     stalePreferences: prData.stalePreferences,
@@ -348,11 +381,14 @@ function App() {
         sectionKey="needsAttention"
         sectionKind="active"
         prs={filteredNeedsAttention}
+        filterPreference={sectionFilterPreferences.needsAttention}
+        unfilteredPrs={displayNeedsAttention}
+        hideAuthorFilter={true}
         isOpen={isNeedsAttentionOpen}
         onToggleOpen={() => setIsNeedsAttentionOpen((current) => !current)}
+        onClearFilters={() => handleSetSectionFilter("needsAttention", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="Nothing currently needs your immediate attention."
         emptyDisconnectedMessage="Add org + PAT above to classify pull requests."
-        updatedCount={filteredNeedsAttention.filter((pr) => pr.stateLabel).length}
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Classifying..." : undefined}
         sortPreference={sectionSortPreferences.needsAttention}
         hideDrafts={sectionHideDrafts.needsAttention}
@@ -383,12 +419,14 @@ function App() {
         title="Your PRs"
         sectionKey="yourPrs"
         sectionKind="active"
-        prs={displayYourPrs}
+        prs={filteredYourPrs}
+        filterPreference={sectionFilterPreferences.yourPrs}
+        unfilteredPrs={displayYourPrs}
         isOpen={isYourPrsOpen}
         onToggleOpen={() => setIsYourPrsOpen((current) => !current)}
+        onClearFilters={() => handleSetSectionFilter("yourPrs", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No assigned or authored pull requests right now."
         emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
-        updatedCount={displayYourPrs.filter((pr) => pr.stateLabel).length}
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Loading..." : undefined}
         sortPreference={sectionSortPreferences.yourPrs}
         hideDrafts={sectionHideDrafts.yourPrs}
@@ -401,11 +439,14 @@ function App() {
         sectionKey="relatedToYou"
         sectionKind="active"
         prs={filteredRelatedToYou}
+        filterPreference={sectionFilterPreferences.relatedToYou}
+        unfilteredPrs={displayRelatedToYou}
+        hideAuthorFilter={true}
         isOpen={isRelatedToYouOpen}
         onToggleOpen={() => setIsRelatedToYouOpen((current) => !current)}
+        onClearFilters={() => handleSetSectionFilter("relatedToYou", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No non-urgent related pull requests right now."
         emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
-        updatedCount={filteredRelatedToYou.filter((pr) => pr.stateLabel).length}
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Loading..." : undefined}
         sortPreference={sectionSortPreferences.relatedToYou}
         hideDrafts={sectionHideDrafts.relatedToYou}
@@ -443,9 +484,12 @@ function App() {
         title="Stale PRs"
         sectionKey="stalePrs"
         sectionKind="stale"
-        prs={displayStalePrs}
+        prs={filteredStalePrs}
+        filterPreference={sectionFilterPreferences.stalePrs}
+        unfilteredPrs={displayStalePrs}
         isOpen={isStaleSectionOpen}
         onToggleOpen={() => setIsStaleSectionOpen((current) => !current)}
+        onClearFilters={() => handleSetSectionFilter("stalePrs", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No stale pull requests right now."
         emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
         sortPreference={sectionSortPreferences.stalePrs}

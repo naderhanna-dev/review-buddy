@@ -7,6 +7,9 @@ import {
   type PullRequest,
   type Review,
   sortByCreatedAt,
+  sortByAuthor,
+  sortByRepository,
+  sortByLineChanges,
 } from './classification'
 
 const noActivity: ActivitySignals = {
@@ -445,5 +448,192 @@ describe('sortByCreatedAt', () => {
 
     expect(sorted).not.toBe(prs)
     expect(prs[0].createdAtIso).toBe('2026-03-20T00:00:00Z')
+  })
+})
+
+describe('sortByAuthor', () => {
+  function makePr(overrides: Partial<PullRequest> = {}): PullRequest {
+    return {
+      id: 1, number: 1, title: '', repository: '', repositoryUrl: '',
+      author: '', authorAvatarUrl: '', authorProfileUrl: '',
+      requestedReviewers: [], updatedAt: '', updatedAtIso: '',
+      createdAtIso: '', url: '', checkState: 'pending',
+      stateLabel: '', stateClass: '', reason: '',
+      ...overrides,
+    }
+  }
+
+  it('sorts authors alphabetically A-Z', () => {
+    const prs = [
+      makePr({ author: 'Charlie' }),
+      makePr({ author: 'Alice' }),
+      makePr({ author: 'Bob' }),
+    ]
+    const sorted = sortByAuthor(prs)
+    expect(sorted.map(pr => pr.author)).toEqual(['Alice', 'Bob', 'Charlie'])
+  })
+
+  it('sorts case-insensitively', () => {
+    const prs = [
+      makePr({ author: 'charlie' }),
+      makePr({ author: 'Alice' }),
+      makePr({ author: 'BOB' }),
+    ]
+    const sorted = sortByAuthor(prs)
+    expect(sorted.map(pr => pr.author)).toEqual(['Alice', 'BOB', 'charlie'])
+  })
+
+  it('sorts empty-string authors to end', () => {
+    const prs = [
+      makePr({ author: '' }),
+      makePr({ author: 'Alice' }),
+      makePr({ author: 'Bob' }),
+    ]
+    const sorted = sortByAuthor(prs)
+    expect(sorted.map(pr => pr.author)).toEqual(['Alice', 'Bob', ''])
+  })
+
+  it('tie-breaks by updatedAtIso descending', () => {
+    const prs = [
+      makePr({ author: 'Alice', updatedAtIso: '2026-03-10T00:00:00Z' }),
+      makePr({ author: 'Alice', updatedAtIso: '2026-03-20T00:00:00Z' }),
+    ]
+    const sorted = sortByAuthor(prs)
+    expect(sorted.map(pr => pr.updatedAtIso)).toEqual([
+      '2026-03-20T00:00:00Z',
+      '2026-03-10T00:00:00Z',
+    ])
+  })
+
+  it('does not mutate the original array', () => {
+    const prs = [makePr({ author: 'Bob' }), makePr({ author: 'Alice' })]
+    const sorted = sortByAuthor(prs)
+    expect(sorted).not.toBe(prs)
+    expect(prs[0].author).toBe('Bob')
+  })
+})
+
+describe('sortByRepository', () => {
+  function makePr(overrides: Partial<PullRequest> = {}): PullRequest {
+    return {
+      id: 1, number: 1, title: '', repository: '', repositoryUrl: '',
+      author: '', authorAvatarUrl: '', authorProfileUrl: '',
+      requestedReviewers: [], updatedAt: '', updatedAtIso: '',
+      createdAtIso: '', url: '', checkState: 'pending',
+      stateLabel: '', stateClass: '', reason: '',
+      ...overrides,
+    }
+  }
+
+  it('sorts repositories alphabetically A-Z', () => {
+    const prs = [
+      makePr({ repository: 'org/zoo' }),
+      makePr({ repository: 'org/alpha' }),
+      makePr({ repository: 'org/mid' }),
+    ]
+    const sorted = sortByRepository(prs)
+    expect(sorted.map(pr => pr.repository)).toEqual(['org/alpha', 'org/mid', 'org/zoo'])
+  })
+
+  it('sorts case-insensitively', () => {
+    const prs = [
+      makePr({ repository: 'org/Zoo' }),
+      makePr({ repository: 'org/alpha' }),
+      makePr({ repository: 'org/MID' }),
+    ]
+    const sorted = sortByRepository(prs)
+    expect(sorted.map(pr => pr.repository)).toEqual(['org/alpha', 'org/MID', 'org/Zoo'])
+  })
+
+  it('sorts empty-string repository to end', () => {
+    const prs = [
+      makePr({ repository: '' }),
+      makePr({ repository: 'org/alpha' }),
+    ]
+    const sorted = sortByRepository(prs)
+    expect(sorted.map(pr => pr.repository)).toEqual(['org/alpha', ''])
+  })
+
+  it('tie-breaks by updatedAtIso descending', () => {
+    const prs = [
+      makePr({ repository: 'org/alpha', updatedAtIso: '2026-03-10T00:00:00Z' }),
+      makePr({ repository: 'org/alpha', updatedAtIso: '2026-03-20T00:00:00Z' }),
+    ]
+    const sorted = sortByRepository(prs)
+    expect(sorted.map(pr => pr.updatedAtIso)).toEqual([
+      '2026-03-20T00:00:00Z',
+      '2026-03-10T00:00:00Z',
+    ])
+  })
+
+  it('does not mutate the original array', () => {
+    const prs = [makePr({ repository: 'org/zoo' }), makePr({ repository: 'org/alpha' })]
+    const sorted = sortByRepository(prs)
+    expect(sorted).not.toBe(prs)
+    expect(prs[0].repository).toBe('org/zoo')
+  })
+})
+
+describe('sortByLineChanges', () => {
+  function makePr(overrides: Partial<PullRequest> = {}): PullRequest {
+    return {
+      id: 1, number: 1, title: '', repository: '', repositoryUrl: '',
+      author: '', authorAvatarUrl: '', authorProfileUrl: '',
+      requestedReviewers: [], updatedAt: '', updatedAtIso: '',
+      createdAtIso: '', url: '', checkState: 'pending',
+      stateLabel: '', stateClass: '', reason: '',
+      ...overrides,
+    }
+  }
+
+  it('sorts by total churn descending (largest first)', () => {
+    const prs = [
+      makePr({ additions: 5, deletions: 5 }),
+      makePr({ additions: 100, deletions: 50 }),
+      makePr({ additions: 20, deletions: 10 }),
+    ]
+    const sorted = sortByLineChanges(prs)
+    expect(sorted.map(pr => (pr.additions ?? 0) + (pr.deletions ?? 0))).toEqual([150, 30, 10])
+  })
+
+  it('sorts PRs with both additions and deletions undefined to end', () => {
+    const prs = [
+      makePr({ additions: undefined, deletions: undefined }),
+      makePr({ additions: 10, deletions: 5 }),
+    ]
+    const sorted = sortByLineChanges(prs)
+    expect(sorted[0].additions).toBe(10)
+    expect(sorted[1].additions).toBeUndefined()
+  })
+
+  it('counts PRs with only one field defined', () => {
+    const prs = [
+      makePr({ additions: 10, deletions: undefined }),
+      makePr({ additions: 5, deletions: 20 }),
+    ]
+    const sorted = sortByLineChanges(prs)
+    expect(sorted.map(pr => (pr.additions ?? 0) + (pr.deletions ?? 0))).toEqual([25, 10])
+  })
+
+  it('tie-breaks by updatedAtIso descending', () => {
+    const prs = [
+      makePr({ additions: 10, deletions: 5, updatedAtIso: '2026-03-10T00:00:00Z' }),
+      makePr({ additions: 10, deletions: 5, updatedAtIso: '2026-03-20T00:00:00Z' }),
+    ]
+    const sorted = sortByLineChanges(prs)
+    expect(sorted.map(pr => pr.updatedAtIso)).toEqual([
+      '2026-03-20T00:00:00Z',
+      '2026-03-10T00:00:00Z',
+    ])
+  })
+
+  it('does not mutate the original array', () => {
+    const prs = [
+      makePr({ additions: 5, deletions: 5 }),
+      makePr({ additions: 100, deletions: 50 }),
+    ]
+    const sorted = sortByLineChanges(prs)
+    expect(sorted).not.toBe(prs)
+    expect(prs[0].additions).toBe(5)
   })
 })
