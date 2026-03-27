@@ -51,68 +51,70 @@ export function FilterMenu({ prs, filter, onSetFilter, hideAuthor = false }: Pro
 
   return (
     <div className="filter-menu" role="menu" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-      {repos.length > 0 && (
+      <div className="filter-menu-scroll">
+        {repos.length > 0 && (
+          <div className="filter-dimension">
+            <span className="row-menu-hint">Repository</span>
+            {repos.map((repo) => (
+              <label key={repo} className="filter-option">
+                <input
+                  type="checkbox"
+                  checked={filter.repository.has(repo)}
+                  onChange={() => toggle("repository", repo)}
+                />
+                <span className="filter-option-label">{repo}</span>
+              </label>
+            ))}
+          </div>
+        )}
         <div className="filter-dimension">
-          <span className="row-menu-hint">Repository</span>
-          {repos.map((repo) => (
-            <label key={repo} className="filter-option">
+          <span className="row-menu-hint">Check status</span>
+          {CHECK_STATUS_OPTIONS.map(({ value, label }) => (
+            <label key={value} className="filter-option">
               <input
                 type="checkbox"
-                checked={filter.repository.has(repo)}
-                onChange={() => toggle("repository", repo)}
+                checked={filter.checkStatus.has(value)}
+                onChange={() => toggle("checkStatus", value)}
               />
-              <span className="filter-option-label">{repo}</span>
+              <span className="filter-option-label">{label}</span>
             </label>
           ))}
         </div>
-      )}
-      <div className="filter-dimension">
-        <span className="row-menu-hint">Check status</span>
-        {CHECK_STATUS_OPTIONS.map(({ value, label }) => (
-          <label key={value} className="filter-option">
-            <input
-              type="checkbox"
-              checked={filter.checkStatus.has(value)}
-              onChange={() => toggle("checkStatus", value)}
-            />
-            <span className="filter-option-label">{label}</span>
-          </label>
-        ))}
+        {sortedLabels.length > 0 && (
+          <div className="filter-dimension">
+            <span className="row-menu-hint">Labels</span>
+            {sortedLabels.map(([name, color]) => (
+              <label key={name} className="filter-option">
+                <input
+                  type="checkbox"
+                  checked={filter.labels.has(name)}
+                  onChange={() => toggle("labels", name)}
+                />
+                <span
+                  className="filter-label-swatch"
+                  style={{ backgroundColor: `#${color}` }}
+                />
+                <span className="filter-option-label">{name}</span>
+              </label>
+            ))}
+          </div>
+        )}
+        {!hideAuthor && authors.length > 0 && (
+          <div className="filter-dimension">
+            <span className="row-menu-hint">Author</span>
+            {authors.map((author) => (
+              <label key={author} className="filter-option">
+                <input
+                  type="checkbox"
+                  checked={filter.author.has(author)}
+                  onChange={() => toggle("author", author)}
+                />
+                <span className="filter-option-label">{author}</span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
-      {sortedLabels.length > 0 && (
-        <div className="filter-dimension">
-          <span className="row-menu-hint">Labels</span>
-          {sortedLabels.map(([name, color]) => (
-            <label key={name} className="filter-option">
-              <input
-                type="checkbox"
-                checked={filter.labels.has(name)}
-                onChange={() => toggle("labels", name)}
-              />
-              <span
-                className="filter-label-swatch"
-                style={{ backgroundColor: `#${color}` }}
-              />
-              <span className="filter-option-label">{name}</span>
-            </label>
-          ))}
-        </div>
-      )}
-      {!hideAuthor && authors.length > 0 && (
-        <div className="filter-dimension">
-          <span className="row-menu-hint">Author</span>
-          {authors.map((author) => (
-            <label key={author} className="filter-option">
-              <input
-                type="checkbox"
-                checked={filter.author.has(author)}
-                onChange={() => toggle("author", author)}
-              />
-              <span className="filter-option-label">{author}</span>
-            </label>
-          ))}
-        </div>
-      )}
       {isAnyActive && (
         <button
           type="button"
