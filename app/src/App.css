@@ -340,6 +340,111 @@
   margin: 4px 0;
 }
 
+/* Filter menu */
+.filter-menu-wrap {
+  position: relative;
+}
+
+.filter-menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--fg-muted, currentColor);
+  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+}
+
+.filter-menu-toggle:hover {
+  background: var(--bg-hover, rgba(128, 128, 128, 0.15));
+}
+
+.filter-menu-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.filter-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 100;
+  min-width: 200px;
+  max-width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--bg-overlay, var(--bg-surface, #fff));
+  border: 1px solid var(--border-default, rgba(0,0,0,0.15));
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 6px 0;
+}
+
+.filter-dimension {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-muted, rgba(128, 128, 128, 0.15));
+}
+
+.filter-dimension:last-of-type {
+  border-bottom: none;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--fg-default, inherit);
+}
+
+.filter-option:hover {
+  background: var(--bg-hover, rgba(128, 128, 128, 0.08));
+}
+
+.filter-option input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.filter-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-label-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.filter-clear-btn {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 6px 8px 2px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-default, rgba(0,0,0,0.2));
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--fg-muted, inherit);
+  text-align: center;
+}
+
+.filter-clear-btn:hover {
+  background: var(--bg-hover, rgba(128, 128, 128, 0.08));
+}
+
 .connection-summary {
   margin: 0;
   padding: 0.9rem 1rem;
