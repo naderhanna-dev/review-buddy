@@ -1,6 +1,6 @@
 import type { PullRequest } from "./classification";
 import type { SortPreference } from "../types";
-import { sortByCreatedAt } from "./classification";
+import { sortByCreatedAt, sortByAuthor, sortByRepository, sortByLineChanges } from "./classification";
 
 export function applySectionSort(
   prs: PullRequest[],
@@ -11,6 +11,15 @@ export function applySectionSort(
   }
   if (preference === "newest-first") {
     return sortByCreatedAt(prs, "desc");
+  }
+  if (preference === "author-az") {
+    return sortByAuthor(prs);
+  }
+  if (preference === "repo-az") {
+    return sortByRepository(prs);
+  }
+  if (preference === "line-changes-desc") {
+    return sortByLineChanges(prs);
   }
   return prs;
 }
