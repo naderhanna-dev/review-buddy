@@ -4,7 +4,7 @@ export function CheckDetailsPanel({ checkStatuses, isLoading, error }: { checkSt
   return (
     <div data-testid="check-details-panel" className="check-details-panel">
       {isLoading ? (
-        <p className="check-details-loading">Loading checks…</p>
+        <p className="check-details-loading">Loading checks</p>
       ) : error ? (
         <p className="check-details-error">{error}</p>
       ) : (
