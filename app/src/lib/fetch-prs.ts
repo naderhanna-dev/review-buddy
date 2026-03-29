@@ -4,6 +4,7 @@ import {
   prViewKey,
   sortByUpdatedDesc,
   type ActivitySignals,
+  type CheckStatus,
   type PolicyBotStatus,
   type PullDetails,
   type PullRequest,
@@ -15,6 +16,7 @@ import {
   type GqlPullRequestNode,
   type GqlSearchResponse,
   type GqlTeamsResponse,
+  PR_CHECKS_QUERY,
   PR_DETAILS_FRAGMENT,
   SEARCH_OPEN_PRS_QUERY,
   VIEWER_AND_TEAMS_QUERY,
@@ -292,6 +294,7 @@ export async function fetchAndClassifyPullRequests(
       }
     }
 
+
     const myLatestReview = reviews
       .filter(
         (review) =>
@@ -535,4 +538,115 @@ export async function fetchRecentlyMergedPRs(
       mergedAtIso: pr.mergedAt as string,
       role,
     }));
+}
+
+type PRChecksContextNode =
+  | { __typename: 'StatusContext'; context: string; state: string; targetUrl: string | null; description: string | null }
+  | { __typename: 'CheckRun'; name: string; status: string; conclusion: string | null; detailsUrl: string | null }
+  | { __typename: string }
+
+type PRChecksResponse = {
+  repository: {
+    pullRequest: {
+      headRefOid: string
+      headRef: {
+        target: {
+          statusCheckRollup: {
+            contexts: {
+              nodes: Array<PRChecksContextNode>
+            }
+          } | null
+        } | null
+      } | null
+    } | null
+  } | null
+}
+
+async function fetchCheckRunsViaRest(
+  owner: string,
+  name: string,
+  sha: string,
+  token: string,
+): Promise<CheckStatus[]> {
+  type RestCheckRun = { name: string; status: string; conclusion: string | null; details_url: string | null }
+
+  const allRuns: RestCheckRun[] = []
+  let url: string | null = `https://api.github.com/repos/${owner}/${name}/commits/${sha}/check-runs?per_page=100`
+
+  while (url) {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    })
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Check details unavailable — your token needs the "checks:read" permission (or a classic PAT with repo scope).')
+    }
+    if (!response.ok) { break }
+    const data = await response.json() as { check_runs: RestCheckRun[] }
+    allRuns.push(...data.check_runs)
+    const linkHeader = response.headers.get('link')
+    const nextMatch = linkHeader?.match(/<([^>]+)>;\s*rel="next"/)
+    url = nextMatch?.[1] ?? null
+  }
+
+  return allRuns.flatMap((run): CheckStatus[] => {
+    const conclusion = run.conclusion?.toLowerCase() ?? null
+    if (conclusion === 'success' || conclusion === 'skipped' || conclusion === 'neutral') { return [] }
+    const state: CheckStatus['state'] = conclusion === null ? 'pending'
+      : (conclusion === 'failure' || conclusion === 'timed_out' || conclusion === 'startup_failure' || conclusion === 'action_required') ? 'failure'
+      : 'error'
+    return [{ name: run.name, state, url: run.details_url, description: null }]
+  })
+}
+
+export async function fetchPRCheckStatuses(
+  repository: string,
+  number: number,
+  token: string,
+): Promise<CheckStatus[]> {
+  const slashIndex = repository.indexOf('/')
+  if (slashIndex === -1) { return [] }
+  const owner = repository.slice(0, slashIndex)
+  const name = repository.slice(slashIndex + 1)
+
+  const result = await graphqlFetch<PRChecksResponse>(
+    PR_CHECKS_QUERY,
+    { owner, name, number },
+    token,
+  )
+
+  const pullRequest = result.repository?.pullRequest
+  const headRefOid = pullRequest?.headRefOid
+  const rollup = pullRequest?.headRef?.target?.statusCheckRollup
+
+  if (rollup === null || rollup === undefined) {
+    if (!headRefOid) { return [] }
+    return fetchCheckRunsViaRest(owner, name, headRefOid, token)
+  }
+
+  const nodes = rollup.contexts.nodes
+
+  return nodes.flatMap((node): CheckStatus[] => {
+    if (node.__typename === 'StatusContext' && 'context' in node) {
+      if (node.state === 'SUCCESS') { return [] }
+      return [{
+        name: node.context,
+        state: node.state.toLowerCase() as CheckStatus['state'],
+        url: node.targetUrl,
+        description: node.description,
+      }]
+    }
+    if (node.__typename === 'CheckRun' && 'name' in node) {
+      const conclusion = node.conclusion?.toLowerCase() ?? null
+      if (conclusion === 'success' || conclusion === 'skipped' || conclusion === 'neutral') { return [] }
+      const state: CheckStatus['state'] = conclusion === null ? 'pending'
+        : (conclusion === 'failure' || conclusion === 'timed_out' || conclusion === 'startup_failure' || conclusion === 'action_required') ? 'failure'
+        : 'error'
+      return [{ name: node.name, state, url: node.detailsUrl, description: null }]
+    }
+    return []
+  })
 }
