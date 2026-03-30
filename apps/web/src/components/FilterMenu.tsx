@@ -1,6 +1,5 @@
-import type { PullRequest } from "../lib/classification";
-import type { SectionFilterState } from "../types";
-import { EMPTY_FILTER_STATE } from "../types";
+import { EMPTY_FILTER_STATE } from "@reviewradar/core";
+import type { PullRequest, SectionFilterState } from "@reviewradar/core";
 
 type Props = {
   prs: PullRequest[];

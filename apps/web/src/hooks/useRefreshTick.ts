@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
-import { SmartRefreshController } from "../lib/smart-refresh";
 import {
+  SmartRefreshController,
   FALLBACK_REFRESH_MS,
   NOTIFICATION_FALLBACK_MS,
   REFRESH_FOCUS_COOLDOWN_MS,
-} from "../constants";
+} from "@reviewradar/core";
 
 export function useRefreshTick({
   org,

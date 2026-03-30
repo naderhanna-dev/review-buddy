@@ -1,6 +1,5 @@
-import type { PullRequest } from "../lib/classification";
-import type { StalePreference } from "../types";
-import { prViewKey } from "../lib/classification";
+import { prViewKey } from "@reviewradar/core";
+import type { PullRequest, StalePreference } from "@reviewradar/core";
 
 function getContrastColor(hexColor: string): string {
   const r = parseInt(hexColor.slice(0, 2), 16);

@@ -1,6 +1,5 @@
-import { prViewKey } from "../lib/classification";
-import type { PullRequest } from "../lib/classification";
-import type { SectionFilterState, SectionKey, SortPreference, StalePreference } from "../types";
+import { prViewKey } from "@reviewradar/core";
+import type { PullRequest, SectionFilterState, SectionKey, SortPreference, StalePreference } from "@reviewradar/core";
 import { SectionHeader } from "./SectionHeader";
 import { PullRequestRow } from "./PullRequestRow";
 

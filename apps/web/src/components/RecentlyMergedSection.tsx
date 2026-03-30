@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { MergedPullRequest } from "../types";
+import type { MergedPullRequest } from "@reviewradar/core";
 import { MergedPrRow } from "./MergedPrRow";
 
 export function RecentlyMergedSection({

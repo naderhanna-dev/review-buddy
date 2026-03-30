@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import { MERGED_COUNT_MAX, MERGED_COUNT_MIN } from "../constants";
+import { MERGED_COUNT_MAX, MERGED_COUNT_MIN } from "@reviewradar/core";
 
 export function SettingsDrawer({
   org,

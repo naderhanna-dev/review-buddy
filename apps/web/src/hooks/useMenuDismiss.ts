@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { SectionKey } from "../types";
+import type { SectionKey } from "@reviewradar/core";
 
 export type MenuDismissState = {
   openRowMenuKey: string | null;

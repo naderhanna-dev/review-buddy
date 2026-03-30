@@ -1,4 +1,4 @@
-import type { MergedPullRequest } from "../types";
+import type { MergedPullRequest } from "@reviewradar/core";
 
 export function MergedPrRow({ pr }: { pr: MergedPullRequest }) {
   return (

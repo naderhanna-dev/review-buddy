@@ -1,5 +1,4 @@
-import type { SectionFilterState, SectionKey, SortPreference } from "../types";
-import type { PullRequest } from "../lib/classification";
+import type { PullRequest, SectionFilterState, SectionKey, SortPreference } from "@reviewradar/core";
 import { FilterMenu } from "./FilterMenu";
 
 export function SectionHeader({

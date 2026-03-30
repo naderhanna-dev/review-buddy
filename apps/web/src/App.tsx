@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { etagCache } from "./lib/etag-cache";
-import { invalidatePRCache } from "./lib/pr-cache";
 import {
+  etagCache,
+  invalidatePRCache,
   readCompactPreference,
   readDimViewedPreference,
   readMergedCountPreference,
@@ -14,8 +14,22 @@ import {
   readStorageItem,
   readThemePreference,
   writeSectionFilterPreferences,
-} from "./lib/storage";
-import { applySectionSort, applySectionFilter, applyDraftFilter, formatRefreshAge } from "./lib/pr-utils";
+  applySectionSort,
+  applySectionFilter,
+  applyDraftFilter,
+  formatRefreshAge,
+  EMPTY_FILTER_STATE,
+  MERGED_COUNT_DEFAULT,
+  MERGED_COUNT_MAX,
+  MERGED_COUNT_MIN,
+  STORAGE_KEYS,
+} from "@reviewradar/core";
+import type {
+  SectionFilterState,
+  SectionKey,
+  SortPreference,
+  ThemePreference,
+} from "@reviewradar/core";
 import { usePRData } from "./hooks/usePRData";
 import { useRefreshTick } from "./hooks/useRefreshTick";
 import { useMenuDismiss } from "./hooks/useMenuDismiss";
@@ -23,14 +37,6 @@ import { PrSection } from "./components/PrSection";
 import { RecentlyMergedSection } from "./components/RecentlyMergedSection";
 import { SettingsDrawer } from "./components/SettingsDrawer";
 import { UserFilterBar } from "./components/UserFilterBar";
-import type { SectionFilterState, SectionKey, SortPreference, ThemePreference } from "./types";
-import { EMPTY_FILTER_STATE } from "./types";
-import {
-  MERGED_COUNT_DEFAULT,
-  MERGED_COUNT_MAX,
-  MERGED_COUNT_MIN,
-  STORAGE_KEYS,
-} from "./constants";
 import "./App.css";
 
 function resolveTheme(preference: ThemePreference): "dark" | "light" {

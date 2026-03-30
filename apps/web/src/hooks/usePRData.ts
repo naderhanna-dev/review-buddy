@@ -1,23 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { prViewKey } from "../lib/classification";
-import type { PullRequest } from "../lib/classification";
-import { RateLimitError } from "../lib/github";
 import {
+  prViewKey,
+  RateLimitError,
   getCacheTimestamp,
   invalidatePRCache,
   isCacheStale,
   PR_CACHE_STORAGE_KEY,
   readCachedPRData,
   writeCachedPRData,
-} from "../lib/pr-cache";
-import {
   fetchAndClassifyPullRequests,
   fetchRecentlyMergedPRs,
   fetchViewerLogin,
-} from "../lib/fetch-prs";
-import { readStalePreferences, readViewedMap } from "../lib/storage";
-import type { MergedPullRequest, StalePreference } from "../types";
-import { STORAGE_KEYS } from "../constants";
+  readStalePreferences,
+  readViewedMap,
+  STORAGE_KEYS,
+} from "@reviewradar/core";
+import type { PullRequest, MergedPullRequest, StalePreference } from "@reviewradar/core";
 
 export type PRDataResult = {
   stalePrs: PullRequest[];
