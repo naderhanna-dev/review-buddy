@@ -1,6 +1,6 @@
-import type { ThemePreference, StalePreference, SectionKey, SortPreference, SectionFilterState } from "../types";
-import { STORAGE_KEYS, MERGED_COUNT_DEFAULT, MERGED_COUNT_MIN, MERGED_COUNT_MAX } from "../constants";
-import { EMPTY_FILTER_STATE } from "../types";
+import type { ThemePreference, StalePreference, SectionKey, SortPreference, SectionFilterState } from "./types";
+import { STORAGE_KEYS, MERGED_COUNT_DEFAULT, MERGED_COUNT_MIN, MERGED_COUNT_MAX } from "./constants";
+import { EMPTY_FILTER_STATE } from "./types";
 
 const VALID_SORT_VALUES: ReadonlySet<string> = new Set([
   "oldest-first",

@@ -19,12 +19,12 @@ import {
   SEARCH_OPEN_PRS_QUERY,
   VIEWER_AND_TEAMS_QUERY,
 } from "./graphql";
-import type { ClassifiedPullRequests, MergedPullRequest, StalePreference } from "../types";
+import type { ClassifiedPullRequests, MergedPullRequest, StalePreference } from "./types";
 import {
   SEARCH_PAGE_SIZE,
   SEARCH_MAX_PAGES,
   STALE_AFTER_MS,
-} from "../constants";
+} from "./constants";
 import { sortByPriorityAndUpdated } from "./pr-utils";
 
 export async function fetchViewerLogin(token: string): Promise<string> {

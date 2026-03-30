@@ -1,4 +1,4 @@
-import type { PullRequest } from "./lib/classification";
+import type { PullRequest } from "./classification";
 
 export type ClassifiedPullRequests = {
   yourPrs: PullRequest[];
