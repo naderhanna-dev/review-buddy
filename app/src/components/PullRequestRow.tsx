@@ -76,6 +76,7 @@ export function PullRequestRow({
     setIsExpanded(nextExpanded);
     if (nextExpanded && checkStatuses === null) {
       setIsLoadingChecks(true);
+      setChecksError(null);
       fetchPRCheckStatuses(pr.repository, pr.number, token)
         .then((statuses) => { setCheckStatuses(statuses); })
         .catch((error: unknown) => {

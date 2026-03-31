@@ -581,10 +581,15 @@ async function fetchCheckRunsViaRest(
         'X-GitHub-Api-Version': '2022-11-28',
       },
     })
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
+      throw new Error('Check details unavailable — your GitHub token is invalid or has expired.')
+    }
+    if (response.status === 403) {
       throw new Error('Check details unavailable — your token needs the "checks:read" permission (or a classic PAT with repo scope).')
     }
-    if (!response.ok) { break }
+    if (!response.ok) {
+      throw new Error(`Failed to fetch check runs (${response.status} ${response.statusText}).`)
+    }
     const data = await response.json() as { check_runs: RestCheckRun[] }
     allRuns.push(...data.check_runs)
     const linkHeader = response.headers.get('link')
@@ -632,12 +637,20 @@ export async function fetchPRCheckStatuses(
   return nodes.flatMap((node): CheckStatus[] => {
     if (node.__typename === 'StatusContext' && 'context' in node) {
       if (node.state === 'SUCCESS') { return [] }
-      return [{
-        name: node.context,
-        state: node.state.toLowerCase() as CheckStatus['state'],
-        url: node.targetUrl,
-        description: node.description,
-      }]
+      let statusContextState: CheckStatus['state']
+      switch (node.state) {
+        case 'PENDING':
+        case 'EXPECTED':
+          statusContextState = 'pending'
+          break
+        case 'FAILURE':
+          statusContextState = 'failure'
+          break
+        case 'ERROR':
+        default:
+          statusContextState = 'error'
+      }
+      return [{ name: node.context, state: statusContextState, url: node.targetUrl, description: node.description }]
     }
     if (node.__typename === 'CheckRun' && 'name' in node) {
       const conclusion = node.conclusion?.toLowerCase() ?? null

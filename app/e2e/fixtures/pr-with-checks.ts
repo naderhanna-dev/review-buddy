@@ -1,11 +1,4 @@
-import type { PullRequest } from '../../src/lib/classification'
-
-export type CheckStatus = {
-  name: string
-  state: 'success' | 'failure' | 'pending'
-  url: string | null
-  description: string | null
-}
+import type { PullRequest, CheckStatus } from '../../src/lib/classification'
 
 export type PullRequestWithChecks = PullRequest & {
   checkStatuses: CheckStatus[]

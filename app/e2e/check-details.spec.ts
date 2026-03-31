@@ -50,20 +50,19 @@ test.beforeEach(async ({ page }) => {
           data: {
             repository: {
               pullRequest: {
-                commits: {
-                  nodes: [{
-                    commit: {
-                      statusCheckRollup: {
-                        contexts: {
-                          nodes: [
-                            { __typename: 'CheckRun', name: 'build / lint', status: 'COMPLETED', conclusion: 'FAILURE', detailsUrl: 'https://example.com/1' },
-                            { __typename: 'CheckRun', name: 'build / test', status: 'COMPLETED', conclusion: 'FAILURE', detailsUrl: 'https://example.com/2' },
-                            { __typename: 'CheckRun', name: 'deploy / preview', status: 'IN_PROGRESS', conclusion: null, detailsUrl: null },
-                          ],
-                        },
+                headRefOid: 'test-head-ref-oid',
+                headRef: {
+                  target: {
+                    statusCheckRollup: {
+                      contexts: {
+                        nodes: [
+                          { __typename: 'CheckRun', name: 'build / lint', status: 'COMPLETED', conclusion: 'FAILURE', detailsUrl: 'https://example.com/1' },
+                          { __typename: 'CheckRun', name: 'build / test', status: 'COMPLETED', conclusion: 'FAILURE', detailsUrl: 'https://example.com/2' },
+                          { __typename: 'CheckRun', name: 'deploy / preview', status: 'IN_PROGRESS', conclusion: null, detailsUrl: null },
+                        ],
                       },
                     },
-                  }],
+                  },
                 },
               },
             },

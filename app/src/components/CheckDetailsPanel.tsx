@@ -9,8 +9,8 @@ export function CheckDetailsPanel({ checkStatuses, isLoading, error }: { checkSt
         <p className="check-details-error">{error}</p>
       ) : (
         <>
-          {checkStatuses.map(check => (
-            <div key={check.name} data-testid="check-item" className="check-item">
+          {checkStatuses.map((check, index) => (
+            <div key={`${check.name}-${check.url ?? ''}-${index}`} data-testid="check-item" className="check-item">
               <span data-testid="check-item-state" className={`check-item-state ${check.state}`}>{check.state}</span>
               <span data-testid="check-item-name" className="check-item-name">{check.name}</span>
               {check.url ? <a href={check.url} target="_blank" rel="noreferrer" className="check-item-link">Details</a> : null}
