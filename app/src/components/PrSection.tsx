@@ -14,6 +14,7 @@ export function PrSection({
   emptyConnectedMessage,
   emptyDisconnectedMessage,
   isLoading,
+  token,
   hasCredentials,
   statusLabel,
   openSectionMenuKey,
@@ -80,6 +81,7 @@ export function PrSection({
   filterBar?: React.ReactNode;
   showLineChanges: boolean;
   showLabels: boolean;
+  token: string;
 }) {
   return (
     <section className="section-card">
@@ -124,6 +126,7 @@ export function PrSection({
             <PullRequestRow
               key={pr.id}
               pr={pr}
+              token={token}
               isViewed={
                 dimViewed &&
                 Boolean(viewedMap[prViewKey(pr.repository, pr.number)])

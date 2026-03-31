@@ -76,13 +76,7 @@ export type GqlPullRequestNode = {
           state: string
           contexts: {
             nodes: Array<
-              | {
-                  __typename: 'StatusContext'
-                  context: string
-                  state: string
-                  targetUrl: string | null
-                  description: string | null
-                }
+              | { __typename: 'StatusContext'; context: string; state: string; targetUrl: string | null; description: string | null }
               | { __typename: string }
             >
           }
@@ -177,7 +171,7 @@ export const PR_DETAILS_FRAGMENT = `
         oid
         statusCheckRollup {
           state
-          contexts(first: 20) {
+          contexts(first: 10) {
             nodes {
               __typename
               ... on StatusContext {
@@ -255,6 +249,41 @@ export const SEARCH_MERGED_PRS_QUERY = `
           mergedAt
           author { login avatarUrl url }
           baseRepository { nameWithOwner url }
+        }
+      }
+    }
+  }
+`
+
+export const PR_CHECKS_QUERY = `
+  query PRChecks($owner: String!, $name: String!, $number: Int!) {
+    repository(owner: $owner, name: $name) {
+      pullRequest(number: $number) {
+        headRefOid
+        headRef {
+          target {
+            ... on Commit {
+              statusCheckRollup {
+                contexts(first: 250) {
+                  nodes {
+                    __typename
+                    ... on StatusContext {
+                      context
+                      state
+                      targetUrl
+                      description
+                    }
+                    ... on CheckRun {
+                      name
+                      status
+                      conclusion
+                      detailsUrl
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }

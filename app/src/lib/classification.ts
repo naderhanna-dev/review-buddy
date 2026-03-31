@@ -4,6 +4,13 @@ export type PolicyBotStatus = {
   description: string | null
 }
 
+export type CheckStatus = {
+  name: string
+  state: 'success' | 'failure' | 'pending' | 'error'
+  url: string | null
+  description: string | null
+}
+
 export type PullRequest = {
   id: number
   number: number
@@ -32,6 +39,7 @@ export type PullRequest = {
   additions?: number
   deletions?: number
   labels?: Array<{ name: string; color: string }>
+  checkStatuses?: CheckStatus[]
 }
 
 export type PullDetails = {
