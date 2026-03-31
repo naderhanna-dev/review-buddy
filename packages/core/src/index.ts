@@ -25,6 +25,7 @@ export {
 
 // ── Classification ───────────────────────────────────────────────────
 export type {
+  CheckStatus,
   PolicyBotStatus,
   PullRequest,
   PullDetails,
@@ -57,6 +58,7 @@ export type {
 } from "./graphql";
 export {
   PR_DETAILS_FRAGMENT,
+  PR_CHECKS_QUERY,
   VIEWER_AND_TEAMS_QUERY,
   SEARCH_OPEN_PRS_QUERY,
   SEARCH_MERGED_PRS_QUERY,
@@ -127,4 +129,5 @@ export {
   fetchViewerLogin,
   fetchAndClassifyPullRequests,
   fetchRecentlyMergedPRs,
+  fetchPRCheckStatuses,
 } from "./fetch-prs";

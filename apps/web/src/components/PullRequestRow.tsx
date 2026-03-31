@@ -1,5 +1,7 @@
-import { prViewKey } from "@reviewradar/core";
-import type { PullRequest, StalePreference } from "@reviewradar/core";
+import { useState } from 'react';
+import { prViewKey, fetchPRCheckStatuses } from "@reviewradar/core";
+import type { CheckStatus, PullRequest, StalePreference } from "@reviewradar/core";
+import { CheckDetailsPanel } from './CheckDetailsPanel';
 
 function getContrastColor(hexColor: string): string {
   const r = parseInt(hexColor.slice(0, 2), 16);
@@ -12,6 +14,7 @@ function getContrastColor(hexColor: string): string {
 
 export function PullRequestRow({
   pr,
+  token,
   isViewed,
   onViewed,
   stalePreference,
@@ -26,6 +29,7 @@ export function PullRequestRow({
   showLabels,
 }: {
   pr: PullRequest;
+  token: string;
   isViewed: boolean;
   onViewed: (repository: string, number: number) => void;
   stalePreference?: StalePreference;
@@ -56,13 +60,32 @@ export function PullRequestRow({
 
   const menuKey = prViewKey(pr.repository, pr.number);
   const isMenuOpen = openMenuKey === menuKey;
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [checkStatuses, setCheckStatuses] = useState<CheckStatus[] | null>(null);
+  const [isLoadingChecks, setIsLoadingChecks] = useState(false);
+  const [checksError, setChecksError] = useState<string | null>(null);
 
   function handleViewed(): void {
     onViewed(pr.repository, pr.number);
   }
 
+  function handleRowClick(): void {
+    const nextExpanded = !isExpanded;
+    setIsExpanded(nextExpanded);
+    if (nextExpanded && checkStatuses === null) {
+      setIsLoadingChecks(true);
+      setChecksError(null);
+      fetchPRCheckStatuses(pr.repository, pr.number, token)
+        .then((statuses) => { setCheckStatuses(statuses); })
+        .catch((error: unknown) => {
+          setChecksError(error instanceof Error ? error.message : 'Failed to load check details.');
+        })
+        .finally(() => { setIsLoadingChecks(false); });
+    }
+  }
+
   return (
-    <article className={`pr-row${isViewed ? " viewed" : ""}`}>
+    <article data-testid="pr-row" className={`pr-row${isViewed ? " viewed" : ""}`} onClick={handleRowClick}>
       <div className="title-group">
         <a
           href={pr.authorProfileUrl}
@@ -71,6 +94,7 @@ export function PullRequestRow({
           rel="noreferrer"
           title={pr.author}
           aria-label={`Open ${pr.author} profile`}
+          onClick={(event) => { event.stopPropagation() }}
         >
           <img
             src={pr.authorAvatarUrl}
@@ -101,9 +125,10 @@ export function PullRequestRow({
           <a
             href={pr.url}
             className="pr-title"
+            data-testid="pr-title-link"
             target="_blank"
             rel="noreferrer"
-            onClick={handleViewed}
+            onClick={(event) => { event.stopPropagation(); handleViewed() }}
           >
             {pr.isDraft ? "[Draft] " : ""}
             {pr.title}
@@ -117,6 +142,7 @@ export function PullRequestRow({
               className="meta-link"
               target="_blank"
               rel="noreferrer"
+              onClick={(event) => { event.stopPropagation() }}
             >
               {pr.author}
             </a>{" "}
@@ -126,6 +152,7 @@ export function PullRequestRow({
               className="meta-link"
               target="_blank"
               rel="noreferrer"
+              onClick={(event) => { event.stopPropagation() }}
             >
               {pr.repository}
             </a>
@@ -141,6 +168,7 @@ export function PullRequestRow({
                   rel="noreferrer"
                   title={reviewer.login}
                   aria-label={`Open ${reviewer.login} profile`}
+                  onClick={(event) => { event.stopPropagation() }}
                 >
                   <img
                     src={reviewer.avatarUrl}
@@ -185,6 +213,7 @@ export function PullRequestRow({
               aria-label={policyTitle}
               target="_blank"
               rel="noreferrer"
+              onClick={(event) => { event.stopPropagation() }}
             >
               <span className="sr-only">{policyTitle}</span>
               <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
@@ -286,6 +315,7 @@ export function PullRequestRow({
           </div>
         ) : null}
       </div>
+      {isExpanded ? <CheckDetailsPanel checkStatuses={checkStatuses ?? []} isLoading={isLoadingChecks} error={checksError} /> : null}
     </article>
   );
 }

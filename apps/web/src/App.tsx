@@ -361,6 +361,7 @@ function App() {
     hasCredentials,
     showLineChanges,
     showLabels,
+    token: token ?? '',
   };
 
   return (

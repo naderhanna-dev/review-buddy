@@ -1,3 +1,4 @@
+.worktrees/
 .turbo
 node_modules
 *.tsbuildinfo
