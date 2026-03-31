@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { PullRequest } from './classification'
-import { EMPTY_FILTER_STATE } from '../types'
+import { EMPTY_FILTER_STATE } from './types'
 import { applySectionFilter, applySectionSort } from './pr-utils'
 
 function makePr(overrides: Partial<PullRequest> = {}): PullRequest {

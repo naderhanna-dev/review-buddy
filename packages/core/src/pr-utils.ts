@@ -1,5 +1,5 @@
 import type { PullRequest } from "./classification";
-import type { SectionFilterState, SortPreference } from "../types";
+import type { SectionFilterState, SortPreference } from "./types";
 import { sortByCreatedAt, sortByAuthor, sortByRepository, sortByLineChanges } from "./classification";
 
 export function applySectionSort(

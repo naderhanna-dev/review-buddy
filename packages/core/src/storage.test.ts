@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 
 import { readSectionSortPreferences, readSectionFilterPreferences, writeSectionFilterPreferences } from './storage'
-import { STORAGE_KEYS } from '../constants'
+import { STORAGE_KEYS } from './constants'
 
 const mockStorage = new Map<string, string>()
 const localStorageMock = {
