@@ -12,7 +12,7 @@ It fetches PRs scoped to you in the selected org (not all org PRs).
 ### Install & Run
 ```bash
 pnpm install
-pnpm dev --filter web    # Start the web app
+pnpm --filter web dev    # Start the web app
 ```
 
 ### Other Commands
@@ -150,7 +150,7 @@ Each PR row also shows a GitHub-style checks icon:
 
 ## Commands
 
-- `pnpm dev --filter web` - start dev server
+- `pnpm --filter web dev` - start dev server
 - `pnpm build` - type-check and build all packages
 - `pnpm lint` - run ESLint
 - `pnpm test` - run all tests (Vitest)
