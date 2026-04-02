@@ -48,6 +48,8 @@ unchanged data returns HTTP 304 and costs minimal API quota.
 [Create a classic token](https://github.com/settings/tokens/new) with these scopes:
 - **repo** (covers pull requests, commit statuses, and administration)
 - **notifications** (enables the Notifications API for near-instant change detection)
+- **read:org** - Read org and team membership, read org projects 
+- **read:discussion** - Read team discussions 
 
 After creation, authorize the token for **MaintainX SSO** — click
 "Configure SSO" next to the token and authorize the MaintainX organization.
