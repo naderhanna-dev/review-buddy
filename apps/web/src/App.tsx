@@ -340,6 +340,23 @@ function App() {
         ? `Last updated ${formatRefreshAge(prData.lastRefreshedAt, nowMs)}`
         : "Not refreshed yet";
 
+  // Fetch active review sessions from the local server (when review feature is enabled)
+  const [activeReviewKeys, setActiveReviewKeys] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (import.meta.env.VITE_REVIEW_ENABLED === 'false') return;
+    const fetchSessions = () => {
+      fetch("/api/reviews")
+        .then((r) => r.ok ? r.json() : [])
+        .then((sessions: Array<{ key: string }>) => {
+          setActiveReviewKeys(new Set(sessions.map((s) => s.key)));
+        })
+        .catch(() => {}); // Server not running — that's fine
+    };
+    fetchSessions();
+    const interval = setInterval(fetchSessions, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const sharedSectionProps = {
     openSectionMenuKey: menu.openSectionMenuKey,
     openSectionFilterKey: menu.openSectionFilterKey,
@@ -361,6 +378,7 @@ function App() {
     hasCredentials,
     showLineChanges,
     showLabels,
+    activeReviewKeys,
     token: token ?? '',
   };
 
