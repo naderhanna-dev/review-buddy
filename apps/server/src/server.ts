@@ -168,6 +168,6 @@ export function createServer(options: ServerOptions) {
     res.end("Not found");
   });
 
-  server.listen(port);
+  server.listen(port, "127.0.0.1");
   return server;
 }
