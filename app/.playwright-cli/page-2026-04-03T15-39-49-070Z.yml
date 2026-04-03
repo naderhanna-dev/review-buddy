@@ -1,0 +1,151 @@
+- main [ref=e3]:
+  - button "Open settings" [ref=e4] [cursor=pointer]:
+    - img [ref=e5]
+  - generic [ref=e7]:
+    - heading "Review Radar" [level=1] [ref=e8]
+    - paragraph [ref=e9]: Not refreshed yet
+  - generic [ref=e10]:
+    - generic [ref=e11]:
+      - button "Needs your attention" [expanded] [ref=e12] [cursor=pointer]:
+        - img [ref=e13]
+        - generic [ref=e15]: Needs your attention
+      - generic [ref=e16]:
+        - generic [ref=e17]: "0"
+        - generic [ref=e18]: ·
+        - generic [ref=e19] [cursor=pointer]: Show drafts
+        - generic [ref=e22]: ·
+        - button "Filter options" [ref=e24] [cursor=pointer]:
+          - img [ref=e25]
+        - button "Group by repository" [ref=e27] [cursor=pointer]:
+          - img [ref=e28]
+        - button "Sort options" [ref=e34] [cursor=pointer]:
+          - img [ref=e35]
+    - paragraph [ref=e39]: Add org + PAT above to classify pull requests.
+  - generic [ref=e40]:
+    - generic [ref=e41]:
+      - button "Your PRs" [expanded] [ref=e42] [cursor=pointer]:
+        - img [ref=e43]
+        - generic [ref=e45]: Your PRs
+      - generic [ref=e46]:
+        - generic [ref=e47]: "0"
+        - generic [ref=e48]: ·
+        - generic [ref=e49] [cursor=pointer]: Show drafts
+        - generic [ref=e52]: ·
+        - button "Filter options" [ref=e54] [cursor=pointer]:
+          - img [ref=e55]
+        - button "Group by repository" [ref=e57] [cursor=pointer]:
+          - img [ref=e58]
+        - button "Sort options" [ref=e64] [cursor=pointer]:
+          - img [ref=e65]
+    - paragraph [ref=e69]: Add org + PAT above to load pull requests from GitHub.
+  - generic [ref=e70]:
+    - generic [ref=e71]:
+      - button "Related to you" [expanded] [ref=e72] [cursor=pointer]:
+        - img [ref=e73]
+        - generic [ref=e75]: Related to you
+      - generic [ref=e76]:
+        - generic [ref=e77]: "0"
+        - generic [ref=e78]: ·
+        - generic [ref=e79] [cursor=pointer]: Show drafts
+        - generic [ref=e82]: ·
+        - button "Filter options" [ref=e84] [cursor=pointer]:
+          - img [ref=e85]
+        - button "Group by repository" [ref=e87] [cursor=pointer]:
+          - img [ref=e88]
+        - button "Sort options" [ref=e94] [cursor=pointer]:
+          - img [ref=e95]
+    - paragraph [ref=e99]: Add org + PAT above to load pull requests from GitHub.
+  - generic [ref=e101]:
+    - button "Recently merged" [ref=e102] [cursor=pointer]:
+      - img [ref=e103]
+      - generic [ref=e105]: Recently merged
+    - generic [ref=e107]: "0"
+  - generic [ref=e109]:
+    - button "Stale PRs" [ref=e110] [cursor=pointer]:
+      - img [ref=e111]
+      - generic [ref=e113]: Stale PRs
+    - generic [ref=e114]:
+      - generic [ref=e115]: "0"
+      - generic [ref=e116]: ·
+      - generic [ref=e117] [cursor=pointer]: Show drafts
+      - generic [ref=e120]: ·
+      - button "Filter options" [ref=e122] [cursor=pointer]:
+        - img [ref=e123]
+      - button "Group by repository" [ref=e125] [cursor=pointer]:
+        - img [ref=e126]
+      - button "Sort options" [ref=e132] [cursor=pointer]:
+        - img [ref=e133]
+  - button "Close settings" [ref=e136] [cursor=pointer]
+  - complementary "Connection settings" [ref=e137]:
+    - generic [ref=e138]:
+      - heading "Settings" [level=2] [ref=e139]
+      - button "Close" [ref=e140] [cursor=pointer]
+    - generic [ref=e141]:
+      - generic [ref=e142]:
+        - text: GitHub organization
+        - textbox "GitHub organization" [ref=e143]:
+          - /placeholder: your-org
+          - text: MaintainX
+      - generic [ref=e144]:
+        - text: Personal access token
+        - textbox "Personal access token" [ref=e145]:
+          - /placeholder: github_pat_...
+      - button "Save and refresh" [ref=e146] [cursor=pointer]
+    - generic [ref=e147]:
+      - paragraph [ref=e148]: PAT is stored in local storage for this browser profile.
+      - paragraph [ref=e149]:
+        - link "Create a fine-grained PAT" [ref=e150] [cursor=pointer]:
+          - /url: https://github.com/settings/personal-access-tokens/new
+        - text: and set
+        - strong [ref=e151]: Resource owner
+        - text: to
+        - strong [ref=e152]: MaintainX
+        - text: (the Resource owner cannot be changed after creation — if your existing token uses your personal account, you need to generate a new one). Then select
+        - strong [ref=e153]: All repositories
+        - text: "and grant these permissions:"
+      - list [ref=e154]:
+        - listitem [ref=e155]: "Pull requests: Read (required)"
+        - listitem [ref=e156]: "Commit statuses: Read (required for PR check status icons)"
+        - listitem [ref=e157]: "Issues: Read (optional, enables PR label display)"
+        - listitem [ref=e158]: "Members: Read — organization permission (optional, enables team-assigned PR signals)"
+      - paragraph [ref=e159]:
+        - text: For
+        - strong [ref=e160]: live refresh
+        - text: (~60s), use a
+        - link "classic token" [ref=e161] [cursor=pointer]:
+          - /url: https://github.com/settings/tokens/new
+        - text: with
+        - strong [ref=e162]: repo
+        - text: and
+        - strong [ref=e163]: notifications
+        - text: scopes, then authorize it for
+        - strong [ref=e164]: MaintainX SSO
+        - text: . Fine-grained tokens use 2-minute polling instead (still efficient via ETag caching).
+    - generic [ref=e165]:
+      - heading "User preferences" [level=3] [ref=e166]
+      - generic [ref=e167]:
+        - heading "Recently merged count" [level=4] [ref=e168]
+        - paragraph [ref=e169]: Number of recently merged PRs to show.
+        - spinbutton [ref=e170]: "5"
+      - generic [ref=e171]:
+        - heading "Dim viewed PRs" [level=4] [ref=e172]
+        - generic [ref=e173] [cursor=pointer]:
+          - generic [ref=e174]: Reduce opacity of PRs you have already clicked.
+          - checkbox "Reduce opacity of PRs you have already clicked." [checked] [ref=e175]
+      - generic [ref=e176]:
+        - heading "Show line changes" [level=4] [ref=e177]
+        - generic [ref=e178] [cursor=pointer]:
+          - generic [ref=e179]: Display additions and deletions on each PR.
+          - checkbox "Display additions and deletions on each PR." [checked] [ref=e180]
+      - generic [ref=e181]:
+        - heading "Show PR labels" [level=4] [ref=e182]
+        - generic [ref=e183] [cursor=pointer]:
+          - generic [ref=e184]: Display GitHub labels on each PR.
+          - checkbox "Display GitHub labels on each PR." [checked] [ref=e185]
+  - link "View source on GitHub" [ref=e186] [cursor=pointer]:
+    - /url: https://github.com/maintainx-labs/ReviewRadar
+    - img [ref=e187]
+  - button "Switch to compact view" [ref=e189] [cursor=pointer]:
+    - img [ref=e190]
+  - button "Switch to dark mode" [ref=e193] [cursor=pointer]:
+    - img [ref=e194]

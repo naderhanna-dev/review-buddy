@@ -3,21 +3,34 @@
 ReviewRadar is a small React + Vite webapp that helps you triage pull requests by attention level.
 It fetches PRs scoped to you in the selected org (not all org PRs).
 
-## Local setup
+## Setup
 
-1. Install dependencies:
+### Prerequisites
+- Node.js 24+
+- pnpm (`corepack enable && corepack prepare pnpm@latest --activate`)
 
+### Install & Run
 ```bash
-cd app && npm install
+pnpm install
+pnpm --filter web dev    # Start the web app
 ```
 
-2. Start development server:
-
+### Other Commands
 ```bash
-cd app && npm run dev
+pnpm build               # Build all packages
+pnpm test                # Run all tests
+pnpm lint                # Lint all packages
+pnpm --filter web dev    # Dev server for web app only
+pnpm --filter @reviewradar/core test  # Test core package only
 ```
 
-3. Open the app, then configure:
+### Project Structure
+- `apps/web/` -- Browser-based PR dashboard (React + Vite)
+- `packages/core/` -- Shared GitHub API client, PR classification, types
+
+### Configuration
+
+Open the app, then configure:
 - GitHub organization (single org scope)
 - Personal access token (PAT)
 - Settings live in a hamburger-toggled sidebar (top-right).
@@ -139,10 +152,10 @@ Each PR row also shows a GitHub-style checks icon:
 
 ## Commands
 
-- `cd app && npm run dev` - start dev server
-- `cd app && npm run build` - type-check and build production bundle
-- `cd app && npm run lint` - run ESLint
-- `cd app && npm run test` - run unit tests (Vitest)
+- `pnpm --filter web dev` - start dev server
+- `pnpm build` - type-check and build all packages
+- `pnpm lint` - run ESLint
+- `pnpm test` - run all tests (Vitest)
 
 ## Running as a permanent service
 
@@ -152,8 +165,8 @@ server that starts automatically on login.
 ### 1. Build and verify
 
 ```bash
-cd app && npm run build
-npm run preview -- --port 4173
+pnpm build
+pnpm --filter web preview -- --port 4173
 # Open http://localhost:4173 to verify, then Ctrl-C
 ```
 
@@ -194,8 +207,8 @@ Create `~/Library/LaunchAgents/com.reviewradar.plist`:
     <!-- <string>0.0.0.0</string> -->
   </array>
   <key>WorkingDirectory</key>
-  <!-- Replace with the absolute path to your clone's app/ directory. -->
-  <string>/Users/YOU/path/to/ReviewRadar/app</string>
+  <!-- Replace with the absolute path to your clone's apps/web/ directory. -->
+  <string>/Users/YOU/path/to/ReviewRadar/apps/web</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
@@ -265,7 +278,7 @@ as long as `serve` is installed globally on the new version.
   devices on your network (e.g. `http://192.168.1.x:4173`), add `--host 0.0.0.0`
   to the serve command in the service file.
 - Change the port in the service file if `4173` conflicts.
-- After pulling new code, rebuild (`cd app && npm run build`) and restart the
+- After pulling new code, rebuild (`pnpm build`) and restart the
   service to pick up changes.
 - The `-s` flag on `serve` enables SPA fallback (rewrites all routes to
   `index.html`), which a client-side React app needs.
