@@ -22,3 +22,7 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
 * { scrollbar-width: thin; scrollbar-color: var(--border) var(--bg); }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
