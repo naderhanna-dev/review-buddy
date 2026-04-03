@@ -132,7 +132,6 @@ export default function FileTree() {
           alignItems: "center",
         }}>
           Groups ({groups.length})
-          {!groupsReady && <Spinner />}
         </div>
         {!groupsReady && (
           <div style={{
@@ -145,7 +144,7 @@ export default function FileTree() {
             borderRadius: 6,
             display: "flex",
             alignItems: "center",
-            gap: 6,
+            gap: 8,
           }}>
             <Spinner />
             AI is analyzing file relationships — groups will update automatically
