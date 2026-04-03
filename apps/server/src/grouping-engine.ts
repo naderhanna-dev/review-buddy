@@ -25,7 +25,7 @@ const CATEGORY_ORDER: Record<string, number> = {
 };
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
-const agentsDir = resolve(moduleDir, "../../packages/agents/src");
+const agentsDir = resolve(moduleDir, "../../../packages/agents/src");
 
 function loadGrouperPrompt(): string {
   try {

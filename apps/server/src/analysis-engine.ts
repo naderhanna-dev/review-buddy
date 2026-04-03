@@ -5,7 +5,7 @@ import type { DiffData, Finding } from "@reviewradar/shared";
 import { spawnAgent } from "./agent-orchestrator";
 import type { ReviewSession } from "./session";
 
-const agentsDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../packages/agents/src");
+const agentsDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/agents/src");
 
 interface AnalysisFindings {
   findings: Array<{
