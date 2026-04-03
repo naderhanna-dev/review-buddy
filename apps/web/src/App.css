@@ -908,6 +908,25 @@
   justify-content: flex-end;
 }
 
+.review-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 0.25rem;
+  color: var(--link);
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.review-link:hover {
+  background: var(--subtle);
+}
+.review-link svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
 .row-menu-wrap {
   position: absolute;
   top: 0.5rem;

@@ -1,0 +1,20 @@
+{
+  "name": "server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "tsx --watch src/cli.ts serve",
+    "serve": "tsx src/cli.ts serve"
+  },
+  "dependencies": {
+    "@reviewradar/shared": "workspace:*",
+    "@reviewradar/agents": "workspace:*",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.0",
+    "typescript": "~5.9.3"
+  }
+}

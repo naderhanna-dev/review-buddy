@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "filePath": { "type": "string" },
+          "lineStart": { "type": "number" },
+          "lineEnd": { "type": "number" },
+          "severity": { "type": "string", "enum": ["critical", "warning", "info"] },
+          "title": { "type": "string" },
+          "description": { "type": "string" }
+        },
+        "required": ["filePath", "lineStart", "severity", "title", "description"]
+      }
+    }
+  },
+  "required": ["findings"]
+}

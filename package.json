@@ -1,9 +1,13 @@
 {
   "name": "reviewradar",
   "private": true,
+  "bin": {
+    "reviewradar": "./bin/reviewradar.sh"
+  },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "serve": "pnpm --filter server run serve",
     "test": "turbo run test",
     "lint": "turbo run lint"
   },

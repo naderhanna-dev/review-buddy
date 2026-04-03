@@ -9,6 +9,11 @@
       "cache": false,
       "persistent": true
     },
+    "serve": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "persistent": true
+    },
     "test": {},
     "lint": {}
   }

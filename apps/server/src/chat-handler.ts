@@ -1,0 +1,89 @@
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { DiffData, PRMetadata } from "@reviewradar/shared";
+import { spawnAgent } from "./agent-orchestrator";
+import type { ReviewSession } from "./session";
+
+const agentsDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../packages/agents/src");
+
+function loadPrompt(): string {
+  try {
+    return readFileSync(resolve(agentsDir, "prompts/chat.md"), "utf-8");
+  } catch {
+    return readFileSync(resolve(process.cwd(), "packages/agents/src/prompts/chat.md"), "utf-8");
+  }
+}
+
+function buildChatPrompt(
+  pr: PRMetadata,
+  diff: DiffData,
+  question: string,
+  context?: { filePath: string; lineRange: [number, number] },
+): string {
+  const basePrompt = loadPrompt();
+
+  const prSection = `## PR #${pr.number}: ${pr.title}\n\n**Author**: ${pr.author}\n**Branch**: ${pr.headBranch} -> ${pr.baseBranch}\n\n${pr.body || "(no description)"}`;
+
+  const truncated = diff.rawPatch.length > 80_000
+    ? diff.rawPatch.slice(0, 80_000) + "\n\n[... truncated]"
+    : diff.rawPatch;
+  const diffSection = `## Diff\n\n\`\`\`diff\n${truncated}\n\`\`\``;
+
+  let contextSection = "";
+  if (context) {
+    const file = diff.files.find((f) => f.path === context.filePath);
+    if (file?.patch) {
+      contextSection = `\n\n## Context: ${context.filePath} (lines ${context.lineRange[0]}-${context.lineRange[1]})\n\n\`\`\`diff\n${file.patch}\n\`\`\``;
+    }
+  }
+
+  return `${basePrompt}\n\n${prSection}\n\n${diffSection}${contextSection}\n\n## Question\n\n${question}`;
+}
+
+export function startChatSession(
+  session: ReviewSession,
+  question: string,
+  context?: { filePath: string; lineRange: [number, number] },
+): string {
+  const sessionId = crypto.randomUUID();
+
+  if (!session.pr || !session.diff) {
+    session.broadcast({ type: "chat:done", sessionId });
+    return sessionId;
+  }
+
+  const prompt = buildChatPrompt(session.pr, session.diff, question, context);
+
+  const { result } = spawnAgent(session, {
+    agentId: "chat",
+    label: `Chat: ${question.slice(0, 40)}`,
+    prompt,
+    model: session.config.chatModel || "sonnet",
+    includePartialMessages: true,
+    onStreamEvent: (event: unknown) => {
+      const e = event as Record<string, unknown>;
+      if (e.type === "stream_event" && e.event) {
+        const inner = e.event as Record<string, unknown>;
+        if (inner.type === "content_block_delta") {
+          const delta = inner.delta as { type?: string; text?: string } | undefined;
+          if (delta?.type === "text_delta" && delta.text) {
+            session.broadcast({
+              type: "chat:chunk",
+              sessionId,
+              delta: delta.text,
+            });
+          }
+        }
+      }
+    },
+  });
+
+  result.then(() => {
+    session.broadcast({ type: "chat:done", sessionId });
+  }).catch(() => {
+    session.broadcast({ type: "chat:done", sessionId });
+  });
+
+  return sessionId;
+}
