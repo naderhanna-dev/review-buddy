@@ -78,6 +78,8 @@ export default function App() {
   const setDiff = useStore((s) => s.setDiff);
   const setGroups = useStore((s) => s.setGroups);
   const addFinding = useStore((s) => s.addFinding);
+  const sessionError = useStore((s) => s.sessionError);
+  const setSessionError = useStore((s) => s.setSessionError);
   const updateFindingScore = useStore((s) => s.updateFindingScore);
   const updateAgentJob = useStore((s) => s.updateAgentJob);
   const appendChatDelta = useStore((s) => s.appendChatDelta);
@@ -129,7 +131,7 @@ export default function App() {
       })
       .catch(console.error);
 
-    fetch(apiUrl("/config"))
+    fetch("/api/config")
       .then((r) => r.json())
       .then((data) => { if (data && !data.error) setConfig(data); })
       .catch(console.error);
@@ -167,6 +169,7 @@ export default function App() {
     switch (e.type) {
       case "session:status":
         if (e.status === "ready") fetchSessionData();
+        if (e.status === "error") setSessionError(e.error || "Session failed to initialize");
         break;
       case "groups:ready":
         setGroups(e.groups, true);
@@ -190,9 +193,28 @@ export default function App() {
         setConfig(e.config);
         break;
     }
-  }, [fetchSessionData, setGroups, addFinding, updateFindingScore, updateAgentJob, appendChatDelta, setConfig]);
+  }, [fetchSessionData, setSessionError, setGroups, addFinding, updateFindingScore, updateAgentJob, appendChatDelta, setConfig]);
 
   useSSE(apiUrl("/events"), handleSSE);
+
+  if (sessionError) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        height: "100vh", flexDirection: "column", gap: 12, padding: 40,
+      }}>
+        <div style={{ fontSize: 18, fontWeight: 600, color: "var(--red)" }}>Session failed</div>
+        <div style={{ fontSize: 14, color: "var(--text-secondary)", textAlign: "center", maxWidth: 500, lineHeight: 1.6 }}>
+          {sessionError}
+        </div>
+        <a href="/" style={{
+          marginTop: 12, padding: "8px 20px", borderRadius: 6,
+          border: "1px solid var(--border)", color: "var(--text-secondary)",
+          textDecoration: "none", fontSize: 13,
+        }}>Back to dashboard</a>
+      </div>
+    );
+  }
 
   return (
     <>

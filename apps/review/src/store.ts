@@ -77,6 +77,10 @@ interface ODRStore {
   setConfig: (config: ODRConfig) => void;
   updateConfig: (partial: Partial<ODRConfig>) => Promise<void>;
 
+  // Session
+  sessionError: string | null;
+  setSessionError: (error: string | null) => void;
+
   // UI
   rightTab: "comments" | "analysis" | "chat";
   setRightTab: (tab: ODRStore["rightTab"]) => void;
@@ -223,13 +227,16 @@ export const useStore = create<ODRStore>((set, get) => ({
     applyTheme(merged.theme);
     set({ config: merged });
     try {
-      await fetch(apiUrl("/config"), {
+      await fetch("/api/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(partial),
       });
     } catch {}
   },
+
+  sessionError: null,
+  setSessionError: (error) => set({ sessionError: error }),
 
   rightTab: "comments",
   setRightTab: (tab) => set({ rightTab: tab }),
