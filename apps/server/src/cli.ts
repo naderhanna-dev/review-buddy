@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { writeFileSync, mkdirSync, unlinkSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -45,6 +45,7 @@ function serve(portOverride?: number, hostOverride?: string) {
 
 function installService() {
   const home = process.env.HOME || "~";
+  const nodePath = execSync("which node").toString().trim();
   const tsxPath = execSync("which tsx").toString().trim();
   const plistDir = resolve(home, "Library/LaunchAgents");
   const plistPath = resolve(plistDir, "com.reviewradar.server.plist");
@@ -69,7 +70,7 @@ function installService() {
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${home}/.local/bin</string>
+    <string>${dirname(nodePath)}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${home}/.local/bin</string>
     <key>HOME</key>
     <string>${home}</string>
   </dict>
