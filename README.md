@@ -42,14 +42,14 @@ This serves both the PR dashboard and the AI review app from a single local serv
 Run the server automatically on login:
 
 ```bash
-reviewradar install-service
+pnpm run install-service
 ```
 
 This creates a launchd plist at `~/Library/LaunchAgents/com.reviewradar.server.plist` and starts the service. Logs go to `~/Library/Logs/ReviewRadar/`.
 
 ```bash
 # Remove the service
-reviewradar uninstall-service
+pnpm run uninstall-service
 
 # Check service status
 launchctl list | grep reviewradar

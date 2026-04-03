@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "tsx --watch src/cli.ts serve",
-    "serve": "tsx src/cli.ts serve"
+    "serve": "tsx src/cli.ts serve",
+    "install-service": "tsx src/cli.ts install-service",
+    "uninstall-service": "tsx src/cli.ts uninstall-service"
   },
   "dependencies": {
     "@reviewradar/shared": "workspace:*",

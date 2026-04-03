@@ -1,13 +1,12 @@
 {
   "name": "reviewradar",
   "private": true,
-  "bin": {
-    "reviewradar": "./bin/reviewradar.sh"
-  },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "serve": "pnpm --filter server run serve",
+    "install-service": "pnpm --filter server run -- install-service",
+    "uninstall-service": "pnpm --filter server run -- uninstall-service",
     "test": "turbo run test",
     "lint": "turbo run lint"
   },
