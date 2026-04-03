@@ -19,6 +19,7 @@ const MIME_TYPES: Record<string, string> = {
 
 export interface ServerOptions {
   port: number;
+  host: string;
   sessionManager: ReviewSessionManager;
   webDistDir: string;
   reviewDistDir: string;
@@ -65,7 +66,7 @@ function readBody(req: IncomingMessage): Promise<string> {
 }
 
 export function createServer(options: ServerOptions) {
-  const { port, sessionManager, webDistDir, reviewDistDir } = options;
+  const { port, host, sessionManager, webDistDir, reviewDistDir } = options;
   const startTime = Date.now();
 
   const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -168,6 +169,6 @@ export function createServer(options: ServerOptions) {
     res.end("Not found");
   });
 
-  server.listen(port, "127.0.0.1");
+  server.listen(port, host);
   return server;
 }

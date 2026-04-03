@@ -11,17 +11,25 @@ import { MONOREPO_ROOT, WEB_DIST, REVIEW_DIST } from "./paths";
 
 const DEFAULT_PORT = 7672;
 
-function serve(portOverride?: number) {
+function serve(portOverride?: number, hostOverride?: string) {
   const config = loadConfig();
   const port = portOverride ?? (parseInt(process.env.REVIEWRADAR_PORT || "") || DEFAULT_PORT);
+  const host = hostOverride ?? "127.0.0.1";
   const sessionManager = new ReviewSessionManager(config);
 
-  const server = createServer({ port, sessionManager, webDistDir: WEB_DIST, reviewDistDir: REVIEW_DIST });
+  if (host !== "127.0.0.1" && host !== "localhost") {
+    console.warn("WARNING: Server is binding to a non-loopback address.");
+    console.warn("  This exposes gh and claude CLI access to your network.");
+    console.warn("  Only use --host on trusted networks.\n");
+  }
+
+  const server = createServer({ port, host, sessionManager, webDistDir: WEB_DIST, reviewDistDir: REVIEW_DIST });
 
   const addr = server.address();
   const actualPort = typeof addr === "object" && addr ? addr.port : port;
-  console.log(`ReviewRadar server running at http://localhost:${actualPort}`);
-  console.log(`  Dashboard: http://localhost:${actualPort}`);
+  const displayHost = host === "127.0.0.1" ? "localhost" : host;
+  console.log(`ReviewRadar server running at http://${displayHost}:${actualPort}`);
+  console.log(`  Dashboard: http://${displayHost}:${actualPort}`);
   console.log(`  Sessions:  ${sessionManager.size} active`);
 
   function shutdown() {
@@ -135,10 +143,14 @@ switch (command) {
       args: args.slice(1),
       options: {
         port: { type: "string", short: "p" },
+        host: { type: "string", short: "H" },
       },
       allowPositionals: true,
     });
-    serve(values.port ? parseInt(values.port) : undefined);
+    serve(
+      values.port ? parseInt(values.port) : undefined,
+      values.host,
+    );
     break;
   }
   case "install-service":
@@ -153,6 +165,7 @@ switch (command) {
     console.log("Commands:");
     console.log("  serve              Start the ReviewRadar server");
     console.log("    --port, -p       Port to listen on (default: 7672)");
+    console.log("    --host, -H       Host to bind to (default: 127.0.0.1)");
     console.log("  install-service    Install launchd service (macOS)");
     console.log("  uninstall-service  Remove launchd service");
     process.exit(command ? 1 : 0);

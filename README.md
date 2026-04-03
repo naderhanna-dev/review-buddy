@@ -27,6 +27,16 @@ pnpm run serve
 
 This serves both the PR dashboard and the AI review app from a single local server.
 
+**Options:**
+- `--port, -p` — Port to listen on (default: 7672)
+- `--host, -H` — Host to bind to (default: 127.0.0.1)
+
+> **Security note:** By default the server binds to `127.0.0.1` (localhost only).
+> The server spawns `gh` and `claude` CLI subprocesses using **your local
+> credentials** — anyone who can reach the server can trigger GitHub API calls
+> and AI analysis on your behalf. Only use `--host 0.0.0.0` on trusted networks
+> where you're comfortable with that exposure.
+
 ### Install as a service (macOS)
 
 Run the server automatically on login:
