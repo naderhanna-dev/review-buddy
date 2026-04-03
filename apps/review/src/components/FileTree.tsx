@@ -134,6 +134,23 @@ export default function FileTree() {
           Groups ({groups.length})
           {!groupsReady && <Spinner />}
         </div>
+        {!groupsReady && (
+          <div style={{
+            margin: "0 8px 6px",
+            padding: "6px 10px",
+            fontSize: 12,
+            color: "var(--accent)",
+            background: "var(--accent-bg)",
+            border: "1px solid var(--accent)",
+            borderRadius: 6,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}>
+            <Spinner />
+            AI is analyzing file relationships — groups will update automatically
+          </div>
+        )}
 
         {groups.map((group) => {
           const expanded = expandedGroups.has(group.id);
