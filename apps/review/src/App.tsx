@@ -90,7 +90,10 @@ export default function App() {
   const [leftWidth, setLeftWidth] = useState(340);
   const [rightWidth, setRightWidth] = useState(360);
 
-  useEffect(() => {
+  // Fetch all session data from the API. Called on mount and again when
+  // the SSE stream reports the session is ready (handles the race where
+  // the initial fetch fires before gh has finished loading the PR).
+  const fetchSessionData = useCallback(() => {
     fetch(apiUrl("/pr"))
       .then((r) => r.json())
       .then((data) => { if (!data.error) setPR(data); })
@@ -132,6 +135,10 @@ export default function App() {
       .catch(console.error);
   }, [setPR, setDiff, setGroups, addFinding, updateAgentJob, setConfig]);
 
+  useEffect(() => {
+    fetchSessionData();
+  }, [fetchSessionData]);
+
   // Poll for groups until ready
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -158,6 +165,9 @@ export default function App() {
   const handleSSE = useCallback((event: unknown) => {
     const e = event as SSEEvent;
     switch (e.type) {
+      case "session:status":
+        if (e.status === "ready") fetchSessionData();
+        break;
       case "groups:ready":
         setGroups(e.groups, true);
         break;
@@ -180,7 +190,7 @@ export default function App() {
         setConfig(e.config);
         break;
     }
-  }, [setGroups, addFinding, updateFindingScore, updateAgentJob, appendChatDelta, setConfig]);
+  }, [fetchSessionData, setGroups, addFinding, updateFindingScore, updateAgentJob, appendChatDelta, setConfig]);
 
   useSSE(apiUrl("/events"), handleSSE);
 
