@@ -1,5 +1,5 @@
 import { apiUrl } from "../api";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useStore } from "../store";
 import { useHighlightedLines } from "../hooks/useHighlightedLines";
 import type { ReviewComment } from "@reviewradar/shared";
@@ -193,14 +193,24 @@ function InlineComment({ comment, onDelete }: { comment: ReviewComment; onDelete
   );
 }
 
-function CommentForm({ filePath, lineNum, onSubmit, onCancel }: {
+function CommentForm({ filePath, lineNum, lineContent, onSubmit, onCancel }: {
   filePath: string;
   lineNum: number;
+  lineContent?: string;
   onSubmit: (text: string, type: ReviewComment["type"]) => void;
   onCancel: () => void;
 }) {
   const [text, setText] = useState("");
   const [type, setType] = useState<ReviewComment["type"]>("comment");
+  const prevType = useRef(type);
+
+  // Pre-populate with source line when switching to suggestion mode
+  useEffect(() => {
+    if (type === "suggestion" && prevType.current !== "suggestion" && !text && lineContent) {
+      setText(lineContent);
+    }
+    prevType.current = type;
+  }, [type, lineContent, text]);
 
   return (
     <div style={{ padding: "8px 12px", background: "var(--bg-tertiary)", borderLeft: "3px solid var(--accent)", margin: "2px 0" }}>
@@ -230,7 +240,7 @@ function CommentForm({ filePath, lineNum, onSubmit, onCancel }: {
             onCancel();
           }
         }}
-        placeholder={type === "suggestion" ? "Describe the suggested change..." : "Add a comment..."}
+        placeholder={type === "suggestion" ? "Edit the code to suggest a change..." : "Add a comment..."}
         style={{
           width: "100%", minHeight: 60, padding: 8, background: "var(--bg)", color: "var(--text)",
           border: "1px solid var(--border)", borderRadius: 4, fontFamily: "var(--font-sans)", fontSize: 13, resize: "vertical",
@@ -283,7 +293,8 @@ export default function DiffPane() {
       line: commentLineNum,
       side: "RIGHT",
       type,
-      body: text,
+      body: type === "suggestion" ? "" : text,
+      suggestedCode: type === "suggestion" ? text : undefined,
       createdAt: Date.now(),
     };
     fetch(apiUrl("/comments"), {
@@ -352,6 +363,7 @@ export default function DiffPane() {
                 <CommentForm
                   filePath={file.path}
                   lineNum={lineNum}
+                  lineContent={line.content.replace(/^[+-]/, "")}
                   onSubmit={handleAddComment}
                   onCancel={() => setCommentingIndex(null)}
                 />
