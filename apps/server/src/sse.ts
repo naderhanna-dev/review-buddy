@@ -1,10 +1,12 @@
 import type { ReviewSession } from "./session";
 
 export function createSSEStream(session: ReviewSession): Response {
+  let ctrl: ReadableStreamDefaultController;
+
   const stream = new ReadableStream({
     start(controller) {
+      ctrl = controller;
       session.sseClients.add(controller);
-      // Send current session status as first event
       const status = {
         type: "session:status",
         status: session.status,
@@ -14,8 +16,10 @@ export function createSSEStream(session: ReviewSession): Response {
         new TextEncoder().encode(`data: ${JSON.stringify(status)}\n\n`),
       );
     },
-    cancel(controller) {
-      session.sseClients.delete(controller as ReadableStreamDefaultController);
+    cancel() {
+      // cancel() receives the cancellation reason, not the controller —
+      // use the controller captured from start() via closure
+      session.sseClients.delete(ctrl);
     },
   });
 

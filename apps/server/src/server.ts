@@ -56,10 +56,11 @@ function serveHTML(distDir: string, res: ServerResponse): boolean {
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on("data", (chunk: Buffer) => chunks.push(chunk));
     req.on("end", () => resolve(Buffer.concat(chunks).toString()));
+    req.on("error", reject);
   });
 }
 
@@ -84,7 +85,15 @@ export function createServer(options: ServerOptions) {
         body,
       });
 
-      const response = await handleRequest(request, sessionManager, startTime);
+      let response: Response | null;
+      try {
+        response = await handleRequest(request, sessionManager, startTime);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ error: msg }));
+        return;
+      }
       if (response) {
         // Check if it's an SSE response
         const contentType = response.headers.get("Content-Type");

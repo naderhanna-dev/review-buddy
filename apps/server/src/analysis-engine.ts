@@ -1,11 +1,9 @@
 import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import type { DiffData, Finding } from "@reviewradar/shared";
 import { spawnAgent } from "./agent-orchestrator";
 import type { ReviewSession } from "./session";
-
-const agentsDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/agents/src");
+import { AGENTS_DIR } from "./paths";
 
 interface AnalysisFindings {
   findings: Array<{
@@ -37,19 +35,11 @@ const ANALYSIS_AGENTS: AgentDef[] = [
 ];
 
 function loadPrompt(filename: string): string {
-  try {
-    return readFileSync(resolve(agentsDir, "prompts", filename), "utf-8");
-  } catch {
-    return readFileSync(resolve(process.cwd(), "packages/agents/src/prompts", filename), "utf-8");
-  }
+  return readFileSync(resolve(AGENTS_DIR, "prompts", filename), "utf-8");
 }
 
 function loadSchema(filename: string): object {
-  try {
-    return JSON.parse(readFileSync(resolve(agentsDir, "schemas", filename), "utf-8"));
-  } catch {
-    return JSON.parse(readFileSync(resolve(process.cwd(), "packages/agents/src/schemas", filename), "utf-8"));
-  }
+  return JSON.parse(readFileSync(resolve(AGENTS_DIR, "schemas", filename), "utf-8"));
 }
 
 function buildAnalysisPrompt(basePrompt: string, diff: DiffData): string {

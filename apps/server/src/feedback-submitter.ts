@@ -1,27 +1,5 @@
-import { spawn } from "node:child_process";
 import type { PRMetadata, ReviewComment, ReviewSubmission } from "@reviewradar/shared";
-
-function exec(cmd: string[], stdin?: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const [bin, ...args] = cmd;
-    const proc = spawn(bin, args, {
-      env: { ...process.env, PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` },
-    });
-    if (stdin) proc.stdin.end(stdin);
-    const chunks: Buffer[] = [];
-    const errChunks: Buffer[] = [];
-    proc.stdout.on("data", (d: Buffer) => chunks.push(d));
-    proc.stderr.on("data", (d: Buffer) => errChunks.push(d));
-    proc.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(`gh failed (${code}): ${Buffer.concat(errChunks).toString().trim()}`));
-      } else {
-        resolve(Buffer.concat(chunks).toString().trim());
-      }
-    });
-    proc.on("error", reject);
-  });
-}
+import { spawnExec } from "./paths";
 
 function formatCommentBody(comment: ReviewComment): string {
   if (comment.type === "suggestion" && comment.suggestedCode) {
@@ -60,13 +38,13 @@ export async function submitReview(
 
   const json = JSON.stringify(payload);
 
-  const result = await exec([
+  const result = await spawnExec([
     "gh", "api",
     "--method", "POST",
     "-H", "Accept: application/vnd.github+json",
     `/repos/${repoArg}/pulls/${pr.number}/reviews`,
     "--input", "-",
-  ], json);
+  ], { stdin: json });
 
   const parsed = JSON.parse(result);
   return {

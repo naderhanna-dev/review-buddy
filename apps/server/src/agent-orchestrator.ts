@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import type { AgentJob } from "@reviewradar/shared";
 import type { ReviewSession } from "./session";
+import { augmentedEnv } from "./paths";
 
 interface AgentSpawnOptions {
   agentId: string;
@@ -85,10 +86,7 @@ export function spawnAgent<T = unknown>(
     proc = spawn(CLAUDE_BIN, args, {
       cwd: options.cwd || process.cwd(),
       stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin:${process.env.HOME}/.local/bin`,
-      },
+      env: augmentedEnv(),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -104,7 +102,6 @@ export function spawnAgent<T = unknown>(
     };
   }
 
-  // Track process handle for cleanup
   const procId = crypto.randomUUID();
   session.activeProcesses.set(procId, { proc, jobId });
 
@@ -115,6 +112,7 @@ export function spawnAgent<T = unknown>(
 
     let rawOutput = "";
     let structuredOutput: T | null = null;
+    let settled = false;
     const errChunks: Buffer[] = [];
 
     const rl = createInterface({ input: proc.stdout! });
@@ -154,31 +152,31 @@ export function spawnAgent<T = unknown>(
 
     proc.stderr?.on("data", (d: Buffer) => errChunks.push(d));
 
-    proc.on("close", (code) => {
+    function settle(exitCode: number, error?: string) {
+      if (settled) return;
+      settled = true;
+
       session.activeProcesses.delete(procId);
 
-      const exitCode = code ?? 1;
+      // Don't write to a cleaned-up session
+      if (session.status === "closed") {
+        resolve({ structuredOutput: null, rawOutput, exitCode });
+        return;
+      }
+
       job.status = exitCode === 0 ? "done" : "failed";
       job.endedAt = Date.now();
-      if (exitCode !== 0) {
-        job.error = Buffer.concat(errChunks).toString().slice(-500);
-      }
+      if (error) job.error = error;
+      else if (exitCode !== 0) job.error = Buffer.concat(errChunks).toString().slice(-500);
 
       session.agentJobs.set(jobId, { ...job });
       session.broadcast({ type: "agent:status", job: { ...job } });
 
       resolve({ structuredOutput, rawOutput, exitCode });
-    });
+    }
 
-    proc.on("error", (err) => {
-      session.activeProcesses.delete(procId);
-      job.status = "failed";
-      job.endedAt = Date.now();
-      job.error = err.message;
-      session.agentJobs.set(jobId, { ...job });
-      session.broadcast({ type: "agent:status", job: { ...job } });
-      resolve({ structuredOutput: null, rawOutput, exitCode: 1 });
-    });
+    proc.on("close", (code) => settle(code ?? 1));
+    proc.on("error", (err) => settle(1, err.message));
   });
 
   return { job, result };

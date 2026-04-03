@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createHighlighter, type Highlighter } from "shiki";
+import { apiUrl } from "../api";
 
 /**
  * Maps file extension to shiki language ID.
@@ -97,7 +98,7 @@ export function useHighlightedLines(filePath: string | undefined): HighlightedLi
 
     (async () => {
       try {
-        const res = await fetch(`/api/file/${encodeURIComponent(filePath)}`, {
+        const res = await fetch(apiUrl(`/file/${encodeURIComponent(filePath)}`), {
           signal: controller.signal,
         });
         if (!res.ok) return;

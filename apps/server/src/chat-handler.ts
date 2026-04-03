@@ -1,18 +1,12 @@
 import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import type { DiffData, PRMetadata } from "@reviewradar/shared";
 import { spawnAgent } from "./agent-orchestrator";
 import type { ReviewSession } from "./session";
-
-const agentsDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/agents/src");
+import { AGENTS_DIR } from "./paths";
 
 function loadPrompt(): string {
-  try {
-    return readFileSync(resolve(agentsDir, "prompts/chat.md"), "utf-8");
-  } catch {
-    return readFileSync(resolve(process.cwd(), "packages/agents/src/prompts/chat.md"), "utf-8");
-  }
+  return readFileSync(resolve(AGENTS_DIR, "prompts/chat.md"), "utf-8");
 }
 
 function buildChatPrompt(

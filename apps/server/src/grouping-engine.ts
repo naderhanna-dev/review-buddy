@@ -2,8 +2,8 @@ import type { FileGroup, DiffData } from "@reviewradar/shared";
 import type { ReviewSession } from "./session";
 import { spawnAgent } from "./agent-orchestrator";
 import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+import { AGENTS_DIR } from "./paths";
 
 interface GroupsOutput {
   groups: Array<{
@@ -24,19 +24,8 @@ const CATEGORY_ORDER: Record<string, number> = {
   other: 6,
 };
 
-const moduleDir = dirname(fileURLToPath(import.meta.url));
-const agentsDir = resolve(moduleDir, "../../../packages/agents/src");
-
 function loadGrouperPrompt(): string {
-  try {
-    return readFileSync(resolve(agentsDir, "prompts/grouper.md"), "utf-8");
-  } catch {
-    try {
-      return readFileSync(resolve(process.cwd(), "packages/agents/src/prompts/grouper.md"), "utf-8");
-    } catch {
-      return "Organize the changed files into logical groups by category (types, core, api, infra, tests, docs, other). Provide a label, category, summary, and filePaths for each group.";
-    }
-  }
+  return readFileSync(resolve(AGENTS_DIR, "prompts/grouper.md"), "utf-8");
 }
 
 export function buildFallbackGroups(diff: DiffData): FileGroup[] {
@@ -89,12 +78,7 @@ export async function computeGroups(
 
   const prompt = `${systemPrompt}\n\n## Changed Files\n\n${fileSummary}\n\n## Diff\n\n\`\`\`\n${diff.rawPatch.slice(0, 50000)}\n\`\`\``;
 
-  let groupsSchema: object;
-  try {
-    groupsSchema = JSON.parse(readFileSync(resolve(agentsDir, "schemas/groups.schema.json"), "utf-8"));
-  } catch {
-    groupsSchema = JSON.parse(readFileSync(resolve(process.cwd(), "packages/agents/src/schemas/groups.schema.json"), "utf-8"));
-  }
+  const groupsSchema = JSON.parse(readFileSync(resolve(AGENTS_DIR, "schemas/groups.schema.json"), "utf-8"));
 
   const { result } = spawnAgent<GroupsOutput>(session, {
     agentId: "grouper",

@@ -52,6 +52,7 @@ export class ReviewSession {
   }
 
   async initialize(): Promise<void> {
+    if (this.status !== "initializing") return;
     try {
       const ref = { owner: this.owner, repo: this.repo, number: this.number };
       const [pr, diff] = await Promise.all([

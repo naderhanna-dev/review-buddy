@@ -1,29 +1,9 @@
-import { spawn } from "node:child_process";
+import { spawnExec } from "./paths";
 
 const cache = new Map<string, string>();
 
 function cacheKey(owner: string, repo: string, sha: string, path: string): string {
   return `${owner}/${repo}@${sha}:${path}`;
-}
-
-function ghExec(args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn("gh", args, {
-      env: { ...process.env, PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` },
-    });
-    const chunks: Buffer[] = [];
-    const errChunks: Buffer[] = [];
-    proc.stdout.on("data", (d: Buffer) => chunks.push(d));
-    proc.stderr.on("data", (d: Buffer) => errChunks.push(d));
-    proc.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(`gh failed (${code}): ${Buffer.concat(errChunks).toString().trim()}`));
-      } else {
-        resolve(Buffer.concat(chunks).toString());
-      }
-    });
-    proc.on("error", reject);
-  });
 }
 
 export async function fetchFileContent(
@@ -36,8 +16,8 @@ export async function fetchFileContent(
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
-  const content = await ghExec([
-    "api",
+  const content = await spawnExec([
+    "gh", "api",
     `repos/${owner}/${repo}/contents/${path}?ref=${sha}`,
     "--jq", ".content",
   ]);

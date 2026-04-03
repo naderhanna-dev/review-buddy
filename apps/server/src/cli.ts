@@ -1,29 +1,22 @@
 #!/usr/bin/env node
 
-import { resolve, dirname } from "node:path";
+import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { fileURLToPath } from "node:url";
 import { writeFileSync, mkdirSync, unlinkSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { createServer } from "./server";
 import { ReviewSessionManager } from "./session-manager";
 import { loadConfig } from "./config";
+import { MONOREPO_ROOT, WEB_DIST, REVIEW_DIST } from "./paths";
 
 const DEFAULT_PORT = 7672;
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const rootDir = resolve(__dirname, "../../..");
 
 function serve(portOverride?: number) {
   const config = loadConfig();
   const port = portOverride ?? (parseInt(process.env.REVIEWRADAR_PORT || "") || DEFAULT_PORT);
   const sessionManager = new ReviewSessionManager(config);
 
-  const webDistDir = resolve(rootDir, "apps/web/dist");
-  const reviewDistDir = resolve(rootDir, "apps/review/dist");
-
-  const server = createServer({ port, sessionManager, webDistDir, reviewDistDir });
+  const server = createServer({ port, sessionManager, webDistDir: WEB_DIST, reviewDistDir: REVIEW_DIST });
 
   const addr = server.address();
   const actualPort = typeof addr === "object" && addr ? addr.port : port;
@@ -60,15 +53,15 @@ function installService() {
   <key>ProgramArguments</key>
   <array>
     <string>${tsxPath}</string>
-    <string>${resolve(rootDir, "apps/server/src/cli.ts")}</string>
+    <string>${resolve(MONOREPO_ROOT, "apps/server/src/cli.ts")}</string>
     <string>serve</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>${rootDir}</string>
+  <string>${MONOREPO_ROOT}</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${home}/.local/bin</string>
     <key>HOME</key>
     <string>${home}</string>
   </dict>
