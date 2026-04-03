@@ -242,6 +242,7 @@ describe('groupPrsByRepo', () => {
     const grouped = groupPrsByRepo(prs)
     expect(grouped.map(([repo]) => repo)).toEqual(['org/alpha', 'org/mid', 'org/zoo'])
     expect(grouped[0][1].map(pr => pr.id)).toEqual([2])
+    expect(grouped[1][1].map(pr => pr.id)).toEqual([4])
     expect(grouped[2][1].map(pr => pr.id)).toEqual([1, 3])
   })
 
