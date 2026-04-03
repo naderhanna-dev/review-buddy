@@ -108,8 +108,29 @@ function uninstallService() {
 const args = process.argv.slice(2);
 const command = args[0];
 
+function preflight() {
+  try {
+    execSync("which gh", { stdio: "ignore" });
+  } catch {
+    console.error("Error: gh CLI not found. Install: https://cli.github.com");
+    process.exit(1);
+  }
+  try {
+    execSync("gh auth status", { stdio: "ignore" });
+  } catch {
+    console.error("Error: gh is not authenticated. Run: gh auth login");
+    process.exit(1);
+  }
+  try {
+    execSync("which claude", { stdio: "ignore" });
+  } catch {
+    console.warn("Warning: claude CLI not found. AI review features (analysis, chat, grouping) will not work.");
+  }
+}
+
 switch (command) {
   case "serve": {
+    preflight();
     const { values } = parseArgs({
       args: args.slice(1),
       options: {
