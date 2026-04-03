@@ -1513,3 +1513,49 @@
 @keyframes check-spin {
   to { transform: rotate(360deg); }
 }
+
+/* Group by repo toggle button */
+.group-by-repo-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  color: var(--muted);
+  border-radius: 0.375rem;
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.group-by-repo-toggle:hover {
+  color: var(--text);
+  background: var(--subtle);
+}
+
+.group-by-repo-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.group-by-repo-toggle.group-by-repo-active {
+  color: var(--accent-fg, #0969da);
+  border-color: var(--accent-fg, #0969da);
+  background: color-mix(in srgb, var(--accent-fg, #0969da) 10%, var(--surface));
+}
+
+/* Repo group divider */
+.repo-group + .repo-group {
+  border-top: 1px solid var(--border-muted, rgba(128, 128, 128, 0.2));
+}
+
+.repo-group-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.5rem 0.75rem 0.25rem;
+  letter-spacing: 0.01em;
+  background: var(--subtle, rgba(128, 128, 128, 0.06));
+  border-bottom: 1px solid var(--border-muted, rgba(128, 128, 128, 0.15));
+}

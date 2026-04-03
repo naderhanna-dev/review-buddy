@@ -18,6 +18,8 @@ export function SectionHeader({
   onToggleOpen,
   hideDrafts,
   onToggleHideDrafts,
+  groupByRepo,
+  onToggleGroupByRepo,
   onToggleSectionMenu,
   onToggleSectionFilter,
   onSetSort,
@@ -39,6 +41,8 @@ export function SectionHeader({
   onToggleOpen: () => void;
   hideDrafts: boolean;
   onToggleHideDrafts: () => void;
+  groupByRepo: boolean;
+  onToggleGroupByRepo: () => void;
   onToggleSectionMenu: (key: SectionKey) => void;
   onToggleSectionFilter: (key: SectionKey) => void;
   onSetSort: (key: SectionKey, sort: SortPreference) => void;
@@ -134,6 +138,30 @@ export function SectionHeader({
             />
           ) : null}
         </div>
+        <button
+          type="button"
+          className={`group-by-repo-toggle${groupByRepo ? " group-by-repo-active" : ""}`}
+          aria-label="Group by repository"
+          aria-pressed={groupByRepo}
+          title="Group by repository"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleGroupByRepo();
+          }}
+        >
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" role="presentation">
+            <path
+              d="M1.5 3h13M1.5 8h13M1.5 13h13"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              fill="none"
+            />
+            <rect x="5" y="1.5" width="3" height="3" rx="0.5" fill="currentColor" opacity="0.5" />
+            <rect x="5" y="6.5" width="3" height="3" rx="0.5" fill="currentColor" opacity="0.5" />
+            <rect x="5" y="11.5" width="3" height="3" rx="0.5" fill="currentColor" opacity="0.5" />
+          </svg>
+        </button>
         <div className="section-menu-wrap">
           <button
             type="button"
@@ -184,13 +212,6 @@ export function SectionHeader({
                     {sortPreference === "author-az" ? "\u2713 " : ""}Author (A–Z)
                   </button>
                 ) : null}
-               <button
-                 type="button"
-                 className={`row-menu-item${sortPreference === "repo-az" ? " active-sort" : ""}`}
-                 onClick={() => onSetSort(sectionKey, "repo-az")}
-               >
-                 {sortPreference === "repo-az" ? "\u2713 " : ""}Repository (A–Z)
-               </button>
                <button
                  type="button"
                  className={`row-menu-item${sortPreference === "line-changes-desc" ? " active-sort" : ""}`}

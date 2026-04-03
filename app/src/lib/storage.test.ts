@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 
-import { readSectionSortPreferences, readSectionFilterPreferences, writeSectionFilterPreferences } from './storage'
+import { readSectionSortPreferences, readSectionGroupByRepoPreferences, readSectionFilterPreferences, writeSectionFilterPreferences } from './storage'
 import { STORAGE_KEYS } from '../constants'
 
 const mockStorage = new Map<string, string>()
@@ -36,15 +36,24 @@ describe('readSectionSortPreferences', () => {
     const stored = {
       needsAttention: 'oldest-first',
       yourPrs: 'newest-first',
-      relatedToYou: 'repo-az',
+      relatedToYou: 'author-az',
       stalePrs: 'line-changes-desc',
     }
     mockStorage.set(STORAGE_KEYS.sectionSort, JSON.stringify(stored))
     const result = readSectionSortPreferences()
     expect(result.needsAttention).toBe('oldest-first')
     expect(result.yourPrs).toBe('newest-first')
-    expect(result.relatedToYou).toBe('repo-az')
+    expect(result.relatedToYou).toBe('author-az')
     expect(result.stalePrs).toBe('line-changes-desc')
+  })
+
+  it('should fall back to default when repo-az sort is stored', () => {
+    const stored = {
+      relatedToYou: 'repo-az',
+    }
+    mockStorage.set(STORAGE_KEYS.sectionSort, JSON.stringify(stored))
+    const result = readSectionSortPreferences()
+    expect(result.relatedToYou).toBe('default')
   })
 
   it('should return all defaults when no preferences are stored', () => {
@@ -62,6 +71,47 @@ describe('readSectionSortPreferences', () => {
     expect(result.yourPrs).toBe('default')
     expect(result.relatedToYou).toBe('default')
     expect(result.stalePrs).toBe('default')
+  })
+})
+
+describe('readSectionGroupByRepoPreferences', () => {
+  beforeEach(() => {
+    mockStorage.clear()
+    vi.clearAllMocks()
+  })
+
+  it('should return all false when no data is stored', () => {
+    const result = readSectionGroupByRepoPreferences()
+    expect(result.needsAttention).toBe(false)
+    expect(result.yourPrs).toBe(false)
+    expect(result.relatedToYou).toBe(false)
+    expect(result.stalePrs).toBe(false)
+  })
+
+  it('should read stored groupByRepo preferences', () => {
+    mockStorage.set(STORAGE_KEYS.sectionGroupByRepo, JSON.stringify({
+      needsAttention: true,
+      yourPrs: false,
+      relatedToYou: true,
+      stalePrs: false,
+    }))
+    const result = readSectionGroupByRepoPreferences()
+    expect(result.needsAttention).toBe(true)
+    expect(result.yourPrs).toBe(false)
+    expect(result.relatedToYou).toBe(true)
+    expect(result.stalePrs).toBe(false)
+  })
+
+  it('should migrate from repo-az sort preference', () => {
+    mockStorage.set(STORAGE_KEYS.sectionSort, JSON.stringify({
+      needsAttention: 'oldest-first',
+      relatedToYou: 'repo-az',
+    }))
+    const result = readSectionGroupByRepoPreferences()
+    expect(result.needsAttention).toBe(false)
+    expect(result.relatedToYou).toBe(true)
+    // should persist migration
+    expect(mockStorage.has(STORAGE_KEYS.sectionGroupByRepo)).toBe(true)
   })
 })
 
