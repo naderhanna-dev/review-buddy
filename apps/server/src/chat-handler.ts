@@ -54,18 +54,38 @@ export function startChatSession(
     label: `Chat: ${question.slice(0, 40)}`,
     prompt,
     model: session.config.chatModel || "sonnet",
+    cwd: session.repoDir || undefined,
+    allowedTools: ["WebSearch"],
     includePartialMessages: true,
     onStreamEvent: (event: unknown) => {
       const e = event as Record<string, unknown>;
       if (e.type === "stream_event" && e.event) {
         const inner = e.event as Record<string, unknown>;
+
+        if (inner.type === "content_block_start") {
+          const block = inner.content_block as { type?: string; name?: string } | undefined;
+          if (block?.type === "tool_use" && block.name) {
+            session.broadcast({
+              type: "chat:tool_use",
+              sessionId,
+              toolName: block.name,
+            });
+          }
+        }
+
         if (inner.type === "content_block_delta") {
-          const delta = inner.delta as { type?: string; text?: string } | undefined;
+          const delta = inner.delta as { type?: string; text?: string; thinking?: string } | undefined;
           if (delta?.type === "text_delta" && delta.text) {
             session.broadcast({
               type: "chat:chunk",
               sessionId,
               delta: delta.text,
+            });
+          } else if (delta?.type === "thinking_delta" && delta.thinking) {
+            session.broadcast({
+              type: "chat:thinking",
+              sessionId,
+              thinking: delta.thinking,
             });
           }
         }

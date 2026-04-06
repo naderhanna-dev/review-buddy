@@ -54,8 +54,13 @@ interface ODRStore {
   // Chat
   chatMessages: ChatMessage[];
   chatStreaming: boolean;
+  chatThinking: string;
+  chatToolActivity: string | null;
   addChatMessage: (msg: ChatMessage) => void;
   appendChatDelta: (delta: string) => void;
+  appendChatThinking: (delta: string) => void;
+  setChatToolActivity: (toolName: string | null) => void;
+  resetChatTransient: () => void;
 
   // Agents
   agentJobs: Map<string, AgentJob>;
@@ -170,6 +175,8 @@ export const useStore = create<ODRStore>((set, get) => ({
 
   chatMessages: [],
   chatStreaming: false,
+  chatThinking: "",
+  chatToolActivity: null,
   addChatMessage: (msg) =>
     set((s) => ({ chatMessages: [...s.chatMessages, msg] })),
   appendChatDelta: (delta) =>
@@ -181,6 +188,12 @@ export const useStore = create<ODRStore>((set, get) => ({
       }
       return { chatMessages: msgs };
     }),
+  appendChatThinking: (delta) =>
+    set((s) => ({ chatThinking: s.chatThinking + delta })),
+  setChatToolActivity: (toolName) =>
+    set({ chatToolActivity: toolName }),
+  resetChatTransient: () =>
+    set({ chatThinking: "", chatToolActivity: null }),
 
   agentJobs: new Map(),
   updateAgentJob: (job) =>

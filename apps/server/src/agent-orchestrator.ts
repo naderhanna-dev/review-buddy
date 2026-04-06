@@ -12,6 +12,7 @@ interface AgentSpawnOptions {
   schema?: object;
   model?: string;
   cwd?: string;
+  allowedTools?: string[];
   onStreamEvent?: (event: unknown) => void;
   includePartialMessages?: boolean;
 }
@@ -73,6 +74,10 @@ export function spawnAgent<T = unknown>(
 
   if (options.includePartialMessages) {
     args.push("--include-partial-messages");
+  }
+
+  if (options.allowedTools?.length) {
+    args.push("--allowed-tools", ...options.allowedTools);
   }
 
   if (options.model) {
