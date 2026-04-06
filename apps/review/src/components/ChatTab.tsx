@@ -327,22 +327,22 @@ function ChatActivityIndicator() {
       flexDirection: "column",
       gap: 4,
     }}>
-      {toolActivity && (
+      {toolActivity ? (
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{
             display: "inline-block",
             width: 12,
             height: 12,
-            animation: "spin 1s linear infinite",
-          }}>
-            &#x21BB;
-          </span>
+            border: "2px solid var(--border)",
+            borderTopColor: "var(--text-secondary)",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }} />
           <span>
             {toolActivity === "WebSearch" ? "Searching the web..." : `Using ${toolActivity}...`}
           </span>
         </div>
-      )}
-      {thinking && (
+      ) : thinking && (
         <div>
           <button
             onClick={() => setExpanded(!expanded)}
