@@ -539,7 +539,7 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0 }: {
   const rangeEndLineNum = rangeLineNums?.endLine;
   const rangeLineContent = normalizedRange
     ? lines.slice(normalizedRange.start, normalizedRange.end + 1)
-        .filter(isSelectableLine)
+        .filter((l) => isSelectableLine(l) && l.type !== "deletion")
         .map((l) => l.content)
         .join("\n")
     : undefined;
