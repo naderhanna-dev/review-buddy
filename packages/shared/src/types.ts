@@ -125,6 +125,8 @@ export type SSEEvent =
   | { type: "agent:status"; job: AgentJob }
   | { type: "verdict:ready"; verdict: Verdict }
   | { type: "chat:chunk"; sessionId: string; delta: string }
+  | { type: "chat:thinking"; sessionId: string; thinking: string }
+  | { type: "chat:tool_use"; sessionId: string; toolName: string }
   | { type: "chat:done"; sessionId: string }
   | { type: "config:updated"; config: ODRConfig }
   | { type: "session:status"; status: string; error?: string };

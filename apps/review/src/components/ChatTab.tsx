@@ -1,8 +1,9 @@
 import { apiUrl } from "../api";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useStore } from "../store";
 import type { ModelChoice } from "@reviewradar/shared";
 import { MODEL_CHOICES } from "@reviewradar/shared";
+import MarkdownMessage from "./MarkdownMessage";
 
 export default function ChatTab() {
   const chatMessages = useStore((s) => s.chatMessages);
@@ -145,13 +146,16 @@ export default function ChatTab() {
               color: msg.role === "user" ? "#fff" : "var(--text)",
               fontSize: 13,
               lineHeight: 1.5,
-              whiteSpace: "pre-wrap",
+              ...(msg.role === "user" ? { whiteSpace: "pre-wrap" as const } : {}),
               wordBreak: "break-word",
             }}>
-              {msg.content || (chatStreaming ? <TypingIndicator /> : "")}
+              {msg.role === "assistant" && msg.content
+                ? <MarkdownMessage content={msg.content} />
+                : msg.content || (chatStreaming ? <TypingIndicator /> : "")}
             </div>
           </div>
         ))}
+        {chatStreaming && <ChatActivityIndicator />}
         <div ref={bottomRef} />
       </div>
       <ChatInput
@@ -189,13 +193,58 @@ function ChatInput({
 }) {
   const chatModel = useStore((s) => s.config.chatModel);
   const updateConfig = useStore((s) => s.updateConfig);
+  const [height, setHeight] = useState(96);
+  const dragging = useRef(false);
+  const startY = useRef(0);
+  const startH = useRef(0);
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    startY.current = e.clientY;
+    startH.current = height;
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      const delta = startY.current - ev.clientY;
+      setHeight(Math.max(72, Math.min(400, startH.current + delta)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [height]);
 
   return (
     <div style={{
       borderTop: "1px solid var(--border)",
       background: "var(--bg-secondary)",
     }}>
-      <div style={{ padding: "6px 12px 0", display: "flex", alignItems: "center", gap: 6 }}>
+      <div
+        onMouseDown={onDragStart}
+        style={{
+          height: 6,
+          cursor: "row-resize",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{
+          width: 32,
+          height: 3,
+          borderRadius: 2,
+          background: "var(--border)",
+        }} />
+      </div>
+      <div style={{ padding: "0 12px 0", display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>Model:</span>
         <select
           value={chatModel}
@@ -221,7 +270,6 @@ function ChatInput({
         onKeyDown={onKeyDown}
         placeholder="Ask about this PR..."
         disabled={disabled}
-        rows={1}
         style={{
           flex: 1,
           padding: "8px 10px",
@@ -233,8 +281,8 @@ function ChatInput({
           fontFamily: "inherit",
           resize: "none",
           outline: "none",
-          minHeight: 36,
-          maxHeight: 120,
+          height,
+          overflow: "auto",
         }}
       />
       <button
@@ -259,6 +307,75 @@ function ChatInput({
         Send
       </button>
       </div>
+    </div>
+  );
+}
+
+function ChatActivityIndicator() {
+  const thinking = useStore((s) => s.chatThinking);
+  const toolActivity = useStore((s) => s.chatToolActivity);
+  const [expanded, setExpanded] = useState(false);
+
+  if (!thinking && !toolActivity) return null;
+
+  return (
+    <div style={{
+      fontSize: 12,
+      color: "var(--text-secondary)",
+      padding: "2px 0 8px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+    }}>
+      {toolActivity ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{
+            display: "inline-block",
+            width: 12,
+            height: 12,
+            border: "2px solid var(--border)",
+            borderTopColor: "var(--text-secondary)",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }} />
+          <span>
+            {toolActivity === "WebSearch" ? "Searching the web..." : `Using ${toolActivity}...`}
+          </span>
+        </div>
+      ) : thinking && (
+        <div>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              padding: 0,
+              fontSize: 12,
+              fontFamily: "inherit",
+            }}
+          >
+            {expanded ? "\u25BE" : "\u25B8"} Thinking...
+          </button>
+          {expanded && (
+            <div style={{
+              marginTop: 4,
+              padding: "6px 8px",
+              background: "var(--bg)",
+              borderRadius: 6,
+              fontSize: 11,
+              maxHeight: 120,
+              overflow: "auto",
+              whiteSpace: "pre-wrap",
+              opacity: 0.7,
+              lineHeight: 1.4,
+            }}>
+              {thinking}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

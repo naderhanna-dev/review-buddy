@@ -31,9 +31,14 @@ function dirName(path: string): string {
   return parts.join("/");
 }
 
-function FileNode({ file, index, isActive }: { file: DiffFile; index: number; isActive: boolean }) {
+function FileNode({ file, index, isActive, isGroupSibling }: { file: DiffFile; index: number; isActive: boolean; isGroupSibling?: boolean }) {
   const setActiveFile = useStore((s) => s.setActiveFile);
   const [hovered, setHovered] = useState(false);
+
+  const bg = isActive ? "var(--bg-tertiary)"
+    : isGroupSibling ? "rgba(88, 166, 255, 0.06)"
+    : hovered ? "rgba(255,255,255,0.03)"
+    : "transparent";
 
   return (
     <button
@@ -47,13 +52,13 @@ function FileNode({ file, index, isActive }: { file: DiffFile; index: number; is
         width: "100%",
         padding: "4px 12px 4px 28px",
         border: "none",
-        background: isActive ? "var(--bg-tertiary)" : hovered ? "rgba(255,255,255,0.03)" : "transparent",
+        background: bg,
         color: "var(--text)",
         cursor: "pointer",
         fontSize: 13,
         fontFamily: "var(--font-mono)",
         textAlign: "left",
-        borderLeft: isActive ? "2px solid var(--accent)" : "2px solid transparent",
+        borderLeft: isActive ? "2px solid var(--accent)" : isGroupSibling ? "2px solid rgba(88, 166, 255, 0.3)" : "2px solid transparent",
         transition: "background 0.1s",
       }}
     >
@@ -101,6 +106,7 @@ export default function FileTree() {
   const groups = useStore((s) => s.groups);
   const groupsReady = useStore((s) => s.groupsReady);
   const activeFileIndex = useStore((s) => s.activeFileIndex);
+  const activeGroupId = useStore((s) => s.activeGroupId);
   const expandedGroups = useStore((s) => s.expandedGroups);
   const toggleGroup = useStore((s) => s.toggleGroup);
 
@@ -174,6 +180,7 @@ export default function FileTree() {
                   file={file}
                   index={index}
                   isActive={index === activeFileIndex}
+                  isGroupSibling={activeGroupId === group.id && index !== activeFileIndex}
                 />
               ))}
             </div>

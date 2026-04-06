@@ -54,8 +54,13 @@ interface ODRStore {
   // Chat
   chatMessages: ChatMessage[];
   chatStreaming: boolean;
+  chatThinking: string;
+  chatToolActivity: string | null;
   addChatMessage: (msg: ChatMessage) => void;
   appendChatDelta: (delta: string) => void;
+  appendChatThinking: (delta: string) => void;
+  setChatToolActivity: (toolName: string | null) => void;
+  resetChatTransient: () => void;
 
   // Agents
   agentJobs: Map<string, AgentJob>;
@@ -111,7 +116,11 @@ export const useStore = create<ODRStore>((set, get) => ({
   activeFileIndex: 0,
   activeGroupId: null,
   expandedGroups: new Set(),
-  setActiveFile: (index) => set({ activeFileIndex: index }),
+  setActiveFile: (index) => set((s) => {
+    const filePath = s.files[index]?.path;
+    const group = s.groups.find((g) => g.filePaths.includes(filePath));
+    return { activeFileIndex: index, activeGroupId: group?.id ?? null };
+  }),
   toggleGroup: (groupId) =>
     set((s) => {
       const next = new Set(s.expandedGroups);
@@ -166,6 +175,8 @@ export const useStore = create<ODRStore>((set, get) => ({
 
   chatMessages: [],
   chatStreaming: false,
+  chatThinking: "",
+  chatToolActivity: null,
   addChatMessage: (msg) =>
     set((s) => ({ chatMessages: [...s.chatMessages, msg] })),
   appendChatDelta: (delta) =>
@@ -177,6 +188,12 @@ export const useStore = create<ODRStore>((set, get) => ({
       }
       return { chatMessages: msgs };
     }),
+  appendChatThinking: (delta) =>
+    set((s) => ({ chatThinking: s.chatThinking + delta })),
+  setChatToolActivity: (toolName) =>
+    set({ chatToolActivity: toolName }),
+  resetChatTransient: () =>
+    set({ chatThinking: "", chatToolActivity: null }),
 
   agentJobs: new Map(),
   updateAgentJob: (job) =>

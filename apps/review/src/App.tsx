@@ -186,8 +186,15 @@ export default function App() {
       case "chat:chunk":
         appendChatDelta(e.delta);
         break;
+      case "chat:thinking":
+        useStore.getState().appendChatThinking(e.thinking);
+        break;
+      case "chat:tool_use":
+        useStore.getState().setChatToolActivity(e.toolName);
+        break;
       case "chat:done":
         useStore.setState({ chatStreaming: false });
+        useStore.getState().resetChatTransient();
         break;
       case "config:updated":
         setConfig(e.config);
