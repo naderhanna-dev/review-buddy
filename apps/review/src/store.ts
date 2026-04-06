@@ -111,7 +111,11 @@ export const useStore = create<ODRStore>((set, get) => ({
   activeFileIndex: 0,
   activeGroupId: null,
   expandedGroups: new Set(),
-  setActiveFile: (index) => set({ activeFileIndex: index }),
+  setActiveFile: (index) => set((s) => {
+    const filePath = s.files[index]?.path;
+    const group = s.groups.find((g) => g.filePaths.includes(filePath));
+    return { activeFileIndex: index, activeGroupId: group?.id ?? null };
+  }),
   toggleGroup: (groupId) =>
     set((s) => {
       const next = new Set(s.expandedGroups);

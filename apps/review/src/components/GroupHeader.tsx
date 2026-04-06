@@ -8,7 +8,7 @@ interface Props {
   fileCount: number;
 }
 
-const categoryColors: Record<string, string> = {
+export const categoryColors: Record<string, string> = {
   types: "#a78bfa",
   core: "#60a5fa",
   api: "#34d399",

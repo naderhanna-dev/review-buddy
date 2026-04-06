@@ -423,7 +423,7 @@ function CommentsPanel() {
                   textDecoration: "underline",
                 }}
               >
-                {c.filePath.split("/").pop()}:{c.line}
+                {c.filePath.split("/").pop()}:{c.line}{c.endLine ? `-${c.endLine}` : ""}
               </button>
               <button
                 onClick={() => {
@@ -444,7 +444,27 @@ function CommentsPanel() {
                 {"\u00d7"}
               </button>
             </div>
-            <div style={{ lineHeight: 1.5 }}>{c.body}</div>
+            <div style={{ lineHeight: 1.5 }}>
+              {c.body ? (
+                <div>{c.body}</div>
+              ) : c.type === "suggestion" ? (
+                <div style={{ color: "var(--text-secondary)", fontSize: 12, fontStyle: "italic" }}>No comment</div>
+              ) : null}
+              {c.type === "suggestion" && c.suggestedCode && (
+                <pre style={{
+                  margin: "6px 0 0",
+                  padding: "6px 8px",
+                  background: "var(--bg)",
+                  borderRadius: 4,
+                  fontSize: 12,
+                  fontFamily: "var(--font-mono)",
+                  overflow: "auto",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                  borderLeft: "2px solid var(--green)",
+                }}>{c.suggestedCode}</pre>
+              )}
+            </div>
           </div>
         );
       })}
