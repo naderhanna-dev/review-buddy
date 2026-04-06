@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useStore } from "../store";
 import { useHighlightedLines } from "../hooks/useHighlightedLines";
 import { categoryColors } from "./GroupHeader";
+import { HighlightedTextarea } from "./HighlightedTextarea";
 import type { ReviewComment, DiffFile } from "@reviewradar/shared";
 
 // CSS hover styles injected once — avoids stale JS hover state from missed mouseLeave events
@@ -224,7 +225,6 @@ function CommentForm({ filePath, lineNum, endLineNum, lineContent, onSubmit, onC
   const [suggestionCode, setSuggestionCode] = useState("");
   const [type, setType] = useState<ReviewComment["type"]>("comment");
   const prevType = useRef(type);
-  const suggestionRef = useRef<HTMLTextAreaElement>(null);
 
   // Pre-populate with source line when switching to suggestion mode
   useEffect(() => {
@@ -233,15 +233,6 @@ function CommentForm({ filePath, lineNum, endLineNum, lineContent, onSubmit, onC
     }
     prevType.current = type;
   }, [type, lineContent, suggestionCode]);
-
-  // Auto-resize suggestion textarea
-  useEffect(() => {
-    const el = suggestionRef.current;
-    if (el) {
-      el.style.height = "auto";
-      el.style.height = Math.max(60, el.scrollHeight) + "px";
-    }
-  }, [suggestionCode, type]);
 
   const canSubmit = type === "suggestion" ? !!suggestionCode.trim() : !!commentText.trim();
 
@@ -302,15 +293,16 @@ function CommentForm({ filePath, lineNum, endLineNum, lineContent, onSubmit, onC
             }}
           />
           <div style={fenceLabelStyle}>```suggestion</div>
-          <textarea
-            ref={suggestionRef}
-            value={suggestionCode} onChange={(e) => setSuggestionCode(e.target.value)} autoFocus
+          <HighlightedTextarea
+            value={suggestionCode}
+            onChange={(e) => setSuggestionCode(e.target.value)}
             onKeyDown={handleKeyDown}
+            filePath={filePath}
+            autoFocus
             placeholder="Edit the code to suggest a change..."
             style={{
-              width: "100%", minHeight: 60, padding: 8, background: "var(--bg)", color: "var(--text)",
-              border: "1px solid var(--border)", borderRadius: "0", fontFamily: "var(--font-mono)", fontSize: 13, resize: "vertical",
-              borderLeft: "2px solid var(--green)", overflow: "hidden",
+              background: "var(--bg)", border: "1px solid var(--border)",
+              borderRadius: "0", borderLeft: "2px solid var(--green)",
             }}
           />
           <div style={fenceLabelStyle}>```</div>
