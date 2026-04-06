@@ -3,38 +3,122 @@
 ReviewRadar is a small React + Vite webapp that helps you triage pull requests by attention level.
 It fetches PRs scoped to you in the selected org (not all org PRs).
 
+The integrated **AI Review** feature lets you launch a deep code review from the dashboard — with syntax-highlighted diffs, AI-powered analysis (bug hunting, architecture review, test coverage), chat, and one-click GitHub review submission.
+
 ## Setup
 
 ### Prerequisites
 - Node.js 24+
 - pnpm (`corepack enable && corepack prepare pnpm@latest --activate`)
+- [GitHub CLI](https://cli.github.com) (`gh`) — required for the AI review feature
+- [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli) — required for AI analysis, grouping, and chat
 
-### Install & Run
+### Install & Build
 ```bash
 pnpm install
-pnpm --filter web dev    # Start the web app
+pnpm build
 ```
 
-### Other Commands
+### Run the server
 ```bash
-pnpm build               # Build all packages
-pnpm test                # Run all tests
-pnpm lint                # Lint all packages
-pnpm --filter web dev    # Dev server for web app only
-pnpm --filter @reviewradar/core test  # Test core package only
+pnpm run serve
+# Server starts at http://localhost:7672
+```
+
+This serves both the PR dashboard and the AI review app from a single local server.
+
+**Options:**
+- `--port, -p` — Port to listen on (default: 7672)
+- `--host, -H` — Host to bind to (default: 127.0.0.1)
+
+> **Security note:** By default the server binds to `127.0.0.1` (localhost only).
+> The server spawns `gh` and `claude` CLI subprocesses using **your local
+> credentials** — anyone who can reach the server can trigger GitHub API calls
+> and AI analysis on your behalf. Only use `--host 0.0.0.0` on trusted networks
+> where you're comfortable with that exposure.
+
+### Install as a service (macOS)
+
+Run the server automatically on login:
+
+```bash
+pnpm run install-service
+```
+
+This creates a launchd plist at `~/Library/LaunchAgents/com.reviewradar.server.plist` and starts the service. Logs go to `~/Library/Logs/ReviewRadar/`.
+
+```bash
+# Remove the service
+pnpm run uninstall-service
+
+# Check service status
+launchctl list | grep reviewradar
+
+# View logs
+tail -f ~/Library/Logs/ReviewRadar/server.log
 ```
 
 ### Project Structure
-- `apps/web/` -- Browser-based PR dashboard (React + Vite)
-- `packages/core/` -- Shared GitHub API client, PR classification, types
+```
+apps/
+  web/          -- PR dashboard (React + Vite, also deployed to GitHub Pages)
+  review/       -- AI review app (React + Vite + Shiki + Zustand)
+  server/       -- Persistent Node.js HTTP server (serves both apps, manages review sessions)
+packages/
+  core/         -- Shared GitHub API client, PR classification, types
+  shared/       -- Review types, gh CLI pr-provider
+  agents/       -- AI agent prompts + JSON schemas
+  theme/        -- Shared CSS design tokens (light/dark)
+```
 
-### Configuration
+### Dashboard Configuration
 
 Open the app, then configure:
 - GitHub organization (single org scope)
 - Personal access token (PAT)
 - Settings live in a hamburger-toggled sidebar (top-right).
 - After saving, the sidebar auto-closes; reopen via the hamburger icon to update.
+
+### AI Review
+
+Click the **Review** button on any PR row to open the AI review interface. This requires the local server to be running (not available on the GitHub Pages deployment).
+
+The review interface provides:
+- **Syntax-highlighted diffs** with Shiki
+- **AI file grouping** — files organized into semantic groups with summaries
+- **AI analysis** — Bug Hunter, Architecture Reviewer, and Test Coverage Analyzer agents
+- **Confidence scoring** — each finding is scored 0-100 by a separate agent
+- **Chat** — ask questions about the PR with streaming responses
+- **Comments & suggestions** — add review comments with GitHub suggestion block support
+- **One-click submit** — post your review (Approve/Comment/Request Changes) directly to GitHub
+
+### Commands
+```bash
+pnpm run serve              # Start the server (dashboard + review)
+pnpm build                  # Build all packages
+pnpm test                   # Run all tests
+pnpm lint                   # Lint all packages
+pnpm --filter web dev       # Dev server for dashboard only
+pnpm --filter @reviewradar/core test  # Test core package only
+```
+
+## Development
+
+```bash
+pnpm run dev
+```
+
+This starts all apps in parallel via Turborepo:
+- **Dashboard** — Vite dev server on port 5173
+- **Review app** — Vite dev server on port 5174 (proxies `/api` to the server)
+- **Server** — tsx with watch mode on port 7672
+
+You can also run selectively:
+```bash
+pnpm --filter web dev                 # Dashboard only
+pnpm --filter review dev              # Review app only (needs server running)
+pnpm --filter server dev              # Server only
+```
 
 ## Token setup
 
@@ -149,139 +233,6 @@ Each PR row also shows a GitHub-style checks icon:
 - Default is `System`, following your OS/browser preference.
 - Floating moon/sun button in the bottom-right toggles between dark and light.
 - Preference is stored in local storage under `review-radar.theme`.
-
-## Commands
-
-- `pnpm --filter web dev` - start dev server
-- `pnpm build` - type-check and build all packages
-- `pnpm lint` - run ESLint
-- `pnpm test` - run all tests (Vitest)
-
-## Running as a permanent service
-
-Build the production bundle once, then serve the static files with a lightweight
-server that starts automatically on login.
-
-### 1. Build and verify
-
-```bash
-pnpm build
-pnpm --filter web preview -- --port 4173
-# Open http://localhost:4173 to verify, then Ctrl-C
-```
-
-### 2. Install a static file server
-
-`vite preview` works but is intended for spot-checking builds, not long-running
-service use. [`serve`](https://github.com/vercel/serve) is a better fit:
-
-```bash
-npm install -g serve
-```
-
-### macOS (launchd)
-
-Create `~/Library/LaunchAgents/com.reviewradar.plist`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.reviewradar</string>
-  <key>ProgramArguments</key>
-  <array>
-    <!-- Run `which serve` to find the real path.
-         See the fnm note below if you use fnm. -->
-    <string>/usr/local/bin/serve</string>
-    <string>-s</string>
-    <string>dist</string>
-    <string>-l</string>
-    <string>4173</string>
-    <!-- Optional: uncomment the next two lines to listen on all
-         interfaces so other devices on your network can reach the app
-         (e.g. http://192.168.1.x:4173). -->
-    <!-- <string>--host</string> -->
-    <!-- <string>0.0.0.0</string> -->
-  </array>
-  <key>WorkingDirectory</key>
-  <!-- Replace with the absolute path to your clone's apps/web/ directory. -->
-  <string>/Users/YOU/path/to/ReviewRadar/apps/web</string>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>/tmp/reviewradar.log</string>
-  <key>StandardErrorPath</key>
-  <string>/tmp/reviewradar.log</string>
-</dict>
-</plist>
-```
-
-Load and start:
-
-```bash
-launchctl load ~/Library/LaunchAgents/com.reviewradar.plist
-```
-
-Management commands:
-
-```bash
-# Stop
-launchctl unload ~/Library/LaunchAgents/com.reviewradar.plist
-
-# Restart (unload then load)
-launchctl unload ~/Library/LaunchAgents/com.reviewradar.plist
-launchctl load ~/Library/LaunchAgents/com.reviewradar.plist
-
-# Check status
-launchctl list | grep reviewradar
-
-# View logs
-tail -f /tmp/reviewradar.log
-```
-
-The service starts automatically on login. To remove it permanently, unload and
-delete the plist file.
-
-### fnm users
-
-launchd does not source your shell profile, so `#!/usr/bin/env node` inside the
-`serve` script cannot find `node`. You need to replace the single `serve` path
-in the plist with the absolute `node` binary followed by the `serve` script:
-
-fnm maintains a `default` alias symlink that tracks whichever version you set
-with `fnm default`. Use it instead of a version-pinned path so upgrades just work:
-
-```bash
-# Verify the alias exists
-ls ~/.local/share/fnm/aliases/default/bin/node
-ls ~/.local/share/fnm/aliases/default/lib/node_modules/serve/build/main.js
-```
-
-Then replace the `<string>/usr/local/bin/serve</string>` line in the plist with:
-
-```xml
-    <string>/Users/YOU/.local/share/fnm/aliases/default/bin/node</string>
-    <string>/Users/YOU/.local/share/fnm/aliases/default/lib/node_modules/serve/build/main.js</string>
-```
-
-After upgrading node via fnm, just restart the service — no path changes needed
-as long as `serve` is installed globally on the new version.
-
-### Notes
-
-- By default the server binds to `localhost` only. To expose the app to other
-  devices on your network (e.g. `http://192.168.1.x:4173`), add `--host 0.0.0.0`
-  to the serve command in the service file.
-- Change the port in the service file if `4173` conflicts.
-- After pulling new code, rebuild (`pnpm build`) and restart the
-  service to pick up changes.
-- The `-s` flag on `serve` enables SPA fallback (rewrites all routes to
-  `index.html`), which a client-side React app needs.
 
 ## Refresh behavior
 

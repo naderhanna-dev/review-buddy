@@ -1,0 +1,126 @@
+/* ReviewRadar shared design tokens — light (default) and dark themes */
+/* Source of truth: ReviewRadar dashboard palette + ODR review aliases */
+
+:root {
+  /* ── Core palette (ReviewRadar canonical) ── */
+  --background: #f6f8fa;
+  --surface: #ffffff;
+  --subtle: #f6f8fa;
+  --border: #d0d7de;
+  --text: #24292f;
+  --muted: #57606a;
+  --link: #0969da;
+  --input-bg: #ffffff;
+  --success-bg: #1f883d;
+  --success-bg-hover: #1a7f37;
+  --warning-bg: #fff8c5;
+  --warning-fg: #9a6700;
+  --error-fg: #cf222e;
+
+  /* ── Status pills (dashboard) ── */
+  --status-danger-bg: #ffebe9;
+  --status-danger-border: #ff8182;
+  --status-danger-fg: #cf222e;
+  --status-warn-bg: #fff8c5;
+  --status-warn-border: #d4a72c;
+  --status-warn-fg: #9a6700;
+  --status-info-bg: #ddf4ff;
+  --status-info-border: #54aeff;
+  --status-info-fg: #0969da;
+  --status-note-bg: #fbefff;
+  --status-note-border: #bf87ff;
+  --status-note-fg: #8250df;
+  --status-own-bg: #eaf5ff;
+  --status-own-border: #91c8ff;
+  --status-own-fg: #0b69c7;
+  --check-success: #1a7f37;
+  --check-pending: #9a6700;
+  --check-failure: #cf222e;
+  --tooltip-bg: #24292f;
+  --tooltip-border: #444d56;
+  --tooltip-fg: #f6f8fa;
+
+  /* ── Review UI aliases (map to canonical names) ── */
+  --bg: var(--surface);
+  --bg-secondary: var(--background);
+  --bg-tertiary: #eaeef2;
+  --text-secondary: var(--muted);
+  --accent: var(--link);
+  --green: #1a7f37;
+  --red: #cf222e;
+  --yellow: #9a6700;
+  --blue: #0969da;
+  --green-bg: rgba(26, 127, 55, 0.12);
+  --green-bg-hover: rgba(26, 127, 55, 0.22);
+  --red-bg: rgba(207, 34, 46, 0.12);
+  --red-bg-hover: rgba(207, 34, 46, 0.22);
+  --yellow-bg: rgba(154, 103, 0, 0.12);
+  --yellow-bg-hover: rgba(154, 103, 0, 0.22);
+  --accent-bg: rgba(9, 105, 218, 0.12);
+  --accent-bg-hover: rgba(9, 105, 218, 0.22);
+  --hover-overlay: rgba(0, 0, 0, 0.05);
+
+  /* ── Fonts ── */
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+
+:root[data-theme='dark'] {
+  /* ── Core palette ── */
+  --background: #0d1117;
+  --surface: #161b22;
+  --subtle: #1f2630;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --link: #58a6ff;
+  --input-bg: #0d1117;
+  --success-bg: #238636;
+  --success-bg-hover: #2ea043;
+  --warning-bg: #2f2a11;
+  --warning-fg: #e3b341;
+  --error-fg: #ff7b72;
+
+  /* ── Status pills ── */
+  --status-danger-bg: #3a1516;
+  --status-danger-border: #8e3538;
+  --status-danger-fg: #ff9b95;
+  --status-warn-bg: #32290f;
+  --status-warn-border: #806219;
+  --status-warn-fg: #e3b341;
+  --status-info-bg: #0c2d4a;
+  --status-info-border: #1f6feb;
+  --status-info-fg: #79c0ff;
+  --status-note-bg: #2b1548;
+  --status-note-border: #8250df;
+  --status-note-fg: #d2a8ff;
+  --status-own-bg: #11253a;
+  --status-own-border: #1f6feb;
+  --status-own-fg: #79c0ff;
+  --check-success: #3fb950;
+  --check-pending: #d29922;
+  --check-failure: #f85149;
+  --tooltip-bg: #f6f8fa;
+  --tooltip-border: #30363d;
+  --tooltip-fg: #0d1117;
+
+  /* ── Review UI aliases ── */
+  --bg: var(--background);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: #21262d;
+  --text-secondary: #9da5ad;
+  --accent: var(--link);
+  --green: #3fb950;
+  --red: #f85149;
+  --yellow: #d29922;
+  --blue: #58a6ff;
+  --green-bg: rgba(63, 185, 80, 0.15);
+  --green-bg-hover: rgba(63, 185, 80, 0.3);
+  --red-bg: rgba(248, 81, 73, 0.15);
+  --red-bg-hover: rgba(248, 81, 73, 0.3);
+  --yellow-bg: rgba(210, 153, 34, 0.15);
+  --yellow-bg-hover: rgba(210, 153, 34, 0.3);
+  --accent-bg: rgba(88, 166, 255, 0.15);
+  --accent-bg-hover: rgba(88, 166, 255, 0.3);
+  --hover-overlay: rgba(255, 255, 255, 0.08);
+}
