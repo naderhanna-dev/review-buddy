@@ -352,17 +352,31 @@ function App() {
         ? `Last updated ${formatRefreshAge(prData.lastRefreshedAt, nowMs)}`
         : "Not refreshed yet";
 
-  // Fetch active review sessions from the local server (when review feature is enabled)
+  // Fetch active review sessions from the local server
+  // Review feature is disabled by default and only enabled when the review API is available
+  // (i.e., when running through the dashboard server at localhost:7672, not Vite dev at localhost:5173)
   const [activeReviewKeys, setActiveReviewKeys] = useState<Set<string>>(new Set());
+  const [reviewFeatureAvailable, setReviewFeatureAvailable] = useState(false);
   useEffect(() => {
+    // Allow explicit disable via env var (e.g., for GitHub Pages deployment)
     if (import.meta.env.VITE_REVIEW_ENABLED === 'false') return;
     const fetchSessions = () => {
       fetch("/api/reviews")
-        .then((r) => r.ok ? r.json() : [])
+        .then((r) => {
+          if (r.ok) {
+            setReviewFeatureAvailable(true);
+            return r.json();
+          }
+          setReviewFeatureAvailable(false);
+          return [];
+        })
         .then((sessions: Array<{ key: string }>) => {
           setActiveReviewKeys(new Set(sessions.map((s) => s.key)));
         })
-        .catch(() => {}); // Server not running — that's fine
+        .catch(() => {
+          // Server not running — disable the review feature
+          setReviewFeatureAvailable(false);
+        });
     };
     fetchSessions();
     const interval = setInterval(fetchSessions, 30_000);
@@ -391,6 +405,7 @@ function App() {
     showLineChanges,
     showLabels,
     activeReviewKeys,
+    reviewFeatureAvailable,
     token: token ?? '',
   };
 
