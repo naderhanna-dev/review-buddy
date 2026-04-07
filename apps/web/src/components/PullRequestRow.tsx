@@ -28,6 +28,7 @@ export function PullRequestRow({
   showLineChanges,
   showLabels,
   hasActiveReview,
+  reviewFeatureAvailable,
 }: {
   pr: PullRequest;
   token: string;
@@ -44,6 +45,7 @@ export function PullRequestRow({
   showLineChanges: boolean;
   showLabels: boolean;
   hasActiveReview?: boolean;
+  reviewFeatureAvailable?: boolean;
 }) {
   const checkTitle =
     pr.checkState === "success"
@@ -231,7 +233,7 @@ export function PullRequestRow({
               </span>
             </span>
           ) : null}
-          {import.meta.env.VITE_REVIEW_ENABLED !== 'false' && (
+          {reviewFeatureAvailable && (
             <a
               href={`/review/${pr.repository}/${pr.number}`}
               className="review-link"

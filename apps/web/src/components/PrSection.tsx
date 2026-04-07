@@ -46,6 +46,7 @@ export function PrSection({
   showLineChanges,
   showLabels,
   activeReviewKeys,
+  reviewFeatureAvailable,
 }: {
   title: string;
   sectionKey: SectionKey;
@@ -87,6 +88,7 @@ export function PrSection({
   showLineChanges: boolean;
   showLabels: boolean;
   activeReviewKeys?: Set<string>;
+  reviewFeatureAvailable?: boolean;
   token: string;
 }) {
   const grouped = useMemo(
@@ -116,6 +118,7 @@ export function PrSection({
         showLineChanges={showLineChanges}
         showLabels={showLabels}
         hasActiveReview={activeReviewKeys?.has(`${pr.repository}#${pr.number}`) ?? false}
+        reviewFeatureAvailable={reviewFeatureAvailable}
       />
     );
   }
