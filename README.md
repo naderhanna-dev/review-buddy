@@ -133,6 +133,7 @@ ReviewRadar supports two token types. Both require the **Resource owner** set to
 - Pull requests: **Read** (required)
 - Commit statuses: **Read** (required for PR check status icons)
 - Metadata: **Read** (auto-granted when any other repo permission is set)
+
 **Organization permissions**:
 - Members: **Read** (optional, enables team-assigned PR signals)
 
