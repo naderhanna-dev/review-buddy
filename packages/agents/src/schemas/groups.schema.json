@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "category": {
+            "type": "string",
+            "enum": ["types", "core", "api", "infra", "tests", "docs", "other"]
+          },
+          "summary": { "type": "string" },
+          "filePaths": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["label", "category", "summary", "filePaths"]
+      }
+    }
+  },
+  "required": ["groups"]
+}

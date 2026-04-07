@@ -27,6 +27,7 @@ export function PullRequestRow({
   onClearStalePreference,
   showLineChanges,
   showLabels,
+  hasActiveReview,
 }: {
   pr: PullRequest;
   token: string;
@@ -42,6 +43,7 @@ export function PullRequestRow({
   onClearStalePreference: (repository: string, number: number) => void;
   showLineChanges: boolean;
   showLabels: boolean;
+  hasActiveReview?: boolean;
 }) {
   const checkTitle =
     pr.checkState === "success"
@@ -229,6 +231,20 @@ export function PullRequestRow({
               </span>
             </span>
           ) : null}
+          {import.meta.env.VITE_REVIEW_ENABLED !== 'false' && (
+            <a
+              href={`/review/${pr.repository}/${pr.number}`}
+              className="review-link"
+              onClick={(event) => { event.stopPropagation(); }}
+              title="Open AI review"
+              aria-label="Open AI review"
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true" role="presentation">
+                <path fill="currentColor" d="M1.679 7.932c.412-.621 1.242-1.75 2.366-2.717C5.175 4.242 6.527 3.5 8 3.5c1.473 0 2.825.742 3.955 1.715 1.124.967 1.954 2.096 2.366 2.717a.12.12 0 0 1 0 .136c-.412.621-1.242 1.75-2.366 2.717C10.825 11.758 9.473 12.5 8 12.5c-1.473 0-2.825-.742-3.955-1.715C2.921 9.818 2.091 8.69 1.679 8.068a.12.12 0 0 1 0-.136ZM8 2c-1.981 0-3.67.992-4.933 2.078C1.786 5.164.897 6.38.451 7.05a1.007 1.007 0 0 0 0 1.09c.446.67 1.335 1.886 2.616 2.972C4.33 12.008 6.019 13 8 13s3.67-.992 4.933-2.078c1.281-1.086 2.17-2.302 2.616-2.972a1.007 1.007 0 0 0 0-1.09c-.446-.67-1.335-1.886-2.616-2.972C11.67 2.992 9.981 2 8 2Zm0 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+              </svg>
+              {hasActiveReview ? "Resume review" : "Review"}
+            </a>
+          )}
           <span className="updated-at">{pr.updatedAt}</span>
         </div>
       </div>

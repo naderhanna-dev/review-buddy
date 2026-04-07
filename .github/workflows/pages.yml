@@ -38,6 +38,8 @@ jobs:
 
       - name: Build
         run: pnpm run build
+        env:
+          VITE_REVIEW_ENABLED: "false"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

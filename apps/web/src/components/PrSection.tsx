@@ -45,6 +45,7 @@ export function PrSection({
   filterBar,
   showLineChanges,
   showLabels,
+  activeReviewKeys,
 }: {
   title: string;
   sectionKey: SectionKey;
@@ -85,6 +86,7 @@ export function PrSection({
   filterBar?: React.ReactNode;
   showLineChanges: boolean;
   showLabels: boolean;
+  activeReviewKeys?: Set<string>;
   token: string;
 }) {
   const grouped = useMemo(
@@ -113,6 +115,7 @@ export function PrSection({
         onClearStalePreference={onClearStalePreference}
         showLineChanges={showLineChanges}
         showLabels={showLabels}
+        hasActiveReview={activeReviewKeys?.has(`${pr.repository}#${pr.number}`) ?? false}
       />
     );
   }

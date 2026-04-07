@@ -1,4 +1,6 @@
 .worktrees/
 .turbo
 node_modules
+dist/
 *.tsbuildinfo
+launcher.sh

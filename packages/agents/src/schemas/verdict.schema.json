@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "recommendation": {
+      "type": "string",
+      "enum": ["approve", "approve-with-nits", "request-changes"]
+    },
+    "reasoning": { "type": "string" }
+  },
+  "required": ["recommendation", "reasoning"]
+}
