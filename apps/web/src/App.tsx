@@ -7,6 +7,7 @@ import {
   readDimViewedPreference,
   readMergedCountPreference,
   readSectionFilterPreferences,
+  readSectionGroupByRepoPreferences,
   readSectionHideDrafts,
   readSectionSortPreferences,
   readShowLabelsPreference,
@@ -86,6 +87,9 @@ function App() {
   const [sectionHideDrafts, setSectionHideDrafts] = useState<
     Record<SectionKey, boolean>
   >(readSectionHideDrafts);
+  const [sectionGroupByRepo, setSectionGroupByRepo] = useState<
+    Record<SectionKey, boolean>
+  >(readSectionGroupByRepoPreferences);
   const [sectionFilterPreferences, setSectionFilterPreferences] = useState<
     Record<SectionKey, SectionFilterState>
   >(readSectionFilterPreferences);
@@ -217,6 +221,14 @@ function App() {
     setSectionHideDrafts((current) => {
       const next = { ...current, [sectionKey]: !current[sectionKey] };
       localStorage.setItem(STORAGE_KEYS.sectionHideDrafts, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function handleToggleSectionGroupByRepo(sectionKey: SectionKey): void {
+    setSectionGroupByRepo((current) => {
+      const next = { ...current, [sectionKey]: !current[sectionKey] };
+      localStorage.setItem(STORAGE_KEYS.sectionGroupByRepo, JSON.stringify(next));
       return next;
     });
   }
@@ -418,6 +430,8 @@ function App() {
         sortPreference={sectionSortPreferences.needsAttention}
         hideDrafts={sectionHideDrafts.needsAttention}
         onToggleHideDrafts={() => handleToggleSectionHideDrafts("needsAttention")}
+        groupByRepo={sectionGroupByRepo.needsAttention}
+        onToggleGroupByRepo={() => handleToggleSectionGroupByRepo("needsAttention")}
         filterBar={
           needsAttentionUsers.length > 1 ? (
             <UserFilterBar
@@ -456,6 +470,8 @@ function App() {
         sortPreference={sectionSortPreferences.yourPrs}
         hideDrafts={sectionHideDrafts.yourPrs}
         onToggleHideDrafts={() => handleToggleSectionHideDrafts("yourPrs")}
+        groupByRepo={sectionGroupByRepo.yourPrs}
+        onToggleGroupByRepo={() => handleToggleSectionGroupByRepo("yourPrs")}
       />
 
       <PrSection
@@ -476,6 +492,8 @@ function App() {
         sortPreference={sectionSortPreferences.relatedToYou}
         hideDrafts={sectionHideDrafts.relatedToYou}
         onToggleHideDrafts={() => handleToggleSectionHideDrafts("relatedToYou")}
+        groupByRepo={sectionGroupByRepo.relatedToYou}
+        onToggleGroupByRepo={() => handleToggleSectionGroupByRepo("relatedToYou")}
         filterBar={
           relatedToYouUsers.length > 1 ? (
             <UserFilterBar
@@ -520,6 +538,8 @@ function App() {
         sortPreference={sectionSortPreferences.stalePrs}
         hideDrafts={sectionHideDrafts.stalePrs}
         onToggleHideDrafts={() => handleToggleSectionHideDrafts("stalePrs")}
+        groupByRepo={sectionGroupByRepo.stalePrs}
+        onToggleGroupByRepo={() => handleToggleSectionGroupByRepo("stalePrs")}
       />
 
       {isConnectionPanelOpen ? (

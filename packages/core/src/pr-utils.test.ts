@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { PullRequest } from './classification'
 import { EMPTY_FILTER_STATE } from './types'
-import { applySectionFilter, applySectionSort } from './pr-utils'
+import { applySectionFilter, applySectionSort, groupPrsByRepo } from './pr-utils'
 
 function makePr(overrides: Partial<PullRequest> = {}): PullRequest {
   return {
@@ -70,14 +70,14 @@ describe('applySectionSort', () => {
     expect(sorted.map(pr => pr.author)).toEqual(['Alice', 'Bob', 'Charlie'])
   })
 
-  it('sorts by repository A-Z for "repo-az"', () => {
+  it('falls back to default for removed "repo-az"', () => {
     const prs = [
       makePr({ repository: 'org/zoo' }),
       makePr({ repository: 'org/alpha' }),
-      makePr({ repository: 'org/mid' }),
     ]
-    const sorted = applySectionSort(prs, 'repo-az')
-    expect(sorted.map(pr => pr.repository)).toEqual(['org/alpha', 'org/mid', 'org/zoo'])
+    // "repo-az" is no longer a valid sort — should return prs unchanged
+    const sorted = applySectionSort(prs, 'repo-az' as any)
+    expect(sorted).toBe(prs)
   })
 
   it('sorts by total churn descending for "line-changes-desc"', () => {
@@ -228,5 +228,25 @@ describe('applySectionFilter', () => {
     })
 
     expect(filtered.map((pr) => pr.id)).toEqual([1])
+  })
+})
+
+describe('groupPrsByRepo', () => {
+  it('groups PRs by repository in alphabetical order', () => {
+    const prs = [
+      makePr({ id: 1, repository: 'org/zoo' }),
+      makePr({ id: 2, repository: 'org/alpha' }),
+      makePr({ id: 3, repository: 'org/zoo' }),
+      makePr({ id: 4, repository: 'org/mid' }),
+    ]
+    const grouped = groupPrsByRepo(prs)
+    expect(grouped.map(([repo]) => repo)).toEqual(['org/alpha', 'org/mid', 'org/zoo'])
+    expect(grouped[0][1].map(pr => pr.id)).toEqual([2])
+    expect(grouped[1][1].map(pr => pr.id)).toEqual([4])
+    expect(grouped[2][1].map(pr => pr.id)).toEqual([1, 3])
+  })
+
+  it('returns empty array for no PRs', () => {
+    expect(groupPrsByRepo([])).toEqual([])
   })
 })

@@ -1,6 +1,6 @@
 import type { PullRequest } from "./classification";
 import type { SectionFilterState, SortPreference } from "./types";
-import { sortByCreatedAt, sortByAuthor, sortByRepository, sortByLineChanges } from "./classification";
+import { sortByCreatedAt, sortByAuthor, sortByLineChanges } from "./classification";
 
 export function applySectionSort(
   prs: PullRequest[],
@@ -14,9 +14,6 @@ export function applySectionSort(
   }
   if (preference === "author-az") {
     return sortByAuthor(prs);
-  }
-  if (preference === "repo-az") {
-    return sortByRepository(prs);
   }
   if (preference === "line-changes-desc") {
     return sortByLineChanges(prs);
@@ -77,6 +74,18 @@ export function formatRefreshAge(timestampMs: number, nowMs: number): string {
 
   const diffHours = Math.floor(diffMinutes / 60);
   return `${diffHours}h ago`;
+}
+
+export function groupPrsByRepo(prs: PullRequest[]): [string, PullRequest[]][] {
+  const groups = new Map<string, PullRequest[]>();
+  for (const pr of prs) {
+    const repo = pr.repository;
+    if (!groups.has(repo)) groups.set(repo, []);
+    groups.get(repo)!.push(pr);
+  }
+  return Array.from(groups.entries()).sort(([a], [b]) =>
+    a.toLowerCase().localeCompare(b.toLowerCase()),
+  );
 }
 
 export function sortByPriorityAndUpdated(

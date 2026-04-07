@@ -6,7 +6,6 @@ const VALID_SORT_VALUES: ReadonlySet<string> = new Set([
   "oldest-first",
   "newest-first",
   "author-az",
-  "repo-az",
   "line-changes-desc",
 ]);
 
@@ -18,6 +17,13 @@ const DEFAULT_SECTION_SORT: Record<SectionKey, SortPreference> = {
 };
 
 const DEFAULT_SECTION_HIDE_DRAFTS: Record<SectionKey, boolean> = {
+  needsAttention: false,
+  yourPrs: false,
+  relatedToYou: false,
+  stalePrs: false,
+};
+
+const DEFAULT_SECTION_GROUP_BY_REPO: Record<SectionKey, boolean> = {
   needsAttention: false,
   yourPrs: false,
   relatedToYou: false,
@@ -135,6 +141,48 @@ export function readSectionHideDrafts(): Record<SectionKey, boolean> {
   } catch {
     return { ...DEFAULT_SECTION_HIDE_DRAFTS };
   }
+}
+
+export function readSectionGroupByRepoPreferences(): Record<SectionKey, boolean> {
+  const raw = readStorageItem(STORAGE_KEYS.sectionGroupByRepo);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const result = { ...DEFAULT_SECTION_GROUP_BY_REPO };
+      for (const key of Object.keys(result) as SectionKey[]) {
+        if (parsed[key] === true) {
+          result[key] = true;
+        }
+      }
+      return result;
+    } catch {
+      // fall through to migration
+    }
+  }
+
+  // Migration: if any section was sorted by "repo-az", auto-enable grouping
+  const sortRaw = readStorageItem(STORAGE_KEYS.sectionSort);
+  if (sortRaw) {
+    try {
+      const sortParsed = JSON.parse(sortRaw) as Record<string, string>;
+      const result = { ...DEFAULT_SECTION_GROUP_BY_REPO };
+      let migrated = false;
+      for (const key of Object.keys(result) as SectionKey[]) {
+        if (sortParsed[key] === "repo-az") {
+          result[key] = true;
+          migrated = true;
+        }
+      }
+      if (migrated) {
+        localStorage.setItem(STORAGE_KEYS.sectionGroupByRepo, JSON.stringify(result));
+        return result;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return { ...DEFAULT_SECTION_GROUP_BY_REPO };
 }
 
 export function readDimViewedPreference(): boolean {

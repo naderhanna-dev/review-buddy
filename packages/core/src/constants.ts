@@ -20,6 +20,7 @@ export const STORAGE_KEYS: Record<
   | "prCache"
   | "recentlyMergedCount"
   | "sectionHideDrafts"
+  | "sectionGroupByRepo"
   | "dimViewed"
   | "showLineChanges"
   | "showLabels"
@@ -39,5 +40,6 @@ export const STORAGE_KEYS: Record<
   dimViewed: "review-radar.dimViewed",
   showLineChanges: "review-radar.showLineChanges",
   showLabels: "review-radar.showLabels",
+  sectionGroupByRepo: "review-radar.sectionGroupByRepo",
   sectionFilters: "review-radar.sectionFilters",
 };

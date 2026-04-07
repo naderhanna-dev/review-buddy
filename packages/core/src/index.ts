@@ -108,6 +108,7 @@ export {
   readMergedCountPreference,
   readSectionSortPreferences,
   readSectionHideDrafts,
+  readSectionGroupByRepoPreferences,
   readDimViewedPreference,
   readShowLineChangesPreference,
   readShowLabelsPreference,
@@ -121,6 +122,7 @@ export {
   applyDraftFilter,
   applySectionFilter,
   formatRefreshAge,
+  groupPrsByRepo,
   sortByPriorityAndUpdated,
 } from "./pr-utils";
 

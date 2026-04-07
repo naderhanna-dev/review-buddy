@@ -1,4 +1,5 @@
-import { prViewKey } from "@reviewradar/core";
+import { useMemo } from "react";
+import { prViewKey, groupPrsByRepo } from "@reviewradar/core";
 import type { PullRequest, SectionFilterState, SectionKey, SortPreference, StalePreference } from "@reviewradar/core";
 import { SectionHeader } from "./SectionHeader";
 import { PullRequestRow } from "./PullRequestRow";
@@ -28,6 +29,8 @@ export function PrSection({
   onToggleSectionFilter,
   onSetSort,
   onSetFilter,
+  groupByRepo,
+  onToggleGroupByRepo,
   dimViewed,
   viewedMap,
   stalePreferences,
@@ -67,6 +70,8 @@ export function PrSection({
   onToggleSectionFilter: (key: SectionKey) => void;
   onSetSort: (key: SectionKey, sort: SortPreference) => void;
   onSetFilter: (key: SectionKey, filter: SectionFilterState) => void;
+  groupByRepo: boolean;
+  onToggleGroupByRepo: () => void;
   dimViewed: boolean;
   viewedMap: Record<string, number>;
   stalePreferences: Record<string, StalePreference>;
@@ -84,6 +89,37 @@ export function PrSection({
   activeReviewKeys?: Set<string>;
   token: string;
 }) {
+  const grouped = useMemo(
+    () => (groupByRepo ? groupPrsByRepo(prs) : null),
+    [groupByRepo, prs],
+  );
+
+  function renderPrRow(pr: PullRequest) {
+    return (
+      <PullRequestRow
+        key={pr.id}
+        pr={pr}
+        token={token}
+        isViewed={
+          dimViewed &&
+          Boolean(viewedMap[prViewKey(pr.repository, pr.number)])
+        }
+        onViewed={onViewed}
+        sectionKind={sectionKind}
+        openMenuKey={openMenuKey}
+        onToggleMenu={onToggleMenu}
+        onCloseMenu={onCloseMenu}
+        stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
+        onMarkStale={onMarkStale}
+        onMarkActive={onMarkActive}
+        onClearStalePreference={onClearStalePreference}
+        showLineChanges={showLineChanges}
+        showLabels={showLabels}
+        hasActiveReview={activeReviewKeys?.has(`${pr.repository}#${pr.number}`) ?? false}
+      />
+    );
+  }
+
   return (
     <section className="section-card">
       <SectionHeader
@@ -102,6 +138,8 @@ export function PrSection({
         onToggleOpen={onToggleOpen}
         hideDrafts={hideDrafts}
         onToggleHideDrafts={onToggleHideDrafts}
+        groupByRepo={groupByRepo}
+        onToggleGroupByRepo={onToggleGroupByRepo}
         onToggleSectionMenu={onToggleSectionMenu}
         onToggleSectionFilter={onToggleSectionFilter}
         onSetSort={onSetSort}
@@ -123,29 +161,14 @@ export function PrSection({
           {!isLoading && !hasCredentials ? (
             <p className="empty-state">{emptyDisconnectedMessage}</p>
           ) : null}
-          {prs.map((pr) => (
-            <PullRequestRow
-              key={pr.id}
-              pr={pr}
-              token={token}
-              isViewed={
-                dimViewed &&
-                Boolean(viewedMap[prViewKey(pr.repository, pr.number)])
-              }
-              onViewed={onViewed}
-              sectionKind={sectionKind}
-              openMenuKey={openMenuKey}
-              onToggleMenu={onToggleMenu}
-              onCloseMenu={onCloseMenu}
-              stalePreference={stalePreferences[prViewKey(pr.repository, pr.number)]}
-              onMarkStale={onMarkStale}
-              onMarkActive={onMarkActive}
-              onClearStalePreference={onClearStalePreference}
-              showLineChanges={showLineChanges}
-              showLabels={showLabels}
-              hasActiveReview={activeReviewKeys?.has(`${pr.repository}#${pr.number}`) ?? false}
-            />
-          ))}
+          {grouped
+            ? grouped.map(([repo, repoPrs]) => (
+                <div key={repo} className="repo-group">
+                  <div className="repo-group-header">{repo}</div>
+                  {repoPrs.map(renderPrRow)}
+                </div>
+              ))
+            : prs.map(renderPrRow)}
         </div>
       ) : null}
     </section>
