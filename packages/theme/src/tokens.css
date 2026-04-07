@@ -59,6 +59,13 @@
   --accent-bg: rgba(9, 105, 218, 0.12);
   --accent-bg-hover: rgba(9, 105, 218, 0.22);
   --hover-overlay: rgba(0, 0, 0, 0.05);
+  --diff-add-bg: rgba(26, 127, 55, 0.12);
+  --diff-add-hover: rgba(26, 127, 55, 0.20);
+  --diff-del-bg: rgba(207, 34, 46, 0.12);
+  --diff-del-hover: rgba(207, 34, 46, 0.20);
+  --diff-ctx-hover: rgba(0, 0, 0, 0.04);
+  --diff-hdr-bg: rgba(9, 105, 218, 0.06);
+  --diff-expand-bg: rgba(9, 105, 218, 0.04);
 
   /* ── Fonts ── */
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
@@ -123,4 +130,11 @@
   --accent-bg: rgba(88, 166, 255, 0.15);
   --accent-bg-hover: rgba(88, 166, 255, 0.3);
   --hover-overlay: rgba(255, 255, 255, 0.08);
+  --diff-add-bg: rgba(63, 185, 80, 0.12);
+  --diff-add-hover: rgba(63, 185, 80, 0.18);
+  --diff-del-bg: rgba(248, 81, 73, 0.12);
+  --diff-del-hover: rgba(248, 81, 73, 0.18);
+  --diff-ctx-hover: rgba(255, 255, 255, 0.03);
+  --diff-hdr-bg: rgba(88, 166, 255, 0.08);
+  --diff-expand-bg: rgba(88, 166, 255, 0.04);
 }

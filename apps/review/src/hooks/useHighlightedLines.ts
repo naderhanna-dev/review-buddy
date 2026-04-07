@@ -8,6 +8,25 @@ import { langFromPath, getHighlighter } from "./shikiHighlighter";
  */
 export type HighlightedLine = string;
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function highlightSource(
+  source: string,
+  lang: string | undefined,
+  theme: "light" | "dark",
+): Promise<HighlightedLine[]> {
+  if (!lang) {
+    return source.split("\n").map(escapeHtml);
+  }
+
+  const highlighter = await getHighlighter();
+  const shikiTheme = theme === "light" ? "github-light" : "github-dark";
+  const html = highlighter.codeToHtml(source, { lang, theme: shikiTheme });
+  return parseShikiOutput(html);
+}
+
 /**
  * Given a file path, fetches the source from the server,
  * highlights it with shiki, and returns an array of HTML strings
@@ -15,19 +34,25 @@ export type HighlightedLine = string;
  *
  * Returns null while loading or if highlighting fails.
  */
-export function useHighlightedLines(filePath: string | undefined): HighlightedLine[] | null {
+export function useHighlightedLines(
+  filePath: string | undefined,
+  theme: "light" | "dark" = "dark",
+): HighlightedLine[] | null {
   const [lines, setLines] = useState<HighlightedLine[] | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const sourceRef = useRef<{ path: string; source: string; lang: string | undefined } | null>(null);
 
   useEffect(() => {
     if (!filePath) {
       setLines(null);
+      sourceRef.current = null;
       return;
     }
 
-    const lang = langFromPath(filePath);
-    if (!lang) {
-      setLines(null);
+    // If we already have the source cached for this path, just re-highlight with new theme
+    if (sourceRef.current?.path === filePath) {
+      const { source, lang } = sourceRef.current;
+      highlightSource(source, lang, theme).then(setLines);
       return;
     }
 
@@ -46,25 +71,18 @@ export function useHighlightedLines(filePath: string | undefined): HighlightedLi
         const source = await res.text();
         if (controller.signal.aborted) return;
 
-        const highlighter = await getHighlighter();
-        if (controller.signal.aborted) return;
+        const lang = langFromPath(filePath);
+        sourceRef.current = { path: filePath, source, lang };
 
-        const html = highlighter.codeToHtml(source, {
-          lang,
-          theme: "github-dark",
-        });
-
-        // shiki wraps output in <pre><code>...lines...</code></pre>
-        // Extract the inner HTML of each line.
-        const lineHtmls = parseShikiOutput(html);
-        setLines(lineHtmls);
+        const result = await highlightSource(source, lang, theme);
+        if (!controller.signal.aborted) setLines(result);
       } catch {
         // Fetch aborted or highlight failed — leave as null (plain text fallback)
       }
     })();
 
     return () => controller.abort();
-  }, [filePath]);
+  }, [filePath, theme]);
 
   return lines;
 }

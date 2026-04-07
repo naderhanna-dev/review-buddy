@@ -8,9 +8,9 @@ import type { ReviewComment, DiffFile } from "@reviewradar/shared";
 
 // CSS hover styles injected once — avoids stale JS hover state from missed mouseLeave events
 const DIFF_STYLES = `
-.diff-line-context:hover { background: rgba(255,255,255,0.03) !important; }
-.diff-line-addition:hover { background: rgba(63,185,80,0.18) !important; }
-.diff-line-deletion:hover { background: rgba(248,81,73,0.18) !important; }
+.diff-line-context:hover { background: var(--diff-ctx-hover) !important; }
+.diff-line-addition:hover { background: var(--diff-add-hover) !important; }
+.diff-line-deletion:hover { background: var(--diff-del-hover) !important; }
 .diff-line-context:hover .diff-comment-btn,
 .diff-line-addition:hover .diff-comment-btn,
 .diff-line-deletion:hover .diff-comment-btn { opacity: 0.7 !important; }
@@ -82,11 +82,70 @@ function lineContentHtml(
 }
 
 const LINE_BG: Record<HunkLine["type"], React.CSSProperties> = {
-  addition: { background: "rgba(63, 185, 80, 0.12)", borderLeft: "3px solid var(--green)" },
-  deletion: { background: "rgba(248, 81, 73, 0.12)", borderLeft: "3px solid var(--red)" },
+  addition: { background: "var(--diff-add-bg)", borderLeft: "3px solid var(--green)" },
+  deletion: { background: "var(--diff-del-bg)", borderLeft: "3px solid var(--red)" },
   context:  { background: "transparent", borderLeft: "3px solid transparent" },
-  header:   { background: "rgba(88, 166, 255, 0.08)", borderLeft: "3px solid var(--blue)" },
+  header:   { background: "var(--diff-hdr-bg)", borderLeft: "3px solid var(--blue)" },
 };
+
+// --- Collapsed range detection ---
+
+interface CollapsedRange {
+  headerIndex: number;
+  startLine: number;
+  endLine: number;
+  startOld: number;
+  endOld: number;
+}
+
+function computeCollapsedRanges(lines: HunkLine[], totalLines?: number) {
+  const rangeByHeader = new Map<number, CollapsedRange>();
+  let prevEndNew = 0;
+  let prevEndOld = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.type === "header") {
+      const match = line.content.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+      if (match) {
+        const hunkOldStart = parseInt(match[1]);
+        const hunkNewStart = parseInt(match[2]);
+
+        const gapStart = prevEndNew + 1;
+        const gapEnd = hunkNewStart - 1;
+        const gapStartOld = prevEndOld + 1;
+        const gapEndOld = hunkOldStart - 1;
+
+        if (gapEnd >= gapStart) {
+          rangeByHeader.set(i, {
+            headerIndex: i,
+            startLine: gapStart,
+            endLine: gapEnd,
+            startOld: gapStartOld,
+            endOld: gapEndOld,
+          });
+        }
+      }
+    } else {
+      if (line.newNum !== undefined) prevEndNew = line.newNum;
+      if (line.oldNum !== undefined) prevEndOld = line.oldNum;
+    }
+  }
+
+  // Trailing range (lines after last hunk)
+  let trailingRange: CollapsedRange | undefined;
+  if (totalLines && prevEndNew > 0 && prevEndNew < totalLines) {
+    trailingRange = {
+      headerIndex: lines.length,
+      startLine: prevEndNew + 1,
+      endLine: totalLines,
+      startOld: prevEndOld + 1,
+      endOld: prevEndOld + (totalLines - prevEndNew),
+    };
+  }
+
+  return { rangeByHeader, trailingRange };
+}
 
 
 // --- Components ---
@@ -389,6 +448,76 @@ function isSelectableLine(line: HunkLine): boolean {
   return line.type !== "header" && getLineNum(line) !== undefined;
 }
 
+// --- Expand components ---
+
+function ExpandableHeader({ line, count, isExpanded, onToggle }: {
+  line: HunkLine;
+  count: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      onClick={onToggle}
+      style={{
+        display: "flex",
+        padding: "0 8px",
+        minHeight: 24,
+        cursor: "pointer",
+        background: "var(--diff-expand-bg)",
+        borderLeft: "3px solid var(--blue)",
+        color: "var(--blue)",
+        fontSize: 12,
+        alignItems: "center",
+        userSelect: "none",
+        transition: "background 0.1s",
+      }}
+    >
+      <span style={{ ...gutterStyle, opacity: 1 }}>{isExpanded ? "\u25be" : "\u25b8"}</span>
+      <span style={gutterStyle} />
+      <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
+        <span>
+          {isExpanded ? "Hide" : "Show"} {count} unchanged line{count !== 1 ? "s" : ""}
+        </span>
+        {line.content && (
+          <span style={{ opacity: 0.4 }}>{line.content}</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+function ExpandedLines({ range, highlightedLines }: {
+  range: CollapsedRange;
+  highlightedLines: string[] | null;
+}) {
+  const result = [];
+  for (let n = range.startLine; n <= range.endLine; n++) {
+    const oldN = range.startOld + (n - range.startLine);
+    const html = highlightedLines?.[n - 1] ?? "";
+    result.push(
+      <div
+        key={n}
+        className="diff-line-context"
+        style={{
+          display: "flex",
+          padding: "0 8px",
+          minHeight: 20,
+          background: "var(--diff-expand-bg)",
+          borderLeft: "3px solid transparent",
+          transition: "background 0.1s",
+          color: "var(--text)",
+        }}
+      >
+        <span style={gutterStyle}>{oldN}</span>
+        <span style={gutterStyle}>{n}</span>
+        <span style={contentStyle} dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    );
+  }
+  return <>{result}</>;
+}
+
 // --- SingleFileDiff ---
 
 function SingleFileDiff({ file, fileIndex, stickyTop = 0 }: {
@@ -400,8 +529,26 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0 }: {
   const addReviewComment = useStore((s) => s.addReviewComment);
   const removeReviewComment = useStore((s) => s.removeReviewComment);
 
-  const highlightedLines = useHighlightedLines(file.path);
+  const theme = useStore((s) => s.config.theme);
+  const resolvedTheme: "light" | "dark" = theme === "system"
+    ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+    : theme as "light" | "dark";
+
+  const highlightedLines = useHighlightedLines(file.path, resolvedTheme);
   const lines = parseHunk(file.patch);
+
+  // Expand collapsed lines
+  const [expandedHeaders, setExpandedHeaders] = useState<Set<number>>(new Set());
+  const { rangeByHeader, trailingRange } = computeCollapsedRanges(lines, highlightedLines?.length);
+
+  const toggleExpand = useCallback((key: number) => {
+    setExpandedHeaders((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   // dragRange: live highlight during drag. formRange: finalized range that shows the comment form.
   const [dragRange, setDragRange] = useState<{ start: number; end: number } | null>(null);
@@ -565,18 +712,34 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0 }: {
           const lineNum = getLineNum(line);
           const isInRange = highlightRange != null && i >= highlightRange.start && i <= highlightRange.end && isSelectableLine(line);
           const showForm = normalizedRange != null && i === normalizedRange.end;
+          const range = rangeByHeader.get(i);
 
           return (
             <div key={i} data-line-idx={i}>
-              <DiffLine
-                line={line}
-                lineNum={lineNum}
-                lineComments={lineKey(line) ? commentsByKey.get(lineKey(line)!) : undefined}
-                highlightHtml={lineContentHtml(line, highlightedLines)}
-                isInRange={isInRange}
-                onMouseDown={(e) => handleLineMouseDown(i, e)}
-                onDeleteComment={handleDeleteComment}
-              />
+              {/* Expanded lines appear before header */}
+              {range && expandedHeaders.has(i) && (
+                <ExpandedLines range={range} highlightedLines={highlightedLines} />
+              )}
+
+              {line.type === "header" && range ? (
+                <ExpandableHeader
+                  line={line}
+                  count={range.endLine - range.startLine + 1}
+                  isExpanded={expandedHeaders.has(i)}
+                  onToggle={() => toggleExpand(i)}
+                />
+              ) : (
+                <DiffLine
+                  line={line}
+                  lineNum={lineNum}
+                  lineComments={lineKey(line) ? commentsByKey.get(lineKey(line)!) : undefined}
+                  highlightHtml={lineContentHtml(line, highlightedLines)}
+                  isInRange={isInRange}
+                  onMouseDown={(e) => handleLineMouseDown(i, e)}
+                  onDeleteComment={handleDeleteComment}
+                />
+              )}
+
               {showForm && rangeStartLineNum && (
                 <CommentForm
                   filePath={file.path}
@@ -590,6 +753,21 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0 }: {
             </div>
           );
         })}
+
+        {/* Trailing expand for lines after last hunk */}
+        {trailingRange && (
+          <div>
+            {expandedHeaders.has(trailingRange.headerIndex) && (
+              <ExpandedLines range={trailingRange} highlightedLines={highlightedLines} />
+            )}
+            <ExpandableHeader
+              line={{ type: "header", content: "" }}
+              count={trailingRange.endLine - trailingRange.startLine + 1}
+              isExpanded={expandedHeaders.has(trailingRange.headerIndex)}
+              onToggle={() => toggleExpand(trailingRange.headerIndex)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
