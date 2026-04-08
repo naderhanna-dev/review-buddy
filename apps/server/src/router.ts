@@ -24,7 +24,7 @@ function cors(): Response {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-GitHub-Api-Version, If-None-Match, If-Modified-Since",
+      "Access-Control-Allow-Headers": "Content-Type",
     },
   });
 }
@@ -55,12 +55,6 @@ export async function handleRequest(
   const url = new URL(req.url);
 
   if (req.method === "OPTIONS") return cors();
-
-  // ── GitHub API proxy (avoids CORS when dashboard is not on localhost) ──
-
-  if (url.pathname.startsWith("/api/github/")) {
-    return proxyGitHub(req, url);
-  }
 
   // ── Top-level routes ──
 
@@ -293,57 +287,4 @@ async function handleSessionRoute(
   }
 
   return json({ error: "Not found" }, 404);
-}
-
-// ── GitHub API reverse proxy ──────────────────────────────────────────
-
-const GITHUB_PROXY_FORWARD_HEADERS = [
-  "authorization",
-  "content-type",
-  "accept",
-  "x-github-api-version",
-  "if-none-match",
-  "if-modified-since",
-];
-
-const GITHUB_PROXY_RETURN_HEADERS = [
-  "content-type",
-  "etag",
-  "last-modified",
-  "x-poll-interval",
-  "x-ratelimit-remaining",
-  "x-ratelimit-reset",
-  "retry-after",
-];
-
-async function proxyGitHub(req: Request, url: URL): Promise<Response> {
-  const path = url.pathname.slice("/api/github".length); // e.g. "/graphql"
-  const target = `https://api.github.com${path}${url.search}`;
-
-  const headers: Record<string, string> = {};
-  for (const name of GITHUB_PROXY_FORWARD_HEADERS) {
-    const value = req.headers.get(name);
-    if (value) headers[name] = value;
-  }
-
-  const ghResponse = await fetch(target, {
-    method: req.method,
-    headers,
-    body: req.method === "GET" || req.method === "HEAD" ? undefined : req.body,
-    // @ts-expect-error duplex is required for streaming request bodies
-    duplex: req.body ? "half" : undefined,
-  });
-
-  const responseHeaders: Record<string, string> = {
-    "Access-Control-Allow-Origin": "*",
-  };
-  for (const name of GITHUB_PROXY_RETURN_HEADERS) {
-    const value = ghResponse.headers.get(name);
-    if (value) responseHeaders[name] = value;
-  }
-
-  return new Response(ghResponse.body, {
-    status: ghResponse.status,
-    headers: responseHeaders,
-  });
 }

@@ -1,5 +1,4 @@
 import { RateLimitError } from './github'
-import { getGitHubApiBase } from './api-base'
 
 // Re-export RateLimitError for convenience
 export { RateLimitError }
@@ -300,7 +299,7 @@ export async function graphqlFetch<T>(
   variables: Record<string, unknown>,
   token: string,
 ): Promise<T> {
-  const response = await fetch(`${getGitHubApiBase()}/graphql`, {
+  const response = await fetch('https://api.github.com/graphql', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
