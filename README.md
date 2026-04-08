@@ -45,7 +45,16 @@ Run the server automatically on login:
 pnpm run install-service
 ```
 
-This creates a launchd plist at `~/Library/LaunchAgents/com.reviewradar.server.plist` and starts the service. Logs go to `~/Library/Logs/ReviewRadar/`.
+**Options** (same as `serve`):
+- `--host, -H` — Host to bind to (default: 127.0.0.1)
+- `--port, -p` — Port to listen on (default: 7672)
+
+Example — bind to a specific network interface so other machines on the LAN can reach it:
+```bash
+pnpm run install-service --host 192.168.1.100
+```
+
+This creates a launchd plist at `~/Library/LaunchAgents/com.reviewradar.server.plist` and starts the service. The launcher script auto-detects your node version manager (fnm or nvm). Logs go to `~/Library/Logs/ReviewRadar/`.
 
 ```bash
 # Remove the service
