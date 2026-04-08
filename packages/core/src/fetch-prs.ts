@@ -26,6 +26,7 @@ import {
   SEARCH_PAGE_SIZE,
   SEARCH_MAX_PAGES,
   BATCH_SEARCH_CHUNK_SIZE,
+  MERGED_COUNT_MAX,
   STALE_AFTER_MS,
 } from "./constants";
 import { sortByPriorityAndUpdated } from "./pr-utils";
@@ -468,7 +469,7 @@ export async function fetchRecentlyMergedPRs(
   const authorQuery = `is:pr is:merged archived:false org:${org} author:${viewerLogin}`;
   const reviewerQuery = `is:pr is:merged archived:false org:${org} reviewed-by:${viewerLogin}`;
 
-  const perQueryLimit = Math.min(limit * 2, SEARCH_PAGE_SIZE);
+  const perQueryLimit = Math.min(limit * 2, MERGED_COUNT_MAX);
 
   const escapedAuthorQuery = authorQuery.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
   const escapedReviewerQuery = reviewerQuery
