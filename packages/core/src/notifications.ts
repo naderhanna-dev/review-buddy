@@ -31,6 +31,8 @@ export function hasRelevantPrChanges(
   return filterPrNotifications(notifications, org).length > 0
 }
 
+import { getGitHubApiBase } from './api-base'
+
 export type NotificationCheckResult = {
   hasChanges: boolean
   pollIntervalSeconds: number
@@ -69,7 +71,7 @@ export async function checkForNotificationChanges(
   let response: Response
   try {
     response = await fetch(
-      'https://api.github.com/notifications?all=false&participating=true',
+      `${getGitHubApiBase()}/notifications?all=false&participating=true`,
       { headers },
     )
   } catch {

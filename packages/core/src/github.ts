@@ -1,4 +1,5 @@
 import { type EtagCache } from './etag-cache'
+import { resolveGitHubUrl } from './api-base'
 
 export class RateLimitError extends Error {
   constructor(message = 'Rate limit hit. Data will refresh when the limit resets.') {
@@ -8,6 +9,7 @@ export class RateLimitError extends Error {
 }
 
 export async function apiFetch<T>(url: string, token: string, cache?: EtagCache): Promise<T> {
+  const resolved = resolveGitHubUrl(url)
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
     Authorization: `Bearer ${token}`,
@@ -21,7 +23,7 @@ export async function apiFetch<T>(url: string, token: string, cache?: EtagCache)
     }
   }
 
-  const response = await fetch(url, { headers })
+  const response = await fetch(resolved, { headers })
 
   // 304 must be checked before !response.ok — fetch treats 304 as not-ok
   if (response.status === 304) {

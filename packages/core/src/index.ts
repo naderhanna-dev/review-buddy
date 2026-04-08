@@ -47,6 +47,7 @@ export {
 } from "./classification";
 
 // ── GitHub API ───────────────────────────────────────────────────────
+export { setGitHubApiBase, getGitHubApiBase, resolveGitHubUrl } from "./api-base";
 export { RateLimitError, apiFetch } from "./github";
 
 export type {
