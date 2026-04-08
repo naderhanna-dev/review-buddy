@@ -97,7 +97,7 @@ export function SettingsDrawer({
                     aria-label={`Remove ${draft.org || "organization"}`}
                     onClick={() => onRemoveOrg(index)}
                   >
-                    <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation" width="16" height="16">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
                       <path d="M18.36 5.64a1 1 0 0 1 0 1.41L13.41 12l4.95 4.95a1 1 0 1 1-1.41 1.41L12 13.41l-4.95 4.95a1 1 0 1 1-1.41-1.41L10.59 12 5.64 7.05a1 1 0 0 1 1.41-1.41L12 10.59l4.95-4.95a1 1 0 0 1 1.41 0Z" />
                     </svg>
                   </button>
