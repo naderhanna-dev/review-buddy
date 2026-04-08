@@ -109,8 +109,11 @@
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
   width: 100%;
-  padding-right: 2.5rem;
   box-sizing: border-box;
+}
+
+.org-config-row--removable {
+  padding-right: 2.5rem;
 }
 
 .org-remove-button {

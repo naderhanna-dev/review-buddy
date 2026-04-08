@@ -69,7 +69,7 @@ export function SettingsDrawer({
         <form className="config-form config-form--multi-org" onSubmit={onSubmit}>
           <div className="org-config-list">
             {orgConfigDrafts.map((draft, index) => (
-              <div key={draft.id} className="org-config-row">
+              <div key={draft.id} className={`org-config-row${orgConfigDrafts.length > 1 ? " org-config-row--removable" : ""}`}>
                 <label>
                   {index === 0 ? "Organization" : <span className="sr-only">Organization</span>}
                   <input
