@@ -25,6 +25,7 @@ import type { ClassifiedPullRequests, MergedPullRequest, StalePreference } from 
 import {
   SEARCH_PAGE_SIZE,
   SEARCH_MAX_PAGES,
+  BATCH_SEARCH_CHUNK_SIZE,
   STALE_AFTER_MS,
 } from "./constants";
 import { sortByPriorityAndUpdated } from "./pr-utils";
@@ -106,35 +107,45 @@ export async function fetchAndClassifyPullRequests(
   const prMap = new Map<number, GqlPullRequestNode>();
   const needsPagination: Array<{ query: string; cursor: string }> = [];
 
-  const batchQuery = buildBatchSearchQuery(candidateQueries, PR_DETAILS_FRAGMENT);
-  const batchResult = await graphqlFetch<
-    Record<
-      string,
-      {
-        issueCount: number;
-        pageInfo: { hasNextPage: boolean; endCursor: string | null };
-        nodes: Array<GqlPullRequestNode | null>;
-      }
-    >
-  >(batchQuery, {}, token);
-
-  for (let i = 0; i < candidateQueries.length; i++) {
-    const result = batchResult[`s${i}`];
-    if (!result) {
-      continue;
+  type BatchSearchResult = Record<
+    string,
+    {
+      issueCount: number;
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      nodes: Array<GqlPullRequestNode | null>;
     }
+  >;
 
-    for (const node of result.nodes) {
-      if (node && !prMap.has(node.databaseId)) {
-        prMap.set(node.databaseId, node);
+  const chunks: string[][] = [];
+  for (let i = 0; i < candidateQueries.length; i += BATCH_SEARCH_CHUNK_SIZE) {
+    chunks.push(candidateQueries.slice(i, i + BATCH_SEARCH_CHUNK_SIZE));
+  }
+
+  let globalIndex = 0;
+  for (const chunk of chunks) {
+    const batchQuery = buildBatchSearchQuery(chunk, PR_DETAILS_FRAGMENT);
+    const batchResult = await graphqlFetch<BatchSearchResult>(batchQuery, {}, token);
+
+    for (let i = 0; i < chunk.length; i++) {
+      const result = batchResult[`s${i}`];
+      if (!result) {
+        globalIndex++;
+        continue;
       }
-    }
 
-    if (result.pageInfo.hasNextPage && result.pageInfo.endCursor) {
-      needsPagination.push({
-        query: candidateQueries[i],
-        cursor: result.pageInfo.endCursor,
-      });
+      for (const node of result.nodes) {
+        if (node && !prMap.has(node.databaseId)) {
+          prMap.set(node.databaseId, node);
+        }
+      }
+
+      if (result.pageInfo.hasNextPage && result.pageInfo.endCursor) {
+        needsPagination.push({
+          query: candidateQueries[globalIndex],
+          cursor: result.pageInfo.endCursor,
+        });
+      }
+      globalIndex++;
     }
   }
 
@@ -199,8 +210,10 @@ export async function fetchAndClassifyPullRequests(
     viewedKeysToFetch.push({ owner, name, number: prNumber, viewKey: key });
   }
 
-  if (viewedKeysToFetch.length > 0) {
-    const aliases = viewedKeysToFetch.map(({ owner, name, number, viewKey }) => {
+  for (let i = 0; i < viewedKeysToFetch.length; i += BATCH_SEARCH_CHUNK_SIZE) {
+    const chunk = viewedKeysToFetch.slice(i, i + BATCH_SEARCH_CHUNK_SIZE);
+
+    const aliases = chunk.map(({ owner, name, number, viewKey }) => {
       const alias = `pr_${viewKey.replace(/[^a-zA-Z0-9]/g, "_")}`;
       return `${alias}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) {
         pullRequest(number: ${number}) {
@@ -216,7 +229,7 @@ export async function fetchAndClassifyPullRequests(
         Record<string, { pullRequest: GqlPullRequestNode | null }>
       >(batchQuery, {}, token);
 
-      for (const { viewKey } of viewedKeysToFetch) {
+      for (const { viewKey } of chunk) {
         const alias = `pr_${viewKey.replace(/[^a-zA-Z0-9]/g, "_")}`;
         const repoResult = batchResult[alias];
         const pullNode = repoResult?.pullRequest;
