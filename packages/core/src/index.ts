@@ -133,7 +133,7 @@ export {
 } from "./pr-utils";
 
 // ── Fetch ────────────────────────────────────────────────────────────
-export type { MultiOrgResult } from "./fetch-prs";
+export type { MultiOrgResult, OrgCompleteEvent } from "./fetch-prs";
 export {
   fetchViewerLogin,
   fetchAndClassifyPullRequests,

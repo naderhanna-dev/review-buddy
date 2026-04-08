@@ -106,7 +106,6 @@ export async function fetchAndClassifyPullRequests(
   }
 
   const prMap = new Map<number, GqlPullRequestNode>();
-  const needsPagination: Array<{ query: string; cursor: string }> = [];
 
   type BatchSearchResult = Record<
     string,
@@ -122,17 +121,17 @@ export async function fetchAndClassifyPullRequests(
     chunks.push(candidateQueries.slice(i, i + BATCH_SEARCH_CHUNK_SIZE));
   }
 
-  let globalIndex = 0;
-  for (const chunk of chunks) {
+  // Run all batch search chunks in parallel
+  const chunkPromises = chunks.map(async (chunk, chunkIndex) => {
     const batchQuery = buildBatchSearchQuery(chunk, PR_DETAILS_FRAGMENT);
     const batchResult = await graphqlFetch<BatchSearchResult>(batchQuery, {}, token);
+    const baseIndex = chunkIndex * BATCH_SEARCH_CHUNK_SIZE;
+
+    const chunkPagination: Array<{ query: string; cursor: string }> = [];
 
     for (let i = 0; i < chunk.length; i++) {
       const result = batchResult[`s${i}`];
-      if (!result) {
-        globalIndex++;
-        continue;
-      }
+      if (!result) continue;
 
       for (const node of result.nodes) {
         if (node && !prMap.has(node.databaseId)) {
@@ -141,17 +140,21 @@ export async function fetchAndClassifyPullRequests(
       }
 
       if (result.pageInfo.hasNextPage && result.pageInfo.endCursor) {
-        needsPagination.push({
-          query: candidateQueries[globalIndex],
+        chunkPagination.push({
+          query: candidateQueries[baseIndex + i],
           cursor: result.pageInfo.endCursor,
         });
       }
-      globalIndex++;
     }
-  }
+    return chunkPagination;
+  });
 
-  for (const { query, cursor } of needsPagination) {
-    let currentCursor: string | null = cursor;
+  const allPaginationArrays = await Promise.all(chunkPromises);
+  const needsPagination = allPaginationArrays.flat();
+
+  // Paginate all queries in parallel (pages within each query are sequential)
+  async function paginateQuery(query: string, startCursor: string): Promise<void> {
+    let currentCursor: string | null = startCursor;
     for (let page = 1; page < SEARCH_MAX_PAGES; page++) {
       const pageResult: GqlSearchResponse<GqlPullRequestNode> =
         await graphqlFetch<GqlSearchResponse<GqlPullRequestNode>>(
@@ -172,6 +175,10 @@ export async function fetchAndClassifyPullRequests(
       currentCursor = pageResult.search.pageInfo.endCursor;
     }
   }
+
+  await Promise.all(
+    needsPagination.map(({ query, cursor }) => paginateQuery(query, cursor)),
+  );
 
   const viewedKeysToFetch: Array<{
     owner: string;
@@ -211,9 +218,12 @@ export async function fetchAndClassifyPullRequests(
     viewedKeysToFetch.push({ owner, name, number: prNumber, viewKey: key });
   }
 
+  const viewedChunks: typeof viewedKeysToFetch[] = [];
   for (let i = 0; i < viewedKeysToFetch.length; i += BATCH_SEARCH_CHUNK_SIZE) {
-    const chunk = viewedKeysToFetch.slice(i, i + BATCH_SEARCH_CHUNK_SIZE);
+    viewedChunks.push(viewedKeysToFetch.slice(i, i + BATCH_SEARCH_CHUNK_SIZE));
+  }
 
+  await Promise.all(viewedChunks.map(async (chunk) => {
     const aliases = chunk.map(({ owner, name, number, viewKey }) => {
       const alias = `pr_${viewKey.replace(/[^a-zA-Z0-9]/g, "_")}`;
       return `${alias}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) {
@@ -241,7 +251,7 @@ export async function fetchAndClassifyPullRequests(
     } catch {
       // Silently ignore batch fetch failures for locally-viewed PRs — they will be cleaned up on next full refresh
     }
-  }
+  }));
 
   const yourPrs: PullRequest[] = [];
   const needsAttention: PullRequest[] = [];
@@ -693,15 +703,26 @@ export type MultiOrgResult = {
   perOrgErrors: Array<{ orgId: string; org: string; error: string }>;
 };
 
+export type OrgCompleteEvent = {
+  orgId: string;
+  org: string;
+  classified: ClassifiedPullRequests;
+  merged: MergedPullRequest[];
+};
+
 /**
  * Fetch and classify PRs across multiple organizations in parallel.
  * Each org uses its own token. Results are merged and deduplicated.
+ *
+ * When `onOrgComplete` is provided, it is called as each org finishes
+ * fetching so the UI can render incrementally instead of waiting for all orgs.
  */
 export async function fetchAllOrgs(
   configs: OrgConfig[],
   viewedMap: Record<string, number>,
   stalePreferences: Record<string, StalePreference>,
   mergedCount: number,
+  onOrgComplete?: (event: OrgCompleteEvent) => void,
 ): Promise<MultiOrgResult> {
   // Resolve viewer login per unique token (different orgs may share a token)
   const viewerLoginByToken = new Map<string, string>();
@@ -750,7 +771,9 @@ export async function fetchAllOrgs(
           ),
           fetchRecentlyMergedPRs(config.org, config.token, mergedCount, viewerLogin),
         ]);
-        return { orgId: config.id, org: config.org, classified, merged };
+        const event = { orgId: config.id, org: config.org, classified, merged };
+        onOrgComplete?.(event);
+        return event;
       }),
   );
 

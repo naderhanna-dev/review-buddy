@@ -13,7 +13,7 @@ import {
   readViewedMap,
   STORAGE_KEYS,
 } from "@reviewradar/core";
-import type { PullRequest, MergedPullRequest, StalePreference, OrgConfig } from "@reviewradar/core";
+import type { PullRequest, MergedPullRequest, StalePreference, OrgConfig, OrgCompleteEvent } from "@reviewradar/core";
 
 export type PRDataResult = {
   stalePrs: PullRequest[];
@@ -215,14 +215,38 @@ export function usePRData({
       setErrorToast(null);
 
       try {
+        // Progressive rendering: update sections as each org completes
+        function handleOrgComplete(event: OrgCompleteEvent): void {
+          if (ignore) return;
+
+          setStalePrs((prev) => [...prev, ...event.classified.stalePrs]);
+          setYourPrs((prev) => [...prev, ...event.classified.yourPrs]);
+          setNeedsAttention((prev) => [...prev, ...event.classified.needsAttention]);
+          setRelatedToYou((prev) => [...prev, ...event.classified.relatedToYou]);
+          setRecentlyMerged((prev) => [...prev, ...event.merged]);
+          setLastRefreshedAt(Date.now());
+
+          // Write this org's cache immediately
+          writeCachedPRData(event.orgId, event.org, {
+            yourPrs: event.classified.yourPrs,
+            needsAttention: event.classified.needsAttention,
+            relatedToYou: event.classified.relatedToYou,
+            stalePrs: event.classified.stalePrs,
+            recentlyMerged: event.merged,
+            teamSignalsUnavailable: event.classified.teamSignalsUnavailable,
+          });
+        }
+
         const result = await fetchAllOrgs(
           configs,
           viewedMapRef.current,
           stalePreferences,
           mergedCount,
+          handleOrgComplete,
         );
 
         if (!ignore) {
+          // Final state from merged+sorted result replaces the progressive state
           setStalePrs(result.stalePrs);
           setYourPrs(result.yourPrs);
           setNeedsAttention(result.needsAttention);
@@ -246,25 +270,6 @@ export function usePRData({
               }
               localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next));
               return next;
-            });
-          }
-
-          // Write per-org caches
-          for (const config of configs) {
-            // Filter PRs belonging to this org by repository prefix
-            const orgPrefix = `${config.org}/`.toLowerCase();
-            const filterByOrg = (prs: PullRequest[]): PullRequest[] =>
-              prs.filter((pr) => pr.repository.toLowerCase().startsWith(orgPrefix));
-
-            writeCachedPRData(config.id, config.org, {
-              yourPrs: filterByOrg(result.yourPrs),
-              needsAttention: filterByOrg(result.needsAttention),
-              relatedToYou: filterByOrg(result.relatedToYou),
-              stalePrs: filterByOrg(result.stalePrs),
-              recentlyMerged: result.recentlyMerged.filter(
-                (pr) => pr.repository.toLowerCase().startsWith(orgPrefix),
-              ),
-              teamSignalsUnavailable: result.teamSignalsUnavailable,
             });
           }
         }
