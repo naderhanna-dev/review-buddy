@@ -1,5 +1,6 @@
-export const SEARCH_PAGE_SIZE = 100;
-export const SEARCH_MAX_PAGES = 10;
+export const SEARCH_PAGE_SIZE = 10;
+export const SEARCH_MAX_PAGES = 25;
+export const BATCH_SEARCH_CHUNK_SIZE = 3;
 export const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 export const FALLBACK_REFRESH_MS = 10 * 60 * 1000;
 export const NOTIFICATION_FALLBACK_MS = 2 * 60 * 1000;
