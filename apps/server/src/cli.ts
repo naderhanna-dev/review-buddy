@@ -43,7 +43,7 @@ function serve(portOverride?: number, hostOverride?: string) {
   process.on("SIGTERM", shutdown);
 }
 
-function installService() {
+function installService(serveArgs: string[] = []) {
   const home = process.env.HOME || "~";
   const plistDir = resolve(home, "Library/LaunchAgents");
   const plistPath = resolve(plistDir, "com.reviewradar.server.plist");
@@ -52,23 +52,29 @@ function installService() {
 
   mkdirSync(logDir, { recursive: true });
 
-  // Generate a launcher script that sources nvm (or fnm) at runtime
-  // so the plist always finds the current node version
+  // Detect which node version manager is in use
   const nvmDir = process.env.NVM_DIR || resolve(home, ".nvm");
+  // fnm can be installed via Homebrew, cargo, or manually
+  let fnmBin = "";
+  try { fnmBin = execSync("which fnm", { encoding: "utf8" }).trim(); } catch {}
+
+  const serveArgStr = serveArgs.length > 0 ? " " + serveArgs.join(" ") : "";
+
   const launcher = `#!/usr/bin/env bash
 set -euo pipefail
 
-# Source node version manager so we get the right node/tsx on PATH
+# Ensure PATH includes common tool locations FIRST so we can find fnm/nvm
 export HOME="${home}"
-if [ -s "${nvmDir}/nvm.sh" ]; then
+export PATH="/opt/homebrew/bin:/usr/local/bin:${home}/.local/bin:\$PATH"
+
+# Source node version manager so we get the right node/pnpm on PATH
+# Prefer fnm if available (installed via Homebrew), fall back to nvm
+if command -v fnm &>/dev/null; then
+  eval "$(fnm env)"
+elif [ -s "${nvmDir}/nvm.sh" ]; then
   export NVM_DIR="${nvmDir}"
   source "$NVM_DIR/nvm.sh"
-elif [ -s "${home}/.fnm/fnm" ]; then
-  eval "$(${home}/.fnm/fnm env)"
 fi
-
-# Ensure PATH includes common tool locations
-export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:${home}/.local/bin"
 
 cd "${MONOREPO_ROOT}"
 
@@ -78,7 +84,7 @@ if [ ! -d "node_modules" ] || [ ! -d "apps/server/node_modules" ]; then
   pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1
 fi
 
-exec pnpm --filter server run serve
+exec pnpm --filter server run serve${serveArgStr}
 `;
 
   writeFileSync(launcherPath, launcher, { mode: 0o755 });
@@ -181,9 +187,21 @@ switch (command) {
     );
     break;
   }
-  case "install-service":
-    installService();
+  case "install-service": {
+    const { values: installValues } = parseArgs({
+      args: args.slice(1),
+      options: {
+        port: { type: "string", short: "p" },
+        host: { type: "string", short: "H" },
+      },
+      allowPositionals: true,
+    });
+    const serveArgs: string[] = [];
+    if (installValues.host) serveArgs.push("--host", installValues.host);
+    if (installValues.port) serveArgs.push("--port", installValues.port);
+    installService(serveArgs);
     break;
+  }
   case "uninstall-service":
     uninstallService();
     break;
@@ -195,6 +213,8 @@ switch (command) {
     console.log("    --port, -p       Port to listen on (default: 7672)");
     console.log("    --host, -H       Host to bind to (default: 127.0.0.1)");
     console.log("  install-service    Install launchd service (macOS)");
+    console.log("    --port, -p       Port for the service (default: 7672)");
+    console.log("    --host, -H       Host for the service (default: 127.0.0.1)");
     console.log("  uninstall-service  Remove launchd service");
     process.exit(command ? 1 : 0);
 }
