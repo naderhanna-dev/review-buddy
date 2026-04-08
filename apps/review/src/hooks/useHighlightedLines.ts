@@ -32,25 +32,34 @@ async function highlightSource(
  * highlights it with shiki, and returns an array of HTML strings
  * indexed by 1-based line number.
  *
+ * Pass `ref` to control which version is fetched:
+ *   - `"head"` (default) — the PR head version
+ *   - `"base"` — the base/old version (for split-view left pane)
+ *
  * Returns null while loading or if highlighting fails.
  */
 export function useHighlightedLines(
   filePath: string | undefined,
   theme: "light" | "dark" = "dark",
+  ref: "head" | "base" = "head",
 ): HighlightedLine[] | null {
   const [lines, setLines] = useState<HighlightedLine[] | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const sourceRef = useRef<{ path: string; source: string; lang: string | undefined } | null>(null);
+  const cacheKeyRef = useRef<string | null>(null);
+  const sourceRef = useRef<{ cacheKey: string; source: string; lang: string | undefined } | null>(null);
 
   useEffect(() => {
     if (!filePath) {
       setLines(null);
       sourceRef.current = null;
+      cacheKeyRef.current = null;
       return;
     }
 
-    // If we already have the source cached for this path, just re-highlight with new theme
-    if (sourceRef.current?.path === filePath) {
+    const cacheKey = `${ref}:${filePath}`;
+
+    // If we already have the source cached for this path+ref, just re-highlight with new theme
+    if (sourceRef.current?.cacheKey === cacheKey) {
       const { source, lang } = sourceRef.current;
       highlightSource(source, lang, theme).then(setLines);
       return;
@@ -59,12 +68,14 @@ export function useHighlightedLines(
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    cacheKeyRef.current = cacheKey;
 
     setLines(null);
 
     (async () => {
       try {
-        const res = await fetch(apiUrl(`/file/${encodeURIComponent(filePath)}`), {
+        const queryParam = ref === "base" ? "?ref=base" : "";
+        const res = await fetch(apiUrl(`/file/${encodeURIComponent(filePath)}${queryParam}`), {
           signal: controller.signal,
         });
         if (!res.ok) return;
@@ -72,7 +83,7 @@ export function useHighlightedLines(
         if (controller.signal.aborted) return;
 
         const lang = langFromPath(filePath);
-        sourceRef.current = { path: filePath, source, lang };
+        sourceRef.current = { cacheKey, source, lang };
 
         const result = await highlightSource(source, lang, theme);
         if (!controller.signal.aborted) setLines(result);
@@ -82,7 +93,7 @@ export function useHighlightedLines(
     })();
 
     return () => controller.abort();
-  }, [filePath, theme]);
+  }, [filePath, theme, ref]);
 
   return lines;
 }

@@ -14,6 +14,14 @@ const DIFF_STYLES = `
 .diff-line-context:hover .diff-comment-btn,
 .diff-line-addition:hover .diff-comment-btn,
 .diff-line-deletion:hover .diff-comment-btn { opacity: 0.7 !important; }
+.split-left .diff-line-deletion:hover { background: var(--diff-del-hover) !important; }
+.split-right .diff-line-addition:hover { background: var(--diff-add-hover) !important; }
+.split-left .diff-line-context:hover,
+.split-right .diff-line-context:hover { background: var(--diff-ctx-hover) !important; }
+.split-left .diff-line-deletion:hover .diff-comment-btn,
+.split-left .diff-line-context:hover .diff-comment-btn,
+.split-right .diff-line-addition:hover .diff-comment-btn,
+.split-right .diff-line-context:hover .diff-comment-btn { opacity: 0.7 !important; }
 `;
 
 // --- Parsing ---
@@ -145,6 +153,64 @@ function computeCollapsedRanges(lines: HunkLine[], totalLines?: number) {
   }
 
   return { rangeByHeader, trailingRange };
+}
+
+// --- Side-by-side line pairing ---
+
+interface SplitRow {
+  left: HunkLine | null;
+  right: HunkLine | null;
+  type: "context" | "change" | "header";
+}
+
+/**
+ * Pair unified diff lines into side-by-side rows.
+ * Context lines appear on both sides. Consecutive deletion+addition
+ * blocks are zipped together; the shorter side gets null filler rows.
+ */
+function pairLines(lines: HunkLine[]): SplitRow[] {
+  const rows: SplitRow[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.type === "header") {
+      rows.push({ left: line, right: line, type: "header" });
+      i++;
+      continue;
+    }
+
+    if (line.type === "context") {
+      rows.push({ left: line, right: line, type: "context" });
+      i++;
+      continue;
+    }
+
+    // Collect consecutive deletions then additions
+    const deletions: HunkLine[] = [];
+    const additions: HunkLine[] = [];
+
+    while (i < lines.length && lines[i].type === "deletion") {
+      deletions.push(lines[i]);
+      i++;
+    }
+    while (i < lines.length && lines[i].type === "addition") {
+      additions.push(lines[i]);
+      i++;
+    }
+
+    const maxLen = Math.max(deletions.length, additions.length);
+    for (let j = 0; j < maxLen; j++) {
+      rows.push({
+        left: j < deletions.length ? deletions[j] : null,
+        right: j < additions.length ? additions[j] : null,
+        type: "change",
+      });
+    }
+  }
+
+  return rows;
 }
 
 
@@ -518,16 +584,489 @@ function ExpandedLines({ range, highlightedLines }: {
   return <>{result}</>;
 }
 
-// --- SingleFileDiff ---
+// --- Split-view components ---
 
-function SingleFileDiff({ file, fileIndex, stickyTop = 0 }: {
+const splitGutterStyle: React.CSSProperties = {
+  minWidth: 40,
+  textAlign: "right",
+  paddingRight: 6,
+  color: "var(--text-secondary)",
+  opacity: 0.6,
+  userSelect: "none",
+  fontSize: 12,
+};
+
+const splitContentStyle: React.CSSProperties = {
+  flex: 1,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-all",
+  overflowWrap: "break-word",
+  paddingRight: 8,
+};
+
+const SPLIT_LINE_BG: Record<string, React.CSSProperties> = {
+  addition: { background: "var(--diff-add-bg)" },
+  deletion: { background: "var(--diff-del-bg)" },
+  context: { background: "transparent" },
+  filler: { background: "var(--diff-filler-bg)" },
+};
+
+function SplitDiffLine({ line, lineNum, highlightHtml, isInRange, onMouseDown, side }: {
+  line: HunkLine | null;
+  lineNum?: number;
+  highlightHtml: string;
+  isInRange: boolean;
+  onMouseDown: (e: React.MouseEvent) => void;
+  side: "left" | "right";
+}) {
+  if (!line) {
+    // Filler row — the other side has content, this side is empty
+    return (
+      <div style={{
+        display: "flex",
+        padding: "0 6px",
+        minHeight: 20,
+        ...SPLIT_LINE_BG.filler,
+      }}>
+        <span style={splitGutterStyle} />
+        <span style={splitContentStyle} />
+      </div>
+    );
+  }
+
+  const isClickable = line.type !== "header" && lineNum !== undefined;
+  const hoverClass = line.type !== "header" ? `diff-line-${line.type}` : "";
+  const rangeBg = isInRange ? { background: "rgba(88, 166, 255, 0.15)" } : {};
+  const bgKey = line.type === "addition" || line.type === "deletion" ? line.type : "context";
+
+  return (
+    <div
+      className={hoverClass}
+      onMouseDown={(e) => { if (isClickable) onMouseDown(e); }}
+      style={{
+        display: "flex",
+        padding: "0 6px",
+        minHeight: 20,
+        cursor: isClickable ? "pointer" : "default",
+        transition: "background 0.1s",
+        color: line.type === "header" ? "var(--blue)" : "var(--text)",
+        fontWeight: line.type === "header" ? 600 : "normal",
+        ...SPLIT_LINE_BG[bgKey],
+        ...rangeBg,
+      }}
+    >
+      <span style={splitGutterStyle}>{lineNum ?? ""}</span>
+      <span
+        style={splitContentStyle}
+        dangerouslySetInnerHTML={{ __html: highlightHtml }}
+      />
+      {isClickable && (
+        <span className="diff-comment-btn" style={{
+          opacity: 0,
+          fontSize: 14,
+          userSelect: "none",
+          paddingLeft: 2,
+          transition: "opacity 0.15s",
+          color: "var(--accent)",
+        }} title="Add review comment">+</span>
+      )}
+    </div>
+  );
+}
+
+function SplitFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true }: {
   file: DiffFile;
   fileIndex: number;
   stickyTop?: number;
+  showViewToggle?: boolean;
 }) {
   const reviewComments = useStore((s) => s.reviewComments);
   const addReviewComment = useStore((s) => s.addReviewComment);
   const removeReviewComment = useStore((s) => s.removeReviewComment);
+  const diffViewMode = useStore((s) => s.diffViewMode);
+  const setDiffViewMode = useStore((s) => s.setDiffViewMode);
+
+  const theme = useStore((s) => s.config.theme);
+  const resolvedTheme: "light" | "dark" = theme === "system"
+    ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+    : theme as "light" | "dark";
+
+  // Highlight new file (right pane) and old file (left pane)
+  const highlightedNew = useHighlightedLines(file.path, resolvedTheme, "head");
+  const oldPath = file.oldPath ?? file.path;
+  const highlightedOld = useHighlightedLines(
+    file.status === "added" ? undefined : oldPath,
+    resolvedTheme,
+    "base",
+  );
+
+  const lines = parseHunk(file.patch);
+  const splitRows = pairLines(lines);
+
+  // Drag-select state (simplified for split view — selects on one side at a time)
+  const [formRange, setFormRange] = useState<{ startRow: number; endRow: number; side: "LEFT" | "RIGHT" } | null>(null);
+  const [dragRange, setDragRange] = useState<{ startRow: number; endRow: number; side: "LEFT" | "RIGHT" } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef<{ row: number; side: "LEFT" | "RIGHT" } | null>(null);
+
+  const handleLineMouseDown = useCallback((rowIdx: number, side: "LEFT" | "RIGHT", e: React.MouseEvent) => {
+    e.preventDefault();
+
+    if (e.shiftKey && formRange && formRange.side === side) {
+      setFormRange({
+        startRow: Math.min(formRange.startRow, rowIdx),
+        endRow: Math.max(formRange.endRow, rowIdx),
+        side,
+      });
+      setDragRange(null);
+      return;
+    }
+
+    setIsDragging(true);
+    dragStart.current = { row: rowIdx, side };
+    setDragRange({ startRow: rowIdx, endRow: rowIdx, side });
+  }, [formRange]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging || !dragStart.current) return;
+    const container = e.currentTarget;
+    const sideClass = dragStart.current.side === "LEFT" ? "split-left" : "split-right";
+    const sideEl = container.querySelector(`.${sideClass}`);
+    if (!sideEl) return;
+
+    const rowEls = sideEl.querySelectorAll("[data-row-idx]");
+    const y = e.clientY;
+    let closest = dragStart.current.row;
+    for (const el of rowEls) {
+      const rect = el.getBoundingClientRect();
+      if (y >= rect.top && y <= rect.bottom) {
+        closest = parseInt(el.getAttribute("data-row-idx")!, 10);
+        break;
+      }
+    }
+    setDragRange({
+      startRow: Math.min(dragStart.current.row, closest),
+      endRow: Math.max(dragStart.current.row, closest),
+      side: dragStart.current.side,
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    if (!isDragging || !dragStart.current) return;
+    setIsDragging(false);
+    if (dragRange) {
+      setFormRange(dragRange);
+    }
+    setDragRange(null);
+    dragStart.current = null;
+  }, [isDragging, dragRange]);
+
+  const activeRange = isDragging ? dragRange : formRange;
+
+  // Comment anchoring — key comments by side+lineNum
+  const commentsByKey = new Map<string, ReviewComment[]>();
+  for (const c of Array.from(reviewComments.values()).filter((c) => c.filePath === file.path)) {
+    const displayNum = c.endLine || c.line;
+    const prefix = c.side === "LEFT" ? "L" : "R";
+    const key = `${prefix}${displayNum}`;
+    const existing = commentsByKey.get(key) || [];
+    existing.push(c);
+    commentsByKey.set(key, existing);
+  }
+
+  const handleAddComment = useCallback((body: string, type: ReviewComment["type"], suggestedCode?: string) => {
+    if (!formRange) return;
+
+    // Collect line numbers from the selected rows on the active side
+    const nums: number[] = [];
+    for (let r = formRange.startRow; r <= formRange.endRow; r++) {
+      const row = splitRows[r];
+      if (!row) continue;
+      const line = formRange.side === "LEFT" ? row.left : row.right;
+      if (!line) continue;
+      const num = formRange.side === "LEFT" ? line.oldNum : line.newNum;
+      if (num !== undefined) nums.push(num);
+    }
+
+    if (nums.length === 0) return;
+
+    const first = nums[0];
+    const last = nums[nums.length - 1];
+    const comment: ReviewComment = {
+      id: crypto.randomUUID(),
+      filePath: file.path,
+      line: first,
+      endLine: last !== first ? last : undefined,
+      side: formRange.side,
+      type,
+      body,
+      suggestedCode,
+      createdAt: Date.now(),
+    };
+    fetch(apiUrl("/comments"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(comment),
+    }).catch(console.error);
+    addReviewComment(comment);
+    setFormRange(null);
+  }, [file.path, formRange, splitRows, addReviewComment]);
+
+  const handleDeleteComment = useCallback((id: string) => {
+    fetch(apiUrl(`/comments/${id}`), { method: "DELETE" }).catch(console.error);
+    removeReviewComment(id);
+  }, [removeReviewComment]);
+
+  // Get content for suggestion pre-fill
+  const rangeLineContent = formRange
+    ? (() => {
+        const contentLines: string[] = [];
+        for (let r = formRange.startRow; r <= formRange.endRow; r++) {
+          const row = splitRows[r];
+          if (!row) continue;
+          const line = formRange.side === "RIGHT" ? row.right : row.left;
+          if (line && line.type !== "deletion") contentLines.push(line.content);
+        }
+        return contentLines.join("\n");
+      })()
+    : undefined;
+
+  // Line nums for the form
+  const formLineNums = formRange
+    ? (() => {
+        const nums: number[] = [];
+        for (let r = formRange.startRow; r <= formRange.endRow; r++) {
+          const row = splitRows[r];
+          if (!row) continue;
+          const line = formRange.side === "LEFT" ? row.left : row.right;
+          if (!line) continue;
+          const num = formRange.side === "LEFT" ? line.oldNum : line.newNum;
+          if (num !== undefined) nums.push(num);
+        }
+        return nums.length > 0 ? { start: nums[0], end: nums[nums.length - 1] } : null;
+      })()
+    : null;
+
+  function lineHtml(
+    line: HunkLine | null,
+    side: "left" | "right",
+  ): string {
+    if (!line) return "";
+    const highlighted = side === "left" ? highlightedOld : highlightedNew;
+    if (!highlighted) return escapeHtml(line.content);
+    const lineNum = side === "left" ? line.oldNum : line.newNum;
+    if (lineNum === undefined) return escapeHtml(line.content);
+    const html = highlighted[lineNum - 1];
+    return html ?? escapeHtml(line.content);
+  }
+
+  return (
+    <div
+      style={{
+        fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: "20px",
+        userSelect: isDragging ? "none" : "auto",
+      }}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={() => {
+        if (isDragging) {
+          setIsDragging(false);
+          setDragRange(null);
+          dragStart.current = null;
+        }
+      }}
+    >
+      {/* Sticky file header */}
+      <div style={{
+        padding: "8px 16px", background: "var(--bg-secondary)",
+        borderBottom: "1px solid var(--border)", fontSize: 13, fontWeight: 600,
+        position: "sticky", top: stickyTop, zIndex: 1,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ flex: 1 }}>{file.path}</span>
+          {showViewToggle && <ViewModeToggle mode={diffViewMode} onChange={setDiffViewMode} />}
+        </div>
+        {file.oldPath && file.oldPath !== file.path && (
+          <div style={{ color: "var(--text-secondary)", fontWeight: 400, fontSize: 12, marginTop: 2 }}>
+            renamed from {file.oldPath}
+          </div>
+        )}
+      </div>
+
+      {/* Two-column diff */}
+      <div style={{ display: "flex" }}>
+        {/* Left pane (old/deletions) */}
+        <div className="split-left" style={{ flex: 1, borderRight: "1px solid var(--diff-split-border)", overflow: "hidden" }}>
+          {splitRows.map((row, rowIdx) => {
+            const line = row.left;
+            const lineNum = line ? line.oldNum : undefined;
+            const isInRange = activeRange !== null
+              && activeRange.side === "LEFT"
+              && rowIdx >= activeRange.startRow
+              && rowIdx <= activeRange.endRow
+              && line !== null;
+
+            // Check for comments on the left side at this row
+            const leftKey = line?.oldNum !== undefined ? `L${line.oldNum}` : undefined;
+            const leftComments = leftKey ? commentsByKey.get(leftKey) : undefined;
+
+            return (
+              <div key={rowIdx} data-row-idx={rowIdx}>
+                {row.type === "header" && line ? (
+                  <div style={{
+                    display: "flex", padding: "0 6px", minHeight: 24,
+                    background: "var(--diff-hdr-bg)", color: "var(--blue)",
+                    fontSize: 12, alignItems: "center",
+                  }}>
+                    <span style={splitGutterStyle} />
+                    <span style={{ flex: 1, opacity: 0.6 }}>{line.content}</span>
+                  </div>
+                ) : (
+                  <SplitDiffLine
+                    line={line}
+                    lineNum={lineNum}
+                    highlightHtml={lineHtml(line, "left")}
+                    isInRange={isInRange}
+                    onMouseDown={(e) => handleLineMouseDown(rowIdx, "LEFT", e)}
+                    side="left"
+                  />
+                )}
+                {leftComments?.map((c) => (
+                  <InlineComment key={c.id} comment={c} onDelete={() => handleDeleteComment(c.id)} />
+                ))}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right pane (new/additions) */}
+        <div className="split-right" style={{ flex: 1, overflow: "hidden" }}>
+          {splitRows.map((row, rowIdx) => {
+            const line = row.right;
+            const lineNum = line ? line.newNum : undefined;
+            const isInRange = activeRange !== null
+              && activeRange.side === "RIGHT"
+              && rowIdx >= activeRange.startRow
+              && rowIdx <= activeRange.endRow
+              && line !== null;
+
+            // Check for comments on the right side at this row
+            const rightKey = line?.newNum !== undefined ? `R${line.newNum}` : undefined;
+            const rightComments = rightKey ? commentsByKey.get(rightKey) : undefined;
+
+            // Show comment form after the last row in the selected range
+            const showForm = formRange !== null
+              && formRange.side === "RIGHT"
+              && rowIdx === formRange.endRow;
+            const showFormLeft = formRange !== null
+              && formRange.side === "LEFT"
+              && rowIdx === formRange.endRow;
+
+            return (
+              <div key={rowIdx} data-row-idx={rowIdx}>
+                {row.type === "header" && line ? (
+                  <div style={{
+                    display: "flex", padding: "0 6px", minHeight: 24,
+                    background: "var(--diff-hdr-bg)", color: "var(--blue)",
+                    fontSize: 12, alignItems: "center",
+                  }}>
+                    <span style={splitGutterStyle} />
+                    <span style={{ flex: 1, opacity: 0.6 }}>{line.content}</span>
+                  </div>
+                ) : (
+                  <SplitDiffLine
+                    line={line}
+                    lineNum={lineNum}
+                    highlightHtml={lineHtml(line, "right")}
+                    isInRange={isInRange}
+                    onMouseDown={(e) => handleLineMouseDown(rowIdx, "RIGHT", e)}
+                    side="right"
+                  />
+                )}
+                {rightComments?.map((c) => (
+                  <InlineComment key={c.id} comment={c} onDelete={() => handleDeleteComment(c.id)} />
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Comment form — rendered full-width below the split panes */}
+      {formRange && formLineNums && (
+        <CommentForm
+          filePath={file.path}
+          lineNum={formLineNums.start}
+          endLineNum={formLineNums.end !== formLineNums.start ? formLineNums.end : undefined}
+          lineContent={rangeLineContent}
+          onSubmit={handleAddComment}
+          onCancel={() => setFormRange(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+
+// --- View mode toggle ---
+
+function ViewModeToggle({ mode, onChange }: {
+  mode: "unified" | "split";
+  onChange: (mode: "unified" | "split") => void;
+}) {
+  const buttonStyle = (active: boolean): React.CSSProperties => ({
+    padding: "2px 6px",
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: "pointer",
+    border: "1px solid var(--border)",
+    background: active ? "var(--accent-bg)" : "transparent",
+    color: active ? "var(--accent)" : "var(--text-secondary)",
+    transition: "all 0.15s",
+    lineHeight: 1.4,
+  });
+
+  return (
+    <div style={{ display: "inline-flex", borderRadius: 4, overflow: "hidden" }}>
+      <button
+        onClick={() => onChange("unified")}
+        style={{ ...buttonStyle(mode === "unified"), borderRadius: "4px 0 0 4px", borderRight: "none" }}
+        title="Unified view"
+      >
+        Unified
+      </button>
+      <button
+        onClick={() => onChange("split")}
+        style={{ ...buttonStyle(mode === "split"), borderRadius: "0 4px 4px 0" }}
+        title="Side-by-side view"
+      >
+        Split
+      </button>
+    </div>
+  );
+}
+
+
+function GroupViewModeToggle() {
+  const mode = useStore((s) => s.diffViewMode);
+  const setMode = useStore((s) => s.setDiffViewMode);
+  return <ViewModeToggle mode={mode} onChange={setMode} />;
+}
+
+
+// --- SingleFileDiff ---
+
+function SingleFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true }: {
+  file: DiffFile;
+  fileIndex: number;
+  stickyTop?: number;
+  showViewToggle?: boolean;
+}) {
+  const reviewComments = useStore((s) => s.reviewComments);
+  const addReviewComment = useStore((s) => s.addReviewComment);
+  const removeReviewComment = useStore((s) => s.removeReviewComment);
+  const diffViewMode = useStore((s) => s.diffViewMode);
+  const setDiffViewMode = useStore((s) => s.setDiffViewMode);
 
   const theme = useStore((s) => s.config.theme);
   const resolvedTheme: "light" | "dark" = theme === "system"
@@ -699,7 +1238,8 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0 }: {
         position: "sticky", top: stickyTop, zIndex: 1,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span>{file.path}</span>
+          <span style={{ flex: 1 }}>{file.path}</span>
+          {showViewToggle && <ViewModeToggle mode={diffViewMode} onChange={setDiffViewMode} />}
         </div>
         {file.oldPath && file.oldPath !== file.path && (
           <div style={{ color: "var(--text-secondary)", fontWeight: 400, fontSize: 12, marginTop: 2 }}>
@@ -774,6 +1314,15 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0 }: {
 }
 
 // --- Main ---
+
+function FileDiff({ file, fileIndex, stickyTop, showViewToggle = true }: {
+  file: DiffFile; fileIndex: number; stickyTop?: number; showViewToggle?: boolean;
+}) {
+  const diffViewMode = useStore((s) => s.diffViewMode);
+  return diffViewMode === "split"
+    ? <SplitFileDiff file={file} fileIndex={fileIndex} stickyTop={stickyTop} showViewToggle={showViewToggle} />
+    : <SingleFileDiff file={file} fileIndex={fileIndex} stickyTop={stickyTop} showViewToggle={showViewToggle} />;
+}
 
 export default function DiffPane() {
   const files = useStore((s) => s.files);
@@ -852,6 +1401,7 @@ export default function DiffPane() {
             <span style={{ color: "var(--text-secondary)", fontSize: 12, marginLeft: "auto" }}>
               {groupFiles.length} file{groupFiles.length !== 1 ? "s" : ""}
             </span>
+            <GroupViewModeToggle />
           </div>
           {activeGroup.summary && (
             <div style={{
@@ -865,7 +1415,7 @@ export default function DiffPane() {
           const ref = (el: HTMLDivElement | null) => { fileRefs.current.set(index, el); };
           return (
             <div key={gf.path} ref={ref}>
-              <SingleFileDiff file={gf} fileIndex={index} stickyTop={groupHeaderHeight} />
+              <FileDiff file={gf} fileIndex={index} stickyTop={groupHeaderHeight} showViewToggle={false} />
             </div>
           );
         })}
@@ -877,7 +1427,7 @@ export default function DiffPane() {
   return (
     <div>
       <style>{DIFF_STYLES}</style>
-      <SingleFileDiff file={file} fileIndex={activeFileIndex} />
+      <FileDiff file={file} fileIndex={activeFileIndex} />
     </div>
   );
 }

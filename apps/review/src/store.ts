@@ -89,6 +89,8 @@ interface ODRStore {
   // UI
   rightTab: "comments" | "analysis" | "chat";
   setRightTab: (tab: ODRStore["rightTab"]) => void;
+  diffViewMode: "unified" | "split";
+  setDiffViewMode: (mode: ODRStore["diffViewMode"]) => void;
   showShortcuts: boolean;
   showSettings: boolean;
 }
@@ -257,6 +259,12 @@ export const useStore = create<ODRStore>((set, get) => ({
 
   rightTab: "comments",
   setRightTab: (tab) => set({ rightTab: tab }),
+
+  diffViewMode: (localStorage.getItem("review-radar.diffViewMode") as "unified" | "split") || "unified",
+  setDiffViewMode: (mode) => {
+    localStorage.setItem("review-radar.diffViewMode", mode);
+    set({ diffViewMode: mode });
+  },
 
   showShortcuts: false,
   showSettings: false,
