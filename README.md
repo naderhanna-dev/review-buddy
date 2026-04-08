@@ -51,7 +51,7 @@ pnpm run install-service
 
 Example — bind to a specific network interface so other machines on the LAN can reach it:
 ```bash
-pnpm run install-service -- --host 192.168.1.100
+pnpm run install-service --host 192.168.1.100
 ```
 
 This creates a launchd plist at `~/Library/LaunchAgents/com.reviewradar.server.plist` and starts the service. The launcher script auto-detects your node version manager (fnm or nvm). Logs go to `~/Library/Logs/ReviewRadar/`.
