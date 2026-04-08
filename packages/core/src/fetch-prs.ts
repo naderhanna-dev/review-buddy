@@ -21,7 +21,7 @@ import {
   SEARCH_OPEN_PRS_QUERY,
   VIEWER_AND_TEAMS_QUERY,
 } from "./graphql";
-import type { ClassifiedPullRequests, MergedPullRequest, StalePreference } from "./types";
+import type { ClassifiedPullRequests, MergedPullRequest, OrgConfig, StalePreference } from "./types";
 import {
   SEARCH_PAGE_SIZE,
   SEARCH_MAX_PAGES,
@@ -662,4 +662,173 @@ export async function fetchPRCheckStatuses(
     }
     return []
   })
+}
+
+// ============================================================================
+// Multi-Org Fetch
+// ============================================================================
+
+export type MultiOrgResult = {
+  yourPrs: PullRequest[];
+  needsAttention: PullRequest[];
+  relatedToYou: PullRequest[];
+  stalePrs: PullRequest[];
+  recentlyMerged: MergedPullRequest[];
+  teamSignalsUnavailable: string | null;
+  closedViewedKeys: string[];
+  perOrgErrors: Array<{ orgId: string; org: string; error: string }>;
+};
+
+/**
+ * Fetch and classify PRs across multiple organizations in parallel.
+ * Each org uses its own token. Results are merged and deduplicated.
+ */
+export async function fetchAllOrgs(
+  configs: OrgConfig[],
+  viewedMap: Record<string, number>,
+  stalePreferences: Record<string, StalePreference>,
+  mergedCount: number,
+): Promise<MultiOrgResult> {
+  // Resolve viewer login per unique token (different orgs may share a token)
+  const viewerLoginByToken = new Map<string, string>();
+  const loginPromises = new Map<string, Promise<string>>();
+  for (const config of configs) {
+    if (!loginPromises.has(config.token)) {
+      loginPromises.set(config.token, fetchViewerLogin(config.token));
+    }
+  }
+  const loginResults = await Promise.allSettled(
+    Array.from(loginPromises.entries()).map(async ([token, promise]) => {
+      const login = await promise;
+      viewerLoginByToken.set(token, login);
+    }),
+  );
+
+  // If a token's login resolution failed, we can't fetch for orgs using that token
+  const failedTokens = new Set<string>();
+  const tokenEntries = Array.from(loginPromises.keys());
+  for (let i = 0; i < loginResults.length; i++) {
+    if (loginResults[i].status === 'rejected') {
+      failedTokens.add(tokenEntries[i]);
+    }
+  }
+
+  // Fetch PRs per org in parallel
+  type OrgFetchResult = {
+    orgId: string;
+    org: string;
+    classified: ClassifiedPullRequests;
+    merged: MergedPullRequest[];
+  };
+
+  const orgResults = await Promise.allSettled(
+    configs
+      .filter((c) => !failedTokens.has(c.token))
+      .map(async (config): Promise<OrgFetchResult> => {
+        const viewerLogin = viewerLoginByToken.get(config.token)!;
+        const [classified, merged] = await Promise.all([
+          fetchAndClassifyPullRequests(
+            config.org,
+            config.token,
+            viewerLogin,
+            viewedMap,
+            stalePreferences,
+          ),
+          fetchRecentlyMergedPRs(config.org, config.token, mergedCount, viewerLogin),
+        ]);
+        return { orgId: config.id, org: config.org, classified, merged };
+      }),
+  );
+
+  // Merge results
+  const seenPrIds = new Set<number>();
+  const allYourPrs: PullRequest[] = [];
+  const allNeedsAttention: PullRequest[] = [];
+  const allRelatedToYou: PullRequest[] = [];
+  const allStalePrs: PullRequest[] = [];
+  const allRecentlyMerged: MergedPullRequest[] = [];
+  const allClosedViewedKeys: string[] = [];
+  const teamWarnings: string[] = [];
+  const perOrgErrors: MultiOrgResult['perOrgErrors'] = [];
+
+  // Collect errors from failed token resolutions
+  for (const config of configs) {
+    if (failedTokens.has(config.token)) {
+      perOrgErrors.push({
+        orgId: config.id,
+        org: config.org,
+        error: 'Failed to authenticate — check your PAT.',
+      });
+    }
+  }
+
+  for (let i = 0; i < orgResults.length; i++) {
+    const result = orgResults[i];
+    const config = configs.filter((c) => !failedTokens.has(c.token))[i];
+
+    if (result.status === 'rejected') {
+      const message = result.reason instanceof Error ? result.reason.message : 'Unknown error';
+      perOrgErrors.push({ orgId: config.id, org: config.org, error: message });
+      continue;
+    }
+
+    const { classified, merged } = result.value;
+
+    if (classified.teamSignalsUnavailable) {
+      teamWarnings.push(`${config.org}: ${classified.teamSignalsUnavailable}`);
+    }
+
+    allClosedViewedKeys.push(...classified.closedViewedKeys);
+
+    // Deduplicate by PR id
+    function addUniquePrs(target: PullRequest[], source: PullRequest[]): void {
+      for (const pr of source) {
+        if (!seenPrIds.has(pr.id)) {
+          seenPrIds.add(pr.id);
+          target.push(pr);
+        }
+      }
+    }
+
+    addUniquePrs(allYourPrs, classified.yourPrs);
+    addUniquePrs(allNeedsAttention, classified.needsAttention);
+    addUniquePrs(allRelatedToYou, classified.relatedToYou);
+    addUniquePrs(allStalePrs, classified.stalePrs);
+
+    const seenMergedIds = new Set(allRecentlyMerged.map((pr) => pr.id));
+    for (const pr of merged) {
+      if (!seenMergedIds.has(pr.id)) {
+        seenMergedIds.add(pr.id);
+        allRecentlyMerged.push(pr);
+      }
+    }
+  }
+
+  // Re-sort merged across orgs and trim to limit
+  allRecentlyMerged.sort(
+    (a, b) => new Date(b.mergedAtIso).getTime() - new Date(a.mergedAtIso).getTime(),
+  );
+  allRecentlyMerged.splice(mergedCount);
+
+  return {
+    yourPrs: sortByPriorityAndUpdated(allYourPrs, {
+      "your-pr-new-reviews": 0,
+      "your-pr-new-comments": 1,
+      "your-pr-unseen-reviews": 2,
+      "your-pr-changes-requested": 3,
+      "your-pr-approved": 4,
+      "your-pr-no-activity": 5,
+    }),
+    needsAttention: sortByPriorityAndUpdated(allNeedsAttention, {
+      "new-updates": 0,
+      "new-comments": 1,
+      "review-requested": 2,
+    }),
+    relatedToYou: sortByUpdatedDesc(allRelatedToYou),
+    stalePrs: sortByUpdatedDesc(allStalePrs),
+    recentlyMerged: allRecentlyMerged,
+    teamSignalsUnavailable: teamWarnings.length > 0 ? teamWarnings.join(' ') : null,
+    closedViewedKeys: allClosedViewedKeys,
+    perOrgErrors,
+  };
 }

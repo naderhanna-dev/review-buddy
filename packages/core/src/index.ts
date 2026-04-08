@@ -2,6 +2,7 @@
 export type {
   ClassifiedPullRequests,
   MergedPullRequest,
+  OrgConfig,
   ThemePreference,
   StalePreference,
   SectionKey,
@@ -75,9 +76,11 @@ export {
   PR_CACHE_STORAGE_KEY,
   readCachedPRData,
   isCacheStale,
+  isAnyCacheStale,
   writeCachedPRData,
   invalidatePRCache,
   getCacheTimestamp,
+  getOldestCacheTimestamp,
 } from "./pr-cache";
 
 // ── Notifications & Refresh ──────────────────────────────────────────
@@ -92,7 +95,7 @@ export {
 } from "./notifications";
 
 export type { SmartRefreshConfig } from "./smart-refresh";
-export { SmartRefreshController } from "./smart-refresh";
+export { SmartRefreshController, MultiOrgRefreshController } from "./smart-refresh";
 
 // ── Retry ────────────────────────────────────────────────────────────
 export type { RetryOptions } from "./retry";
@@ -114,6 +117,8 @@ export {
   readShowLabelsPreference,
   readSectionFilterPreferences,
   writeSectionFilterPreferences,
+  readOrgConfigs,
+  writeOrgConfigs,
 } from "./storage";
 
 // ── PR Utilities ─────────────────────────────────────────────────────
@@ -127,9 +132,11 @@ export {
 } from "./pr-utils";
 
 // ── Fetch ────────────────────────────────────────────────────────────
+export type { MultiOrgResult } from "./fetch-prs";
 export {
   fetchViewerLogin,
   fetchAndClassifyPullRequests,
   fetchRecentlyMergedPRs,
   fetchPRCheckStatuses,
+  fetchAllOrgs,
 } from "./fetch-prs";

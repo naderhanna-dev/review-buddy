@@ -4,18 +4,16 @@ import {
   RateLimitError,
   getCacheTimestamp,
   invalidatePRCache,
-  isCacheStale,
+  isAnyCacheStale,
   PR_CACHE_STORAGE_KEY,
   readCachedPRData,
   writeCachedPRData,
-  fetchAndClassifyPullRequests,
-  fetchRecentlyMergedPRs,
-  fetchViewerLogin,
+  fetchAllOrgs,
   readStalePreferences,
   readViewedMap,
   STORAGE_KEYS,
 } from "@reviewradar/core";
-import type { PullRequest, MergedPullRequest, StalePreference } from "@reviewradar/core";
+import type { PullRequest, MergedPullRequest, StalePreference, OrgConfig } from "@reviewradar/core";
 
 export type PRDataResult = {
   stalePrs: PullRequest[];
@@ -38,14 +36,73 @@ export type PRDataResult = {
   handleClearStalePreference: (repository: string, number: number) => void;
 };
 
+function mergeOrgCaches(orgConfigs: OrgConfig[]): {
+  data: {
+    yourPrs: PullRequest[];
+    needsAttention: PullRequest[];
+    relatedToYou: PullRequest[];
+    stalePrs: PullRequest[];
+    recentlyMerged: MergedPullRequest[];
+    teamSignalsUnavailable: string | null;
+  } | null;
+  lastRefreshedAt: number | null;
+} {
+  if (orgConfigs.length === 0) {
+    return { data: null, lastRefreshedAt: null };
+  }
+
+  const allYourPrs: PullRequest[] = [];
+  const allNeedsAttention: PullRequest[] = [];
+  const allRelatedToYou: PullRequest[] = [];
+  const allStalePrs: PullRequest[] = [];
+  const allRecentlyMerged: MergedPullRequest[] = [];
+  const teamWarnings: string[] = [];
+  let hasAnyData = false;
+  let oldest: number | null = null;
+
+  for (const config of orgConfigs) {
+    const cached = readCachedPRData(config.id);
+    if (!cached) continue;
+
+    hasAnyData = true;
+    allYourPrs.push(...cached.yourPrs);
+    allNeedsAttention.push(...cached.needsAttention);
+    allRelatedToYou.push(...cached.relatedToYou);
+    allStalePrs.push(...cached.stalePrs);
+    allRecentlyMerged.push(...cached.recentlyMerged);
+    if (cached.teamSignalsUnavailable) {
+      teamWarnings.push(cached.teamSignalsUnavailable);
+    }
+
+    const ts = getCacheTimestamp(config.id);
+    if (ts !== null && (oldest === null || ts < oldest)) {
+      oldest = ts;
+    }
+  }
+
+  if (!hasAnyData) {
+    return { data: null, lastRefreshedAt: null };
+  }
+
+  return {
+    data: {
+      yourPrs: allYourPrs,
+      needsAttention: allNeedsAttention,
+      relatedToYou: allRelatedToYou,
+      stalePrs: allStalePrs,
+      recentlyMerged: allRecentlyMerged,
+      teamSignalsUnavailable: teamWarnings.length > 0 ? teamWarnings.join(" ") : null,
+    },
+    lastRefreshedAt: oldest,
+  };
+}
+
 export function usePRData({
-  org,
-  token,
+  orgConfigs,
   mergedCount,
   refreshTick,
 }: {
-  org: string;
-  token: string;
+  orgConfigs: OrgConfig[];
   mergedCount: number;
   refreshTick: number;
 }): PRDataResult {
@@ -66,6 +123,11 @@ export function usePRData({
   const isLoadingRef = useRef(false);
   const viewedMapRef = useRef<Record<string, number>>(viewedMap);
   const refreshTickRef = useRef(refreshTick);
+  const orgConfigsRef = useRef(orgConfigs);
+
+  // Stable serialized key to detect orgConfigs changes without object identity issues
+  const orgConfigsKey = JSON.stringify(orgConfigs.map((c) => `${c.id}:${c.org}:${c.token}`));
+  orgConfigsRef.current = orgConfigs;
 
   useEffect(() => {
     isLoadingRef.current = isLoading;
@@ -75,26 +137,27 @@ export function usePRData({
     viewedMapRef.current = viewedMap;
   }, [viewedMap]);
 
+  // Cross-tab cache sync
   useEffect(() => {
     function handleStorageEvent(event: StorageEvent): void {
       if (event.key !== PR_CACHE_STORAGE_KEY || event.newValue === null) {
         return;
       }
 
-      const crossTabData = readCachedPRData(org);
-      if (!crossTabData) {
+      const configs = orgConfigsRef.current;
+      const merged = mergeOrgCaches(configs);
+      if (!merged.data) {
         return;
       }
 
-      setStalePrs(crossTabData.stalePrs);
-      setYourPrs(crossTabData.yourPrs);
-      setNeedsAttention(crossTabData.needsAttention);
-      setRelatedToYou(crossTabData.relatedToYou);
-      setRecentlyMerged(crossTabData.recentlyMerged);
-      setTeamSignalsUnavailable(crossTabData.teamSignalsUnavailable);
-      const crossTabTimestamp = getCacheTimestamp(org);
-      if (crossTabTimestamp) {
-        setLastRefreshedAt(crossTabTimestamp);
+      setStalePrs(merged.data.stalePrs);
+      setYourPrs(merged.data.yourPrs);
+      setNeedsAttention(merged.data.needsAttention);
+      setRelatedToYou(merged.data.relatedToYou);
+      setRecentlyMerged(merged.data.recentlyMerged);
+      setTeamSignalsUnavailable(merged.data.teamSignalsUnavailable);
+      if (merged.lastRefreshedAt) {
+        setLastRefreshedAt(merged.lastRefreshedAt);
       }
     }
 
@@ -102,10 +165,13 @@ export function usePRData({
     return () => {
       window.removeEventListener("storage", handleStorageEvent);
     };
-  }, [org]);
+  }, [orgConfigsKey]);
 
   useEffect(() => {
-    if (!token || !org) {
+    const configs = orgConfigsRef.current;
+    const hasConfigs = configs.length > 0 && configs.every((c) => c.org && c.token);
+
+    if (!hasConfigs) {
       setStalePrs([]);
       setYourPrs([]);
       setNeedsAttention([]);
@@ -118,30 +184,30 @@ export function usePRData({
 
     let ignore = false;
 
-    // Read cache immediately — hydrate state before any network fetch
-    const cachedData = readCachedPRData(org);
+    // Read cache immediately -- hydrate state before any network fetch
+    const cached = mergeOrgCaches(configs);
     const refreshTickChanged = refreshTickRef.current !== refreshTick;
     refreshTickRef.current = refreshTick;
-    if (cachedData && !ignore) {
-      setStalePrs(cachedData.stalePrs);
-      setYourPrs(cachedData.yourPrs);
-      setNeedsAttention(cachedData.needsAttention);
-      setRelatedToYou(cachedData.relatedToYou);
-      setRecentlyMerged(cachedData.recentlyMerged);
-      setTeamSignalsUnavailable(cachedData.teamSignalsUnavailable);
-      const cachedTimestamp = getCacheTimestamp(org);
-      if (cachedTimestamp) {
-        setLastRefreshedAt(cachedTimestamp);
+    if (cached.data && !ignore) {
+      setStalePrs(cached.data.stalePrs);
+      setYourPrs(cached.data.yourPrs);
+      setNeedsAttention(cached.data.needsAttention);
+      setRelatedToYou(cached.data.relatedToYou);
+      setRecentlyMerged(cached.data.recentlyMerged);
+      setTeamSignalsUnavailable(cached.data.teamSignalsUnavailable);
+      if (cached.lastRefreshedAt) {
+        setLastRefreshedAt(cached.lastRefreshedAt);
       }
     }
 
-    // If cache is fresh, skip the network fetch — SmartRefreshController will trigger refreshTick when stale
-    if (cachedData && !isCacheStale(org) && !refreshTickChanged) {
+    // If all caches are fresh, skip the network fetch
+    const orgIds = configs.map((c) => c.id);
+    if (cached.data && !isAnyCacheStale(orgIds) && !refreshTickChanged) {
       return () => { ignore = true; };
     }
 
     async function loadAndClassifyPulls(): Promise<void> {
-      if (cachedData) {
+      if (cached.data) {
         setIsRevalidating(true);
       } else {
         setIsLoading(true);
@@ -149,31 +215,33 @@ export function usePRData({
       setErrorToast(null);
 
       try {
-        const viewerLogin = await fetchViewerLogin(token);
-        const [classified, merged] = await Promise.all([
-          fetchAndClassifyPullRequests(
-            org,
-            token,
-            viewerLogin,
-            viewedMapRef.current,
-            stalePreferences,
-          ),
-          fetchRecentlyMergedPRs(org, token, mergedCount, viewerLogin),
-        ]);
+        const result = await fetchAllOrgs(
+          configs,
+          viewedMapRef.current,
+          stalePreferences,
+          mergedCount,
+        );
+
         if (!ignore) {
-          setStalePrs(classified.stalePrs);
-          setYourPrs(classified.yourPrs);
-          setNeedsAttention(classified.needsAttention);
-          setRelatedToYou(classified.relatedToYou);
-          setTeamSignalsUnavailable(classified.teamSignalsUnavailable);
-          setRecentlyMerged(merged);
+          setStalePrs(result.stalePrs);
+          setYourPrs(result.yourPrs);
+          setNeedsAttention(result.needsAttention);
+          setRelatedToYou(result.relatedToYou);
+          setTeamSignalsUnavailable(result.teamSignalsUnavailable);
+          setRecentlyMerged(result.recentlyMerged);
           setLastRefreshedAt(Date.now());
           setRateLimitWarning(false);
 
-          if (classified.closedViewedKeys.length > 0) {
+          // Show per-org errors as toasts
+          if (result.perOrgErrors.length > 0) {
+            const messages = result.perOrgErrors.map((e) => `${e.org}: ${e.error}`);
+            setErrorToast(messages.join(" | "));
+          }
+
+          if (result.closedViewedKeys.length > 0) {
             setViewedMap((current) => {
               const next = { ...current };
-              for (const key of classified.closedViewedKeys) {
+              for (const key of result.closedViewedKeys) {
                 delete next[key];
               }
               localStorage.setItem(STORAGE_KEYS.viewed, JSON.stringify(next));
@@ -181,14 +249,24 @@ export function usePRData({
             });
           }
 
-          writeCachedPRData(org, {
-            yourPrs: classified.yourPrs,
-            needsAttention: classified.needsAttention,
-            relatedToYou: classified.relatedToYou,
-            stalePrs: classified.stalePrs,
-            recentlyMerged: merged,
-            teamSignalsUnavailable: classified.teamSignalsUnavailable,
-          });
+          // Write per-org caches
+          for (const config of configs) {
+            // Filter PRs belonging to this org by repository prefix
+            const orgPrefix = `${config.org}/`.toLowerCase();
+            const filterByOrg = (prs: PullRequest[]): PullRequest[] =>
+              prs.filter((pr) => pr.repository.toLowerCase().startsWith(orgPrefix));
+
+            writeCachedPRData(config.id, config.org, {
+              yourPrs: filterByOrg(result.yourPrs),
+              needsAttention: filterByOrg(result.needsAttention),
+              relatedToYou: filterByOrg(result.relatedToYou),
+              stalePrs: filterByOrg(result.stalePrs),
+              recentlyMerged: result.recentlyMerged.filter(
+                (pr) => pr.repository.toLowerCase().startsWith(orgPrefix),
+              ),
+              teamSignalsUnavailable: result.teamSignalsUnavailable,
+            });
+          }
         }
       } catch (loadError) {
         if (!ignore) {
@@ -215,7 +293,7 @@ export function usePRData({
     return () => {
       ignore = true;
     };
-  }, [mergedCount, org, refreshTick, stalePreferences, token]);
+  }, [mergedCount, orgConfigsKey, refreshTick, stalePreferences]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleViewed(repository: string, number: number): void {
     const key = prViewKey(repository, number);
