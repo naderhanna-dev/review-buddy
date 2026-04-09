@@ -15,6 +15,7 @@ function getContrastColor(hexColor: string): string {
 export function PullRequestRow({
   pr,
   token,
+  getTokenForRepo,
   isViewed,
   onViewed,
   stalePreference,
@@ -32,6 +33,7 @@ export function PullRequestRow({
 }: {
   pr: PullRequest;
   token: string;
+  getTokenForRepo?: (repository: string) => string;
   isViewed: boolean;
   onViewed: (repository: string, number: number) => void;
   stalePreference?: StalePreference;
@@ -79,7 +81,7 @@ export function PullRequestRow({
     if (nextExpanded && checkStatuses === null) {
       setIsLoadingChecks(true);
       setChecksError(null);
-      fetchPRCheckStatuses(pr.repository, pr.number, token)
+      fetchPRCheckStatuses(pr.repository, pr.number, getTokenForRepo ? getTokenForRepo(pr.repository) : token)
         .then((statuses) => { setCheckStatuses(statuses); })
         .catch((error: unknown) => {
           setChecksError(error instanceof Error ? error.message : 'Failed to load check details.');

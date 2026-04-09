@@ -47,6 +47,7 @@ export function PrSection({
   showLabels,
   activeReviewKeys,
   reviewFeatureAvailable,
+  getTokenForRepo,
 }: {
   title: string;
   sectionKey: SectionKey;
@@ -90,6 +91,7 @@ export function PrSection({
   activeReviewKeys?: Set<string>;
   reviewFeatureAvailable?: boolean;
   token: string;
+  getTokenForRepo?: (repository: string) => string;
 }) {
   const grouped = useMemo(
     () => (groupByRepo ? groupPrsByRepo(prs) : null),
@@ -102,6 +104,7 @@ export function PrSection({
         key={pr.id}
         pr={pr}
         token={token}
+        getTokenForRepo={getTokenForRepo}
         isViewed={
           dimViewed &&
           Boolean(viewedMap[prViewKey(pr.repository, pr.number)])

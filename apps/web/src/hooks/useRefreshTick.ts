@@ -1,51 +1,54 @@
 import { useEffect, useRef } from "react";
 import {
-  SmartRefreshController,
+  MultiOrgRefreshController,
   FALLBACK_REFRESH_MS,
   NOTIFICATION_FALLBACK_MS,
   REFRESH_FOCUS_COOLDOWN_MS,
 } from "@reviewradar/core";
+import type { OrgConfig } from "@reviewradar/core";
 
 export function useRefreshTick({
-  org,
-  token,
+  orgConfigs,
   isLoadingRef,
   onRefresh,
 }: {
-  org: string;
-  token: string;
+  orgConfigs: OrgConfig[];
   isLoadingRef: React.MutableRefObject<boolean>;
   onRefresh: () => void;
 }): void {
   const lastVisibilityRefreshAtRef = useRef(0);
 
+  // Stable serialized key for detecting orgConfigs changes
+  const orgConfigsKey = JSON.stringify(orgConfigs.map((c) => `${c.id}:${c.org}:${c.token}`));
+
   useEffect(() => {
-    if (!token || !org) {
+    if (orgConfigs.length === 0) {
       return;
     }
 
-    const controller = new SmartRefreshController({
-      token,
-      org,
-      onRefresh: () => {
+    const controller = new MultiOrgRefreshController(
+      orgConfigs,
+      () => {
         if (document.visibilityState !== "visible" || isLoadingRef.current) {
           return;
         }
         onRefresh();
       },
-      fallbackIntervalMs: FALLBACK_REFRESH_MS,
-      degradedIntervalMs: NOTIFICATION_FALLBACK_MS,
-    });
+      {
+        fallbackIntervalMs: FALLBACK_REFRESH_MS,
+        degradedIntervalMs: NOTIFICATION_FALLBACK_MS,
+      },
+    );
 
     controller.start();
 
     return () => {
       controller.stop();
     };
-  }, [isLoadingRef, onRefresh, org, token]);
+  }, [isLoadingRef, onRefresh, orgConfigsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!token || !org) {
+    if (orgConfigs.length === 0) {
       return;
     }
 
@@ -76,5 +79,5 @@ export function useRefreshTick({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", triggerFocusRefresh);
     };
-  }, [isLoadingRef, onRefresh, org, token]);
+  }, [isLoadingRef, onRefresh, orgConfigsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 }

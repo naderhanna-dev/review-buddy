@@ -1,13 +1,13 @@
 import type { FormEvent } from "react";
 import { MERGED_COUNT_MAX, MERGED_COUNT_MIN } from "@reviewradar/core";
+import type { OrgConfig } from "@reviewradar/core";
 
 export function SettingsDrawer({
-  org,
-  hasSavedConnection,
-  tokenInput,
-  setTokenInput,
-  orgInput,
-  setOrgInput,
+  orgConfigs,
+  orgConfigDrafts,
+  onOrgDraftChange,
+  onAddOrg,
+  onRemoveOrg,
   onSubmit,
   mergedCountInput,
   onMergedCountChange,
@@ -21,12 +21,11 @@ export function SettingsDrawer({
   teamSignalsUnavailable,
   onClose,
 }: {
-  org: string;
-  hasSavedConnection: boolean;
-  tokenInput: string;
-  setTokenInput: (value: string) => void;
-  orgInput: string;
-  setOrgInput: (value: string) => void;
+  orgConfigs: OrgConfig[];
+  orgConfigDrafts: OrgConfig[];
+  onOrgDraftChange: (index: number, field: "org" | "token", value: string) => void;
+  onAddOrg: () => void;
+  onRemoveOrg: (index: number) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   mergedCountInput: string;
   onMergedCountChange: (value: string) => void;
@@ -41,6 +40,8 @@ export function SettingsDrawer({
   teamSignalsUnavailable: string | null;
   onClose: () => void;
 }) {
+  const connectedOrgs = orgConfigs.filter((c) => c.org && c.token);
+
   return (
     <>
       <button
@@ -60,36 +61,59 @@ export function SettingsDrawer({
             Close
           </button>
         </div>
-        {hasSavedConnection ? (
+        {connectedOrgs.length > 0 ? (
           <p className="connection-summary">
-            Connected to {org} with saved PAT.
+            Connected to {connectedOrgs.map((c) => c.org).join(", ")}.
           </p>
         ) : null}
-        <form className="config-form" onSubmit={onSubmit}>
-          <label>
-            GitHub organization
-            <input
-              type="text"
-              value={orgInput}
-              onChange={(event) => setOrgInput(event.target.value)}
-              placeholder="your-org"
-              autoComplete="organization"
-            />
-          </label>
-          <label>
-            Personal access token
-            <input
-              type="password"
-              value={tokenInput}
-              onChange={(event) => setTokenInput(event.target.value)}
-              placeholder="github_pat_..."
-              autoComplete="off"
-            />
-          </label>
-          <button type="submit">Save and refresh</button>
+        <form className="config-form config-form--multi-org" onSubmit={onSubmit}>
+          <div className="org-config-list">
+            {orgConfigDrafts.map((draft, index) => (
+              <div key={draft.id} className={`org-config-row${orgConfigDrafts.length > 1 ? " org-config-row--removable" : ""}`}>
+                <label>
+                  {index === 0 ? "Organization" : <span className="sr-only">Organization</span>}
+                  <input
+                    type="text"
+                    value={draft.org}
+                    onChange={(event) => onOrgDraftChange(index, "org", event.target.value)}
+                    placeholder="your-org"
+                    autoComplete="organization"
+                  />
+                </label>
+                <label>
+                  {index === 0 ? "Personal access token" : <span className="sr-only">Personal access token</span>}
+                  <input
+                    type="password"
+                    value={draft.token}
+                    onChange={(event) => onOrgDraftChange(index, "token", event.target.value)}
+                    placeholder="github_pat_..."
+                    autoComplete="off"
+                  />
+                </label>
+                {orgConfigDrafts.length > 1 ? (
+                  <button
+                    type="button"
+                    className="org-remove-button"
+                    aria-label={`Remove ${draft.org || "organization"}`}
+                    onClick={() => onRemoveOrg(index)}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true" role="presentation">
+                      <path d="M18.36 5.64a1 1 0 0 1 0 1.41L13.41 12l4.95 4.95a1 1 0 1 1-1.41 1.41L12 13.41l-4.95 4.95a1 1 0 1 1-1.41-1.41L10.59 12 5.64 7.05a1 1 0 0 1 1.41-1.41L12 10.59l4.95-4.95a1 1 0 0 1 1.41 0Z" />
+                    </svg>
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          <div className="org-config-actions">
+            <button type="button" className="org-add-button" onClick={onAddOrg}>
+              + Add organization
+            </button>
+            <button type="submit">Save and refresh</button>
+          </div>
         </form>
         <div className="helper-copy">
-          <p>PAT is stored in local storage for this browser profile.</p>
+          <p>PATs are stored in local storage for this browser profile.</p>
           <p>
             <a
               href="https://github.com/settings/personal-access-tokens/new"
@@ -98,10 +122,9 @@ export function SettingsDrawer({
             >
               Create a fine-grained PAT
             </a>{" "}
-            and set <strong>Resource owner</strong> to{" "}
-            <strong>MaintainX</strong> (the Resource owner cannot be changed
-            after creation — if your existing token uses your personal
-            account, you need to generate a new one). Then select{" "}
+            and set <strong>Resource owner</strong> to your target
+            organization (the Resource owner cannot be changed
+            after creation). Then select{" "}
             <strong>All repositories</strong> and grant these permissions:
           </p>
           <ul>
@@ -127,9 +150,14 @@ export function SettingsDrawer({
               classic token
             </a>{" "}
             with <strong>repo</strong> and <strong>notifications</strong>{" "}
-            scopes, then authorize it for <strong>MaintainX SSO</strong>.
+            scopes, then authorize it for your org&apos;s SSO.
             Fine-grained tokens use 2-minute polling instead (still
             efficient via ETag caching).
+          </p>
+          <p>
+            Each organization requires its own PAT with the correct
+            Resource owner. Add multiple rows above to monitor
+            several organizations.
           </p>
         </div>
         <div className="user-preferences">

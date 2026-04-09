@@ -6,7 +6,9 @@ import {
   CACHE_SCHEMA_VERSION,
   PR_CACHE_STORAGE_KEY,
   getCacheTimestamp,
+  getOldestCacheTimestamp,
   invalidatePRCache,
+  isAnyCacheStale,
   isCacheStale,
   readCachedPRData,
   writeCachedPRData,
@@ -29,6 +31,7 @@ const localStorageMock = {
 
 vi.stubGlobal('localStorage', localStorageMock)
 
+const orgId = 'org-1'
 const org = 'maintainx'
 const fixedNow = 1_700_000_000_000
 
@@ -88,7 +91,11 @@ function setRawCache(value: unknown): void {
   mockStorage.set(PR_CACHE_STORAGE_KEY, JSON.stringify(value))
 }
 
-describe('pr-cache', () => {
+function setMultiOrgCache(entries: Record<string, { timestamp: number; org: string; data: typeof sampleData }>): void {
+  setRawCache({ version: CACHE_SCHEMA_VERSION, entries })
+}
+
+describe('pr-cache (multi-org)', () => {
   beforeEach(() => {
     mockStorage.clear()
     vi.clearAllMocks()
@@ -97,15 +104,15 @@ describe('pr-cache', () => {
 
   describe('readCachedPRData', () => {
     it('should return null when localStorage is empty', () => {
-      const result = readCachedPRData(org)
+      const result = readCachedPRData(orgId)
       expect(result).toBeNull()
     })
 
     it('should return identical data after write and read round-trip', () => {
       vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
 
-      writeCachedPRData(org, sampleData)
-      const result = readCachedPRData(org)
+      writeCachedPRData(orgId, org, sampleData)
+      const result = readCachedPRData(orgId)
 
       expect(result).toEqual(sampleData)
     })
@@ -113,8 +120,8 @@ describe('pr-cache', () => {
     it('should return null for corrupt JSON without throwing', () => {
       mockStorage.set(PR_CACHE_STORAGE_KEY, '{broken')
 
-      expect(() => readCachedPRData(org)).not.toThrow()
-      expect(readCachedPRData(org)).toBeNull()
+      expect(() => readCachedPRData(orgId)).not.toThrow()
+      expect(readCachedPRData(orgId)).toBeNull()
     })
 
     it('should return null when getItem throws SecurityError', () => {
@@ -122,20 +129,21 @@ describe('pr-cache', () => {
         throw new Error('SecurityError')
       })
 
-      expect(() => readCachedPRData(org)).not.toThrow()
-      expect(readCachedPRData(org)).toBeNull()
+      expect(() => readCachedPRData(orgId)).not.toThrow()
+      expect(readCachedPRData(orgId)).toBeNull()
     })
 
     it('should return null when cache is older than max age', () => {
       vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
-      setRawCache({
-        version: CACHE_SCHEMA_VERSION,
-        timestamp: fixedNow - CACHE_MAX_AGE_MS - 1,
-        org,
-        data: sampleData,
+      setMultiOrgCache({
+        [orgId]: {
+          timestamp: fixedNow - CACHE_MAX_AGE_MS - 1,
+          org,
+          data: sampleData,
+        },
       })
 
-      const result = readCachedPRData(org)
+      const result = readCachedPRData(orgId)
 
       expect(result).toBeNull()
     })
@@ -144,12 +152,12 @@ describe('pr-cache', () => {
       vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
       setRawCache({
         version: CACHE_SCHEMA_VERSION + 1,
-        timestamp: fixedNow,
-        org,
-        data: sampleData,
+        entries: {
+          [orgId]: { timestamp: fixedNow, org, data: sampleData },
+        },
       })
 
-      const result = readCachedPRData(org)
+      const result = readCachedPRData(orgId)
 
       expect(result).toBeNull()
     })
@@ -157,64 +165,103 @@ describe('pr-cache', () => {
     it('should round-trip recentlyMerged data', () => {
       vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
 
-      writeCachedPRData(org, sampleData)
-      const result = readCachedPRData(org)
+      writeCachedPRData(orgId, org, sampleData)
+      const result = readCachedPRData(orgId)
 
       expect(result?.recentlyMerged).toEqual([sampleMergedPR])
       expect(result?.recentlyMerged[0].role).toBe('author')
       expect(result?.recentlyMerged[0].mergedAtIso).toBe('2026-03-25T08:00:00.000Z')
     })
 
-    it('should reject old schema version 1 caches missing recentlyMerged', () => {
+    it('should return null when orgId is not in cache', () => {
       vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
-      setRawCache({
-        version: 1,
-        timestamp: fixedNow,
-        org,
-        data: {
-          yourPrs: [samplePullRequest],
-          needsAttention: [],
-          relatedToYou: [],
-          stalePrs: [],
-          teamSignalsUnavailable: null,
-        },
+      setMultiOrgCache({
+        'other-org-id': { timestamp: fixedNow, org: 'other-org', data: sampleData },
       })
 
-      const result = readCachedPRData(org)
+      const result = readCachedPRData(orgId)
 
       expect(result).toBeNull()
     })
 
-    it('should return null when org mismatches', () => {
+    it('should store and retrieve multiple orgs independently', () => {
       vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
+      const orgId2 = 'org-2'
+      const org2 = 'acme-corp'
+
+      writeCachedPRData(orgId, org, sampleData)
+      writeCachedPRData(orgId2, org2, { ...sampleData, teamSignalsUnavailable: 'no teams' })
+
+      const result1 = readCachedPRData(orgId)
+      const result2 = readCachedPRData(orgId2)
+
+      expect(result1?.teamSignalsUnavailable).toBeNull()
+      expect(result2?.teamSignalsUnavailable).toBe('no teams')
+    })
+
+    it('should migrate legacy single-org format on read', () => {
+      vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
+      // Legacy format (version 5)
       setRawCache({
-        version: CACHE_SCHEMA_VERSION,
+        version: 5,
         timestamp: fixedNow,
-        org: 'other-org',
+        org,
         data: sampleData,
       })
 
-      const result = readCachedPRData(org)
+      const legacyKey = `legacy-${org}`
+      const result = readCachedPRData(legacyKey)
 
-      expect(result).toBeNull()
+      expect(result).toEqual(sampleData)
     })
   })
 
   describe('isCacheStale', () => {
     it('should return true when cache is older than revalidation ttl and still readable', () => {
       vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
-      setRawCache({
-        version: CACHE_SCHEMA_VERSION,
-        timestamp: fixedNow - CACHE_REVALIDATION_TTL_MS - 60_000,
-        org,
-        data: sampleData,
+      setMultiOrgCache({
+        [orgId]: {
+          timestamp: fixedNow - CACHE_REVALIDATION_TTL_MS - 60_000,
+          org,
+          data: sampleData,
+        },
       })
 
-      const stale = isCacheStale(org)
-      const cachedData = readCachedPRData(org)
+      const stale = isCacheStale(orgId)
+      const cachedData = readCachedPRData(orgId)
 
       expect(stale).toBe(true)
       expect(cachedData).toEqual(sampleData)
+    })
+
+    it('should return true when orgId is not cached', () => {
+      expect(isCacheStale('nonexistent')).toBe(true)
+    })
+  })
+
+  describe('isAnyCacheStale', () => {
+    it('should return true when any org is stale', () => {
+      vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
+      setMultiOrgCache({
+        [orgId]: { timestamp: fixedNow, org, data: sampleData },
+        'org-2': { timestamp: fixedNow - CACHE_REVALIDATION_TTL_MS - 1, org: 'acme', data: sampleData },
+      })
+
+      expect(isAnyCacheStale([orgId, 'org-2'])).toBe(true)
+    })
+
+    it('should return false when all orgs are fresh', () => {
+      vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
+      setMultiOrgCache({
+        [orgId]: { timestamp: fixedNow, org, data: sampleData },
+        'org-2': { timestamp: fixedNow, org: 'acme', data: sampleData },
+      })
+
+      expect(isAnyCacheStale([orgId, 'org-2'])).toBe(false)
+    })
+
+    it('should return true for empty orgIds array', () => {
+      expect(isAnyCacheStale([])).toBe(true)
     })
   })
 
@@ -224,7 +271,7 @@ describe('pr-cache', () => {
         throw new Error('QuotaExceededError')
       })
 
-      expect(() => writeCachedPRData(org, sampleData)).not.toThrow()
+      expect(() => writeCachedPRData(orgId, org, sampleData)).not.toThrow()
     })
 
     it('should not throw when setItem throws SecurityError', () => {
@@ -232,56 +279,65 @@ describe('pr-cache', () => {
         throw new Error('SecurityError')
       })
 
-      expect(() => writeCachedPRData(org, sampleData)).not.toThrow()
+      expect(() => writeCachedPRData(orgId, org, sampleData)).not.toThrow()
     })
   })
 
   describe('invalidatePRCache', () => {
-    it('should remove key from localStorage', () => {
-      setRawCache({
-        version: CACHE_SCHEMA_VERSION,
-        timestamp: fixedNow,
-        org,
-        data: sampleData,
+    it('should remove entire cache when called without orgId', () => {
+      setMultiOrgCache({
+        [orgId]: { timestamp: fixedNow, org, data: sampleData },
       })
 
       invalidatePRCache()
 
       expect(mockStorage.has(PR_CACHE_STORAGE_KEY)).toBe(false)
     })
+
+    it('should remove only the specified orgId entry', () => {
+      vi.spyOn(Date, 'now').mockReturnValue(fixedNow)
+      const orgId2 = 'org-2'
+
+      writeCachedPRData(orgId, org, sampleData)
+      writeCachedPRData(orgId2, 'acme', sampleData)
+
+      invalidatePRCache(orgId)
+
+      expect(readCachedPRData(orgId)).toBeNull()
+      expect(readCachedPRData(orgId2)).toEqual(sampleData)
+    })
   })
 
   describe('getCacheTimestamp', () => {
     it('should return timestamp for valid cache', () => {
-      setRawCache({
-        version: CACHE_SCHEMA_VERSION,
-        timestamp: fixedNow,
-        org,
-        data: sampleData,
+      setMultiOrgCache({
+        [orgId]: { timestamp: fixedNow, org, data: sampleData },
       })
 
-      const result = getCacheTimestamp(org)
+      const result = getCacheTimestamp(orgId)
 
       expect(result).toBe(fixedNow)
     })
 
-    it('should return null for missing cache', () => {
-      const result = getCacheTimestamp(org)
+    it('should return null for missing orgId', () => {
+      const result = getCacheTimestamp(orgId)
 
       expect(result).toBeNull()
     })
+  })
 
-    it('should return null for invalid cache', () => {
-      setRawCache({
-        version: CACHE_SCHEMA_VERSION + 1,
-        timestamp: fixedNow,
-        org,
-        data: sampleData,
+  describe('getOldestCacheTimestamp', () => {
+    it('should return oldest timestamp across all entries', () => {
+      setMultiOrgCache({
+        [orgId]: { timestamp: fixedNow, org, data: sampleData },
+        'org-2': { timestamp: fixedNow - 5000, org: 'acme', data: sampleData },
       })
 
-      const result = getCacheTimestamp(org)
+      expect(getOldestCacheTimestamp()).toBe(fixedNow - 5000)
+    })
 
-      expect(result).toBeNull()
+    it('should return null when no entries', () => {
+      expect(getOldestCacheTimestamp()).toBeNull()
     })
   })
 })

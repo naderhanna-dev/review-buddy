@@ -13,6 +13,7 @@ export const MERGED_COUNT_MAX = 25;
 export const STORAGE_KEYS: Record<
   | "token"
   | "org"
+  | "orgs"
   | "viewed"
   | "theme"
   | "compact"
@@ -30,6 +31,7 @@ export const STORAGE_KEYS: Record<
 > = {
   token: "review-radar.pat",
   org: "review-radar.org",
+  orgs: "review-radar.orgs",
   viewed: "review-radar.viewed",
   theme: "review-radar.theme",
   compact: "review-radar.compact",

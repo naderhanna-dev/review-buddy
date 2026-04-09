@@ -42,3 +42,9 @@ export const EMPTY_FILTER_STATE: SectionFilterState = {
   labels: new Set(),
   author: new Set(),
 };
+
+export type OrgConfig = {
+  id: string;
+  org: string;
+  token: string;
+};

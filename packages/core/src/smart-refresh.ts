@@ -1,4 +1,5 @@
 import { checkForNotificationChanges, type NotificationCheckResult } from './notifications'
+import type { OrgConfig } from './types'
 
 export type SmartRefreshConfig = {
   token: string
@@ -103,5 +104,55 @@ export class SmartRefreshController {
       this.debounceTimerId = null
       this.config.onRefresh()
     }, this.config.debounceMs)
+  }
+}
+
+/**
+ * Manages one SmartRefreshController per organization.
+ * Any single org's refresh signal triggers the shared onRefresh callback.
+ */
+export class MultiOrgRefreshController {
+  controllers: SmartRefreshController[] = []
+  configs: OrgConfig[]
+  onRefresh: () => void
+  options?: { fallbackIntervalMs?: number; degradedIntervalMs?: number }
+
+  constructor(
+    configs: OrgConfig[],
+    onRefresh: () => void,
+    options?: { fallbackIntervalMs?: number; degradedIntervalMs?: number },
+  ) {
+    this.configs = configs
+    this.onRefresh = onRefresh
+    this.options = options
+  }
+
+  start(): void {
+    this.stop()
+    this.controllers = this.configs.map(
+      (config) =>
+        new SmartRefreshController({
+          token: config.token,
+          org: config.org,
+          onRefresh: this.onRefresh,
+          fallbackIntervalMs: this.options?.fallbackIntervalMs,
+          degradedIntervalMs: this.options?.degradedIntervalMs,
+        }),
+    )
+    for (const controller of this.controllers) {
+      controller.start()
+    }
+  }
+
+  stop(): void {
+    for (const controller of this.controllers) {
+      controller.stop()
+    }
+    this.controllers = []
+  }
+
+  restart(configs: OrgConfig[]): void {
+    this.configs = configs
+    this.start()
   }
 }

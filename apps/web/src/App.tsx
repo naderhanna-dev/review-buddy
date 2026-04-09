@@ -6,14 +6,15 @@ import {
   readCompactPreference,
   readDimViewedPreference,
   readMergedCountPreference,
+  readOrgConfigs,
   readSectionFilterPreferences,
   readSectionGroupByRepoPreferences,
   readSectionHideDrafts,
   readSectionSortPreferences,
   readShowLabelsPreference,
   readShowLineChangesPreference,
-  readStorageItem,
   readThemePreference,
+  writeOrgConfigs,
   writeSectionFilterPreferences,
   applySectionSort,
   applySectionFilter,
@@ -26,6 +27,7 @@ import {
   STORAGE_KEYS,
 } from "@reviewradar/core";
 import type {
+  OrgConfig,
   SectionFilterState,
   SectionKey,
   SortPreference,
@@ -52,23 +54,30 @@ function resolveTheme(preference: ThemePreference): "dark" | "light" {
     : "light";
 }
 
+function generateId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createEmptyOrgConfig(): OrgConfig {
+  return { id: generateId(), org: "", token: "" };
+}
+
 function App() {
-  const [tokenInput, setTokenInput] = useState(() =>
-    readStorageItem(STORAGE_KEYS.token),
-  );
-  const [token, setToken] = useState(() => readStorageItem(STORAGE_KEYS.token));
-  const [orgInput, setOrgInput] = useState(
-    () => readStorageItem(STORAGE_KEYS.org) || "MaintainX",
-  );
-  const [org, setOrg] = useState(() => readStorageItem(STORAGE_KEYS.org));
+  const [orgConfigs, setOrgConfigs] = useState<OrgConfig[]>(() => readOrgConfigs());
+  const [orgConfigDrafts, setOrgConfigDrafts] = useState<OrgConfig[]>(() => {
+    const saved = readOrgConfigs();
+    return saved.length > 0 ? saved : [createEmptyOrgConfig()];
+  });
   const [mergedCount, setMergedCount] = useState(() => readMergedCountPreference());
   const [mergedCountInput, setMergedCountInput] = useState(() =>
     String(readMergedCountPreference()),
   );
   const [isConnectionPanelOpen, setIsConnectionPanelOpen] = useState(() => {
-    const savedToken = readStorageItem(STORAGE_KEYS.token);
-    const savedOrg = readStorageItem(STORAGE_KEYS.org);
-    return !(savedToken && savedOrg);
+    const saved = readOrgConfigs();
+    return saved.length === 0 || !saved.every((c) => c.org && c.token);
   });
   const [isCompact, setIsCompact] = useState(() => readCompactPreference());
   const [dimViewed, setDimViewed] = useState(() => readDimViewedPreference());
@@ -102,11 +111,10 @@ function App() {
     setRefreshTick((current) => current + 1);
   }, []);
 
-  const prData = usePRData({ org, token, mergedCount, refreshTick });
+  const prData = usePRData({ orgConfigs, mergedCount, refreshTick });
 
   useRefreshTick({
-    org,
-    token,
+    orgConfigs,
     isLoadingRef: prData.isLoadingRef,
     onRefresh: handleRefresh,
   });
@@ -162,10 +170,47 @@ function App() {
     };
   }, [isConnectionPanelOpen]);
 
+  function handleOrgDraftChange(index: number, field: "org" | "token", value: string): void {
+    setOrgConfigDrafts((current) => {
+      const next = [...current];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  }
+
+  function handleAddOrg(): void {
+    setOrgConfigDrafts((current) => [...current, createEmptyOrgConfig()]);
+  }
+
+  function handleRemoveOrg(index: number): void {
+    setOrgConfigDrafts((current) => {
+      const next = current.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [createEmptyOrgConfig()];
+    });
+  }
+
   function handleSaveConfig(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    const nextToken = tokenInput.trim();
-    const nextOrg = orgInput.trim();
+
+    // Clean up drafts: trim whitespace, filter out completely empty rows
+    const cleaned = orgConfigDrafts
+      .map((draft) => ({
+        ...draft,
+        org: draft.org.trim(),
+        token: draft.token.trim(),
+      }))
+      .filter((draft) => draft.org || draft.token);
+
+    // If everything was empty, keep one empty row in drafts
+    if (cleaned.length === 0) {
+      setOrgConfigDrafts([createEmptyOrgConfig()]);
+      setOrgConfigs([]);
+      writeOrgConfigs([]);
+      invalidatePRCache();
+      etagCache.clear();
+      setIsConnectionPanelOpen(true);
+      return;
+    }
 
     const parsedCount = parseInt(mergedCountInput, 10);
     const nextMergedCount =
@@ -175,20 +220,24 @@ function App() {
         ? MERGED_COUNT_DEFAULT
         : parsedCount;
 
-    localStorage.setItem(STORAGE_KEYS.token, nextToken);
-    localStorage.setItem(STORAGE_KEYS.org, nextOrg);
     localStorage.setItem(STORAGE_KEYS.recentlyMergedCount, String(nextMergedCount));
 
-    if (nextToken !== token || nextOrg !== org) {
+    // Check if org configs changed
+    const prevKey = JSON.stringify(orgConfigs.map((c) => `${c.id}:${c.org}:${c.token}`));
+    const nextKey = JSON.stringify(cleaned.map((c) => `${c.id}:${c.org}:${c.token}`));
+    if (prevKey !== nextKey) {
       invalidatePRCache();
       etagCache.clear();
     }
 
-    setToken(nextToken);
-    setOrg(nextOrg);
+    writeOrgConfigs(cleaned);
+    setOrgConfigs(cleaned);
+    setOrgConfigDrafts(cleaned);
     setMergedCount(nextMergedCount);
     setMergedCountInput(String(nextMergedCount));
-    setIsConnectionPanelOpen(!nextToken || !nextOrg);
+
+    const allValid = cleaned.every((c) => c.org && c.token);
+    setIsConnectionPanelOpen(!allValid);
   }
 
   function handleMergedCountChange(rawValue: string): void {
@@ -272,8 +321,12 @@ function App() {
     });
   }
 
-  const hasCredentials = Boolean(token && org);
+  const hasCredentials = orgConfigs.length > 0 && orgConfigs.every((c) => c.org && c.token);
   const activeTheme = resolveTheme(themePreference);
+
+  // For the token prop passed to sharedSectionProps, use the first org's token
+  // (used for check status details fetch which is scoped to a specific repo)
+  const primaryToken = orgConfigs[0]?.token ?? "";
 
   const displayNeedsAttention = applyDraftFilter(
     applySectionSort(prData.needsAttention, sectionSortPreferences.needsAttention),
@@ -383,6 +436,25 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // For check details, we need to figure out which token to use per-repository.
+  // Build a lookup map from org prefix -> token
+  const orgTokenMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const config of orgConfigs) {
+      map.set(config.org.toLowerCase(), config.token);
+    }
+    return map;
+  }, [orgConfigs]);
+
+  // Resolve the token to use for a given repository (org/repo-name)
+  const getTokenForRepo = useCallback(
+    (repository: string): string => {
+      const orgName = repository.split("/")[0]?.toLowerCase() ?? "";
+      return orgTokenMap.get(orgName) ?? primaryToken;
+    },
+    [orgTokenMap, primaryToken],
+  );
+
   const sharedSectionProps = {
     openSectionMenuKey: menu.openSectionMenuKey,
     openSectionFilterKey: menu.openSectionFilterKey,
@@ -406,7 +478,8 @@ function App() {
     showLabels,
     activeReviewKeys,
     reviewFeatureAvailable,
-    token: token ?? '',
+    token: primaryToken,
+    getTokenForRepo,
   };
 
   return (
@@ -440,7 +513,7 @@ function App() {
         onToggleOpen={() => setIsNeedsAttentionOpen((current) => !current)}
         onClearFilters={() => handleSetSectionFilter("needsAttention", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="Nothing currently needs your immediate attention."
-        emptyDisconnectedMessage="Add org + PAT above to classify pull requests."
+        emptyDisconnectedMessage="Add an organization above to classify pull requests."
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Classifying..." : undefined}
         sortPreference={sectionSortPreferences.needsAttention}
         hideDrafts={sectionHideDrafts.needsAttention}
@@ -480,7 +553,7 @@ function App() {
         onToggleOpen={() => setIsYourPrsOpen((current) => !current)}
         onClearFilters={() => handleSetSectionFilter("yourPrs", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No assigned or authored pull requests right now."
-        emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
+        emptyDisconnectedMessage="Add an organization above to load pull requests from GitHub."
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Loading..." : undefined}
         sortPreference={sectionSortPreferences.yourPrs}
         hideDrafts={sectionHideDrafts.yourPrs}
@@ -502,7 +575,7 @@ function App() {
         onToggleOpen={() => setIsRelatedToYouOpen((current) => !current)}
         onClearFilters={() => handleSetSectionFilter("relatedToYou", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No non-urgent related pull requests right now."
-        emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
+        emptyDisconnectedMessage="Add an organization above to load pull requests from GitHub."
         statusLabel={prData.isLoading && !prData.lastRefreshedAt ? "Loading..." : undefined}
         sortPreference={sectionSortPreferences.relatedToYou}
         hideDrafts={sectionHideDrafts.relatedToYou}
@@ -549,7 +622,7 @@ function App() {
         onToggleOpen={() => setIsStaleSectionOpen((current) => !current)}
         onClearFilters={() => handleSetSectionFilter("stalePrs", EMPTY_FILTER_STATE)}
         emptyConnectedMessage="No stale pull requests right now."
-        emptyDisconnectedMessage="Add org + PAT above to load pull requests from GitHub."
+        emptyDisconnectedMessage="Add an organization above to load pull requests from GitHub."
         sortPreference={sectionSortPreferences.stalePrs}
         hideDrafts={sectionHideDrafts.stalePrs}
         onToggleHideDrafts={() => handleToggleSectionHideDrafts("stalePrs")}
@@ -559,12 +632,11 @@ function App() {
 
       {isConnectionPanelOpen ? (
         <SettingsDrawer
-          org={org}
-          hasSavedConnection={Boolean(token && org)}
-          tokenInput={tokenInput}
-          setTokenInput={setTokenInput}
-          orgInput={orgInput}
-          setOrgInput={setOrgInput}
+          orgConfigs={orgConfigs}
+          orgConfigDrafts={orgConfigDrafts}
+          onOrgDraftChange={handleOrgDraftChange}
+          onAddOrg={handleAddOrg}
+          onRemoveOrg={handleRemoveOrg}
           onSubmit={handleSaveConfig}
           mergedCountInput={mergedCountInput}
           onMergedCountChange={handleMergedCountChange}
@@ -646,12 +718,12 @@ function App() {
 
       {prData.rateLimitWarning ? (
         <div className="toast toast-warning" role="status">
-          ⚠ Rate limit hit — showing cached data. Will refresh automatically.
+          Rate limit hit — showing cached data. Will refresh automatically.
         </div>
       ) : null}
       {prData.errorToast ? (
         <div className="toast toast-error" role="alert">
-          ⚠ {prData.errorToast}
+          {prData.errorToast}
         </div>
       ) : null}
     </main>

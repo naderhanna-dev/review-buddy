@@ -1,4 +1,4 @@
-import type { ThemePreference, StalePreference, SectionKey, SortPreference, SectionFilterState } from "./types";
+import type { ThemePreference, StalePreference, SectionKey, SortPreference, SectionFilterState, OrgConfig } from "./types";
 import { STORAGE_KEYS, MERGED_COUNT_DEFAULT, MERGED_COUNT_MIN, MERGED_COUNT_MAX } from "./constants";
 import { EMPTY_FILTER_STATE } from "./types";
 
@@ -269,4 +269,57 @@ export function writeSectionFilterPreferences(
     };
   }
   localStorage.setItem(STORAGE_KEYS.sectionFilters, JSON.stringify(serializable));
+}
+
+function generateId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments without crypto.randomUUID
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Read the list of configured organizations from localStorage.
+ * Automatically migrates from the legacy single-org/token keys on first call.
+ */
+export function readOrgConfigs(): OrgConfig[] {
+  const raw = readStorageItem(STORAGE_KEYS.orgs);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (entry): entry is OrgConfig =>
+            typeof entry === "object" &&
+            entry !== null &&
+            typeof entry.id === "string" &&
+            typeof entry.org === "string" &&
+            typeof entry.token === "string",
+        );
+      }
+    } catch {
+      // Corrupted data -- fall through to migration
+    }
+  }
+
+  // Migration: read legacy single-org keys
+  const legacyToken = readStorageItem(STORAGE_KEYS.token);
+  const legacyOrg = readStorageItem(STORAGE_KEYS.org);
+  if (legacyToken && legacyOrg) {
+    const migrated: OrgConfig[] = [{ id: generateId(), org: legacyOrg, token: legacyToken }];
+    writeOrgConfigs(migrated);
+    return migrated;
+  }
+
+  return [];
+}
+
+export function writeOrgConfigs(configs: OrgConfig[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.orgs, JSON.stringify(configs));
+  } catch {
+    return;
+  }
 }
