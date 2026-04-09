@@ -37,6 +37,8 @@ interface ODRStore {
   expandedGroups: Set<string>;
   setActiveFile: (index: number) => void;
   toggleGroup: (groupId: string) => void;
+  scrollToLine: { line: number; side?: "LEFT" | "RIGHT" } | null;
+  setScrollToLine: (target: { line: number; side?: "LEFT" | "RIGHT" } | null) => void;
 
   // Findings
   findings: Map<string, Finding>;
@@ -49,6 +51,7 @@ interface ODRStore {
   // Review Comments (draft GitHub review)
   reviewComments: Map<string, ReviewComment>;
   addReviewComment: (c: ReviewComment) => void;
+  updateReviewComment: (id: string, updates: Partial<ReviewComment>) => void;
   removeReviewComment: (id: string) => void;
 
   // Chat
@@ -134,6 +137,8 @@ export const useStore = create<ODRStore>((set, get) => ({
       else next.add(groupId);
       return { expandedGroups: next };
     }),
+  scrollToLine: null,
+  setScrollToLine: (target) => set({ scrollToLine: target }),
 
   findings: new Map(),
   findingsFilter: { minConfidence: 80, severities: ["critical", "warning", "info"] },
@@ -170,6 +175,13 @@ export const useStore = create<ODRStore>((set, get) => ({
     set((s) => {
       const next = new Map(s.reviewComments);
       next.set(c.id, c);
+      return { reviewComments: next };
+    }),
+  updateReviewComment: (id, updates) =>
+    set((s) => {
+      const next = new Map(s.reviewComments);
+      const existing = next.get(id);
+      if (existing) next.set(id, { ...existing, ...updates, id });
       return { reviewComments: next };
     }),
   removeReviewComment: (id) =>
