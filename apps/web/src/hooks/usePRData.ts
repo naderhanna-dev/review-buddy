@@ -36,7 +36,7 @@ export type PRDataResult = {
   handleClearStalePreference: (repository: string, number: number) => void;
 };
 
-function mergeOrgCaches(orgConfigs: OrgConfig[]): {
+function mergeOrgCaches(orgConfigs: OrgConfig[], mergedLimit: number): {
   data: {
     yourPrs: PullRequest[];
     needsAttention: PullRequest[];
@@ -56,6 +56,7 @@ function mergeOrgCaches(orgConfigs: OrgConfig[]): {
   const allRelatedToYou: PullRequest[] = [];
   const allStalePrs: PullRequest[] = [];
   const allRecentlyMerged: MergedPullRequest[] = [];
+  const seenMergedIds = new Set<number>();
   const teamWarnings: string[] = [];
   let hasAnyData = false;
   let oldest: number | null = null;
@@ -69,7 +70,12 @@ function mergeOrgCaches(orgConfigs: OrgConfig[]): {
     allNeedsAttention.push(...cached.needsAttention);
     allRelatedToYou.push(...cached.relatedToYou);
     allStalePrs.push(...cached.stalePrs);
-    allRecentlyMerged.push(...cached.recentlyMerged);
+    for (const pr of cached.recentlyMerged) {
+      if (!seenMergedIds.has(pr.id)) {
+        seenMergedIds.add(pr.id);
+        allRecentlyMerged.push(pr);
+      }
+    }
     if (cached.teamSignalsUnavailable) {
       teamWarnings.push(cached.teamSignalsUnavailable);
     }
@@ -83,6 +89,12 @@ function mergeOrgCaches(orgConfigs: OrgConfig[]): {
   if (!hasAnyData) {
     return { data: null, lastRefreshedAt: null };
   }
+
+  // Sort by most recently merged and enforce the user's limit
+  allRecentlyMerged.sort(
+    (a, b) => new Date(b.mergedAtIso).getTime() - new Date(a.mergedAtIso).getTime(),
+  );
+  allRecentlyMerged.splice(mergedLimit);
 
   return {
     data: {
@@ -145,7 +157,7 @@ export function usePRData({
       }
 
       const configs = orgConfigsRef.current;
-      const merged = mergeOrgCaches(configs);
+      const merged = mergeOrgCaches(configs, mergedCount);
       if (!merged.data) {
         return;
       }
@@ -165,7 +177,7 @@ export function usePRData({
     return () => {
       window.removeEventListener("storage", handleStorageEvent);
     };
-  }, [orgConfigsKey]);
+  }, [orgConfigsKey, mergedCount]);
 
   useEffect(() => {
     const configs = orgConfigsRef.current;
@@ -185,7 +197,7 @@ export function usePRData({
     let ignore = false;
 
     // Read cache immediately -- hydrate state before any network fetch
-    const cached = mergeOrgCaches(configs);
+    const cached = mergeOrgCaches(configs, mergedCount);
     const refreshTickChanged = refreshTickRef.current !== refreshTick;
     refreshTickRef.current = refreshTick;
     if (cached.data && !ignore) {
@@ -229,13 +241,17 @@ export function usePRData({
             setYourPrs(event.classified.yourPrs);
             setNeedsAttention(event.classified.needsAttention);
             setRelatedToYou(event.classified.relatedToYou);
-            setRecentlyMerged(event.merged);
+            setRecentlyMerged(event.merged.slice(0, mergedCount));
           } else {
             setStalePrs((prev) => [...prev, ...event.classified.stalePrs]);
             setYourPrs((prev) => [...prev, ...event.classified.yourPrs]);
             setNeedsAttention((prev) => [...prev, ...event.classified.needsAttention]);
             setRelatedToYou((prev) => [...prev, ...event.classified.relatedToYou]);
-            setRecentlyMerged((prev) => [...prev, ...event.merged]);
+            setRecentlyMerged((prev) => {
+              const seenIds = new Set(prev.map((pr) => pr.id));
+              const unique = event.merged.filter((pr) => !seenIds.has(pr.id));
+              return [...prev, ...unique].slice(0, mergedCount);
+            });
           }
           setLastRefreshedAt(Date.now());
 
