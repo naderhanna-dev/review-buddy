@@ -86,6 +86,10 @@ interface ODRStore {
   sessionError: string | null;
   setSessionError: (error: string | null) => void;
 
+  // Viewed files
+  viewedFiles: Set<string>;
+  toggleFileViewed: (filePath: string) => void;
+
   // UI
   rightTab: "comments" | "analysis" | "chat";
   setRightTab: (tab: ODRStore["rightTab"]) => void;
@@ -254,6 +258,15 @@ export const useStore = create<ODRStore>((set, get) => ({
 
   sessionError: null,
   setSessionError: (error) => set({ sessionError: error }),
+
+  viewedFiles: new Set(),
+  toggleFileViewed: (filePath) =>
+    set((s) => {
+      const next = new Set(s.viewedFiles);
+      if (next.has(filePath)) next.delete(filePath);
+      else next.add(filePath);
+      return { viewedFiles: next };
+    }),
 
   rightTab: "comments",
   setRightTab: (tab) => set({ rightTab: tab }),

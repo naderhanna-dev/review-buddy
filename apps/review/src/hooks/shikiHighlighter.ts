@@ -38,6 +38,8 @@ export function langFromPath(path: string): string | undefined {
     cpp: "cpp",
     h: "c",
     hpp: "cpp",
+    cs: "csharp",
+    csx: "csharp",
   };
   return ext ? map[ext] : undefined;
 }
@@ -52,7 +54,7 @@ export function getHighlighter(): Promise<Highlighter> {
         "typescript", "tsx", "javascript", "jsx", "json", "markdown",
         "python", "rust", "go", "ruby", "java", "kotlin", "swift",
         "css", "scss", "html", "vue", "svelte", "yaml", "toml",
-        "bash", "sql", "graphql", "dockerfile", "c", "cpp",
+        "bash", "sql", "graphql", "dockerfile", "c", "cpp", "csharp",
       ],
     });
   }

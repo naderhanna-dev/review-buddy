@@ -31,8 +31,40 @@ function dirName(path: string): string {
   return parts.join("/");
 }
 
+function ViewedCheckbox({ checked, onClick }: { checked: boolean; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <span
+      role="checkbox"
+      aria-checked={checked}
+      onClick={onClick}
+      title={checked ? "Mark as unviewed" : "Mark as viewed"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 14,
+        height: 14,
+        borderRadius: 3,
+        border: checked ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
+        background: checked ? "var(--accent)" : "transparent",
+        cursor: "pointer",
+        flexShrink: 0,
+        transition: "all 0.15s",
+      }}
+    >
+      {checked && (
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M2 5.5L4 7.5L8 3" stroke="var(--bg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
 function FileNode({ file, index, isActive, isGroupSibling }: { file: DiffFile; index: number; isActive: boolean; isGroupSibling?: boolean }) {
   const setActiveFile = useStore((s) => s.setActiveFile);
+  const viewed = useStore((s) => s.viewedFiles.has(file.path));
+  const toggleFileViewed = useStore((s) => s.toggleFileViewed);
   const [hovered, setHovered] = useState(false);
 
   const bg = isActive ? "var(--bg-tertiary)"
@@ -60,8 +92,16 @@ function FileNode({ file, index, isActive, isGroupSibling }: { file: DiffFile; i
         textAlign: "left",
         borderLeft: isActive ? "2px solid var(--accent)" : isGroupSibling ? "2px solid rgba(88, 166, 255, 0.3)" : "2px solid transparent",
         transition: "background 0.1s",
+        opacity: viewed && !isActive ? 0.55 : 1,
       }}
     >
+      <ViewedCheckbox
+        checked={viewed}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleFileViewed(file.path);
+        }}
+      />
       <span style={{
         color: statusColor(file.status),
         fontWeight: 600,
@@ -109,6 +149,8 @@ export default function FileTree() {
   const activeGroupId = useStore((s) => s.activeGroupId);
   const expandedGroups = useStore((s) => s.expandedGroups);
   const toggleGroup = useStore((s) => s.toggleGroup);
+  const viewedFiles = useStore((s) => s.viewedFiles);
+  const viewedCount = files.filter((f) => viewedFiles.has(f.path)).length;
 
   if (files.length === 0) {
     return (
@@ -138,6 +180,11 @@ export default function FileTree() {
           alignItems: "center",
         }}>
           Groups ({groups.length})
+          {viewedCount > 0 && (
+            <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+              {viewedCount}/{files.length} viewed
+            </span>
+          )}
         </div>
         {!groupsReady && (
           <div style={{
@@ -223,8 +270,15 @@ export default function FileTree() {
         textTransform: "uppercase",
         letterSpacing: "0.05em",
         color: "var(--text-secondary)",
+        display: "flex",
+        alignItems: "center",
       }}>
         Files ({files.length})
+        {viewedCount > 0 && (
+          <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+            {viewedCount}/{files.length} viewed
+          </span>
+        )}
       </div>
       {files.map((file, i) => (
         <FileNode key={file.path} file={file} index={i} isActive={i === activeFileIndex} />
