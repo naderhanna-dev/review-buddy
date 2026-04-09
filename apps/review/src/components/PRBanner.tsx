@@ -17,8 +17,25 @@ const BANNER_STYLES = `
   border-color: var(--text-secondary);
   color: var(--text);
 }
+.banner-btn-dashboard {
+  border: 1px solid var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 5px 12px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.banner-btn-dashboard:hover {
+  background: var(--accent-bg-hover);
+}
 .banner-btn-done {
-  margin-left: auto;
   border: 1px solid var(--red);
   background: var(--red-bg);
   color: var(--red);
@@ -87,13 +104,21 @@ export default function PRBanner() {
         <span style={{ fontWeight: 600, fontSize: 14 }}>
           PR #{pr.number}: {pr.title}
         </span>
-        <button
-          className="banner-btn-done"
-          onClick={handleDoneClick}
-          title="End review session"
-        >
-          Done {"\u2715"}
-        </button>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          <a
+            href="/"
+            className="banner-btn-dashboard"
+          >
+            {"\u2190"} Dashboard
+          </a>
+          <button
+            className="banner-btn-done"
+            onClick={handleDoneClick}
+            title="End review session"
+          >
+            Done {"\u2715"}
+          </button>
+        </div>
       </div>
 
       {/* Row 2: meta + branch + buttons */}
