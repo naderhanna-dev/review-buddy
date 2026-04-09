@@ -42,6 +42,12 @@ export function useKeyboardShortcuts() {
           state.setRightTab("chat");
           break;
         }
+        case "s": {
+          e.preventDefault();
+          const current = state.diffViewMode;
+          state.setDiffViewMode(current === "unified" ? "split" : "unified");
+          break;
+        }
         case "?": {
           e.preventDefault();
           useStore.setState((s) => ({ showShortcuts: !s.showShortcuts }));

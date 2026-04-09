@@ -255,11 +255,14 @@ async function handleSessionRoute(
   if (rest.startsWith("/file/") && req.method === "GET") {
     if (!session.pr || !session.diff) return json({ error: "No PR loaded" }, 400);
     const filePath = decodeURIComponent(rest.slice("/file/".length));
+    const fileUrl = new URL(req.url);
+    const ref = fileUrl.searchParams.get("ref");
+    const sha = ref === "base" ? session.diff.baseSha : session.pr.headSha;
     try {
       const content = await fetchFileContent(
         session.pr.owner,
         session.pr.repo,
-        session.pr.headSha,
+        sha,
         filePath,
       );
       return new Response(content, {
