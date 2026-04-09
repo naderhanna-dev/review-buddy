@@ -215,15 +215,28 @@ export function usePRData({
       setErrorToast(null);
 
       try {
-        // Progressive rendering: update sections as each org completes
+        // Progressive rendering: update sections as each org completes.
+        // The first org to complete replaces (not appends to) the cache-hydrated
+        // state so that stale cache entries don't produce duplicates.
+        let isFirstOrgComplete = true;
+
         function handleOrgComplete(event: OrgCompleteEvent): void {
           if (ignore) return;
 
-          setStalePrs((prev) => [...prev, ...event.classified.stalePrs]);
-          setYourPrs((prev) => [...prev, ...event.classified.yourPrs]);
-          setNeedsAttention((prev) => [...prev, ...event.classified.needsAttention]);
-          setRelatedToYou((prev) => [...prev, ...event.classified.relatedToYou]);
-          setRecentlyMerged((prev) => [...prev, ...event.merged]);
+          if (isFirstOrgComplete) {
+            isFirstOrgComplete = false;
+            setStalePrs(event.classified.stalePrs);
+            setYourPrs(event.classified.yourPrs);
+            setNeedsAttention(event.classified.needsAttention);
+            setRelatedToYou(event.classified.relatedToYou);
+            setRecentlyMerged(event.merged);
+          } else {
+            setStalePrs((prev) => [...prev, ...event.classified.stalePrs]);
+            setYourPrs((prev) => [...prev, ...event.classified.yourPrs]);
+            setNeedsAttention((prev) => [...prev, ...event.classified.needsAttention]);
+            setRelatedToYou((prev) => [...prev, ...event.classified.relatedToYou]);
+            setRecentlyMerged((prev) => [...prev, ...event.merged]);
+          }
           setLastRefreshedAt(Date.now());
 
           // Write this org's cache immediately
@@ -246,14 +259,28 @@ export function usePRData({
         );
 
         if (!ignore) {
-          // Final state from merged+sorted result replaces the progressive state
-          setStalePrs(result.stalePrs);
-          setYourPrs(result.yourPrs);
-          setNeedsAttention(result.needsAttention);
-          setRelatedToYou(result.relatedToYou);
-          setTeamSignalsUnavailable(result.teamSignalsUnavailable);
-          setRecentlyMerged(result.recentlyMerged);
-          setLastRefreshedAt(Date.now());
+          // If every org errored and the result is empty, keep the cached
+          // data visible instead of wiping the board.
+          const allOrgsFailed =
+            result.perOrgErrors.length > 0 &&
+            result.perOrgErrors.length >= configs.length;
+          const resultIsEmpty =
+            result.yourPrs.length === 0 &&
+            result.needsAttention.length === 0 &&
+            result.relatedToYou.length === 0 &&
+            result.stalePrs.length === 0 &&
+            result.recentlyMerged.length === 0;
+
+          if (!(allOrgsFailed && resultIsEmpty)) {
+            // Final state from merged+sorted result replaces the progressive state
+            setStalePrs(result.stalePrs);
+            setYourPrs(result.yourPrs);
+            setNeedsAttention(result.needsAttention);
+            setRelatedToYou(result.relatedToYou);
+            setTeamSignalsUnavailable(result.teamSignalsUnavailable);
+            setRecentlyMerged(result.recentlyMerged);
+            setLastRefreshedAt(Date.now());
+          }
           setRateLimitWarning(false);
 
           // Show per-org errors as toasts
