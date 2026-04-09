@@ -6,6 +6,7 @@ import { categoryColors } from "./GroupHeader";
 import { HighlightedTextarea } from "./HighlightedTextarea";
 import type { ReviewComment, DiffFile } from "@reviewradar/shared";
 import HighlightedSuggestion from "./HighlightedSuggestion";
+import { CommentForm } from "./CommentForm";
 
 // CSS hover styles injected once — avoids stale JS hover state from missed mouseLeave events
 const DIFF_STYLES = `
@@ -217,7 +218,7 @@ function pairLines(lines: HunkLine[]): SplitRow[] {
 
 // --- Components ---
 
-function DiffLine({ line, lineNum, lineComments, highlightHtml, isInRange, onMouseDown, onDeleteComment }: {
+function DiffLine({ line, lineNum, lineComments, highlightHtml, isInRange, onMouseDown, onDeleteComment, onEditComment }: {
   line: HunkLine;
   lineNum?: number;
   lineComments?: ReviewComment[];
@@ -225,6 +226,7 @@ function DiffLine({ line, lineNum, lineComments, highlightHtml, isInRange, onMou
   isInRange: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
   onDeleteComment: (id: string) => void;
+  onEditComment: (id: string, body: string, type: ReviewComment["type"], suggestedCode?: string) => void;
 }) {
   const isClickable = line.type !== "header" && lineNum;
   const hoverClass = line.type !== "header" ? `diff-line-${line.type}` : "";
@@ -272,7 +274,7 @@ function DiffLine({ line, lineNum, lineComments, highlightHtml, isInRange, onMou
       </div>
 
       {lineComments?.map((c) => (
-        <InlineComment key={c.id} comment={c} onDelete={() => onDeleteComment(c.id)} />
+        <InlineComment key={c.id} comment={c} onDelete={() => onDeleteComment(c.id)} onEdit={(body, type, suggestedCode) => onEditComment(c.id, body, type, suggestedCode)} />
       ))}
     </div>
   );
@@ -296,7 +298,32 @@ const contentStyle: React.CSSProperties = {
   paddingRight: 16,
 };
 
-function InlineComment({ comment, onDelete }: { comment: ReviewComment; onDelete: () => void }) {
+function InlineComment({ comment, onDelete, onEdit }: {
+  comment: ReviewComment;
+  onDelete: () => void;
+  onEdit: (body: string, type: ReviewComment["type"], suggestedCode?: string) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+
+  if (isEditing) {
+    return (
+      <CommentForm
+        filePath={comment.filePath}
+        lineNum={comment.line}
+        endLineNum={comment.endLine}
+        initialBody={comment.body}
+        initialType={comment.type}
+        initialSuggestedCode={comment.suggestedCode}
+        submitLabel="Save"
+        onSubmit={(body, type, suggestedCode) => {
+          onEdit(body, type, suggestedCode);
+          setIsEditing(false);
+        }}
+        onCancel={() => setIsEditing(false)}
+      />
+    );
+  }
+
   const typeColor = comment.type === "suggestion" ? "var(--green)" : "var(--accent)";
   return (
     <div style={{
@@ -325,6 +352,10 @@ function InlineComment({ comment, onDelete }: { comment: ReviewComment; onDelete
           />
         )}
       </span>
+      <button onClick={() => setIsEditing(true)} title="Edit comment" style={{
+        border: "none", background: "transparent", color: "var(--text-secondary)",
+        cursor: "pointer", fontSize: 12, padding: 0, lineHeight: 1,
+      }}>{"\u270e"}</button>
       <button onClick={onDelete} title="Delete annotation" style={{
         border: "none", background: "transparent", color: "var(--text-secondary)",
         cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1,
@@ -333,130 +364,6 @@ function InlineComment({ comment, onDelete }: { comment: ReviewComment; onDelete
   );
 }
 
-function CommentForm({ filePath, lineNum, endLineNum, lineContent, onSubmit, onCancel }: {
-  filePath: string;
-  lineNum: number;
-  endLineNum?: number;
-  lineContent?: string;
-  onSubmit: (body: string, type: ReviewComment["type"], suggestedCode?: string) => void;
-  onCancel: () => void;
-}) {
-  const [commentText, setCommentText] = useState("");
-  const [suggestionCode, setSuggestionCode] = useState("");
-  const [type, setType] = useState<ReviewComment["type"]>("comment");
-  const prevType = useRef(type);
-
-  // Pre-populate with source line when switching to suggestion mode
-  useEffect(() => {
-    if (type === "suggestion" && prevType.current !== "suggestion" && !suggestionCode && lineContent) {
-      setSuggestionCode(lineContent);
-    }
-    prevType.current = type;
-  }, [type, lineContent, suggestionCode]);
-
-  const canSubmit = type === "suggestion" ? !!suggestionCode.trim() : !!commentText.trim();
-
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-    if (type === "suggestion") {
-      onSubmit(commentText.trim(), type, suggestionCode);
-    } else {
-      onSubmit(commentText, type);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canSubmit) {
-      e.preventDefault();
-      handleSubmit();
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      onCancel();
-    }
-  };
-
-  const fenceLabelStyle: React.CSSProperties = {
-    fontSize: 11,
-    fontFamily: "var(--font-mono)",
-    color: "var(--green)",
-    padding: "2px 0",
-    userSelect: "none",
-  };
-
-  return (
-    <div style={{ padding: "8px 12px", background: "var(--bg-tertiary)", borderLeft: "3px solid var(--accent)", margin: "2px 0" }}>
-      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
-        {endLineNum && endLineNum !== lineNum ? `Lines ${lineNum}-${endLineNum}` : `Line ${lineNum}`} — {filePath.split("/").pop()}
-      </div>
-      <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
-        {(["comment", "suggestion"] as const).map((t) => (
-          <button key={t} onClick={() => setType(t)} style={{
-            padding: "2px 8px", fontSize: 11, border: "1px solid",
-            borderColor: type === t ? "var(--accent)" : "var(--border)",
-            background: type === t ? "var(--accent)22" : "transparent",
-            color: type === t ? "var(--accent)" : "var(--text-secondary)",
-            borderRadius: 4, cursor: "pointer",
-          }}>{t}</button>
-        ))}
-      </div>
-      {type === "suggestion" ? (
-        <>
-          <textarea
-            value={commentText} onChange={(e) => setCommentText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Add a comment (optional)..."
-            style={{
-              width: "100%", minHeight: 40, padding: 8, background: "var(--bg)", color: "var(--text)",
-              border: "1px solid var(--border)", borderRadius: 4, fontFamily: "var(--font-sans)", fontSize: 13, resize: "vertical",
-              marginBottom: 6,
-            }}
-          />
-          <div style={fenceLabelStyle}>```suggestion</div>
-          <HighlightedTextarea
-            value={suggestionCode}
-            onChange={(e) => setSuggestionCode(e.target.value)}
-            onKeyDown={handleKeyDown}
-            filePath={filePath}
-            autoFocus
-            placeholder="Edit the code to suggest a change..."
-            style={{
-              background: "var(--bg)", border: "1px solid var(--border)",
-              borderRadius: "0", borderLeft: "2px solid var(--green)",
-            }}
-          />
-          <div style={fenceLabelStyle}>```</div>
-        </>
-      ) : (
-        <textarea
-          value={commentText} onChange={(e) => setCommentText(e.target.value)} autoFocus
-          onKeyDown={handleKeyDown}
-          placeholder="Add a comment..."
-          style={{
-            width: "100%", minHeight: 60, padding: 8, background: "var(--bg)", color: "var(--text)",
-            border: "1px solid var(--border)", borderRadius: 4, fontFamily: "var(--font-sans)", fontSize: 13, resize: "vertical",
-          }}
-        />
-      )}
-      <div style={{ display: "flex", gap: 6, marginTop: 6, justifyContent: "flex-end" }}>
-        <button onClick={onCancel} style={{
-          padding: "4px 12px", fontSize: 12, border: "1px solid var(--border)",
-          background: "transparent", color: "var(--text-secondary)", borderRadius: 4, cursor: "pointer",
-        }}>Cancel</button>
-        <button
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          style={{
-            padding: "4px 12px", fontSize: 12, border: "none",
-            background: canSubmit ? "var(--accent)" : "var(--bg-tertiary)",
-            color: canSubmit ? "#fff" : "var(--text-secondary)", borderRadius: 4,
-            cursor: canSubmit ? "pointer" : "default",
-          }}
-        >Add</button>
-      </div>
-    </div>
-  );
-}
 
 // --- Helpers ---
 
@@ -677,9 +584,12 @@ function SplitFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true }
 }) {
   const reviewComments = useStore((s) => s.reviewComments);
   const addReviewComment = useStore((s) => s.addReviewComment);
+  const updateReviewComment = useStore((s) => s.updateReviewComment);
   const removeReviewComment = useStore((s) => s.removeReviewComment);
   const diffViewMode = useStore((s) => s.diffViewMode);
   const setDiffViewMode = useStore((s) => s.setDiffViewMode);
+  const scrollToLine = useStore((s) => s.scrollToLine);
+  const setScrollToLine = useStore((s) => s.setScrollToLine);
 
   const theme = useStore((s) => s.config.theme);
   const resolvedTheme: "light" | "dark" = theme === "system"
@@ -697,6 +607,25 @@ function SplitFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true }
 
   const lines = parseHunk(file.patch);
   const splitRows = pairLines(lines);
+  const splitContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!scrollToLine || !splitContainerRef.current) return;
+    const targetLine = scrollToLine.line;
+    const targetSide = scrollToLine.side;
+    const rowIdx = splitRows.findIndex((row) => {
+      if (targetSide === "LEFT") return row.left?.oldNum === targetLine;
+      if (targetSide === "RIGHT") return row.right?.newNum === targetLine;
+      return row.left?.oldNum === targetLine || row.right?.newNum === targetLine;
+    });
+    if (rowIdx >= 0) {
+      const el = splitContainerRef.current.querySelector(`[data-row-idx="${rowIdx}"]`);
+      if (el) {
+        requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "center" }));
+      }
+    }
+    setScrollToLine(null);
+  }, [scrollToLine, splitRows, setScrollToLine]);
 
   // Drag-select state (simplified for split view — selects on one side at a time)
   const [formRange, setFormRange] = useState<{ startRow: number; endRow: number; side: "LEFT" | "RIGHT" } | null>(null);
@@ -812,6 +741,16 @@ function SplitFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true }
     removeReviewComment(id);
   }, [removeReviewComment]);
 
+  const handleEditComment = useCallback((id: string, body: string, type: ReviewComment["type"], suggestedCode?: string) => {
+    const updates: Partial<ReviewComment> = { body, type, suggestedCode };
+    fetch(apiUrl(`/comments/${id}`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    }).catch(console.error);
+    updateReviewComment(id, updates);
+  }, [updateReviewComment]);
+
   // Get content for suggestion pre-fill
   const rangeLineContent = formRange
     ? (() => {
@@ -857,6 +796,7 @@ function SplitFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true }
 
   return (
     <div
+      ref={splitContainerRef}
       style={{
         fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: "20px",
         userSelect: isDragging ? "none" : "auto",
@@ -927,7 +867,7 @@ function SplitFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true }
                   />
                 )}
                 {leftComments?.map((c) => (
-                  <InlineComment key={c.id} comment={c} onDelete={() => handleDeleteComment(c.id)} />
+                  <InlineComment key={c.id} comment={c} onDelete={() => handleDeleteComment(c.id)} onEdit={(body, type, suggestedCode) => handleEditComment(c.id, body, type, suggestedCode)} />
                 ))}
               </div>
             );
@@ -979,7 +919,7 @@ function SplitFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true }
                   />
                 )}
                 {rightComments?.map((c) => (
-                  <InlineComment key={c.id} comment={c} onDelete={() => handleDeleteComment(c.id)} />
+                  <InlineComment key={c.id} comment={c} onDelete={() => handleDeleteComment(c.id)} onEdit={(body, type, suggestedCode) => handleEditComment(c.id, body, type, suggestedCode)} />
                 ))}
               </div>
             );
@@ -1059,9 +999,12 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true 
 }) {
   const reviewComments = useStore((s) => s.reviewComments);
   const addReviewComment = useStore((s) => s.addReviewComment);
+  const updateReviewComment = useStore((s) => s.updateReviewComment);
   const removeReviewComment = useStore((s) => s.removeReviewComment);
   const diffViewMode = useStore((s) => s.diffViewMode);
   const setDiffViewMode = useStore((s) => s.setDiffViewMode);
+  const scrollToLine = useStore((s) => s.scrollToLine);
+  const setScrollToLine = useStore((s) => s.setScrollToLine);
 
   const theme = useStore((s) => s.config.theme);
   const resolvedTheme: "light" | "dark" = theme === "system"
@@ -1070,6 +1013,26 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true 
 
   const highlightedLines = useHighlightedLines(file.path, resolvedTheme);
   const lines = parseHunk(file.patch);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!scrollToLine || !containerRef.current) return;
+    const targetLine = scrollToLine.line;
+    const targetSide = scrollToLine.side;
+    // Find the line index matching the target line number
+    const idx = lines.findIndex((l) => {
+      if (targetSide === "LEFT") return l.type === "deletion" && l.oldNum === targetLine;
+      if (targetSide === "RIGHT") return (l.type === "addition" && l.newNum === targetLine) || (l.type === "context" && l.newNum === targetLine);
+      return getLineNum(l) === targetLine;
+    });
+    if (idx >= 0) {
+      const el = containerRef.current.querySelector(`[data-line-idx="${idx}"]`);
+      if (el) {
+        requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "center" }));
+      }
+    }
+    setScrollToLine(null);
+  }, [scrollToLine, lines, setScrollToLine]);
 
   // Expand collapsed lines
   const [expandedHeaders, setExpandedHeaders] = useState<Set<number>>(new Set());
@@ -1195,6 +1158,16 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true 
     removeReviewComment(id);
   }, [removeReviewComment]);
 
+  const handleEditComment = useCallback((id: string, body: string, type: ReviewComment["type"], suggestedCode?: string) => {
+    const updates: Partial<ReviewComment> = { body, type, suggestedCode };
+    fetch(apiUrl(`/comments/${id}`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    }).catch(console.error);
+    updateReviewComment(id, updates);
+  }, [updateReviewComment]);
+
   // Display inline comments at the END of their range (endLine, or line if single-line).
   // Key includes side prefix to avoid old/new line number collisions.
   const commentsByKey = new Map<string, ReviewComment[]>();
@@ -1219,6 +1192,7 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true 
 
   return (
     <div
+      ref={containerRef}
       style={{
         fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: "20px",
         userSelect: isDragging ? "none" : "auto",
@@ -1272,6 +1246,7 @@ function SingleFileDiff({ file, fileIndex, stickyTop = 0, showViewToggle = true 
                   isInRange={isInRange}
                   onMouseDown={(e) => handleLineMouseDown(i, e)}
                   onDeleteComment={handleDeleteComment}
+                  onEditComment={handleEditComment}
                 />
               )}
 

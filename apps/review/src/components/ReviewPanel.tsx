@@ -3,8 +3,9 @@ import { useState, useEffect } from "react";
 import { useStore } from "../store";
 import FindingCard from "./FindingCard";
 import ChatTab from "./ChatTab";
-import type { AgentJob, Finding } from "@reviewradar/shared";
+import type { AgentJob, Finding, ReviewComment } from "@reviewradar/shared";
 import HighlightedSuggestion from "./HighlightedSuggestion";
+import { CommentForm } from "./CommentForm";
 
 const tabs = [
   { id: "comments" as const, label: "Comments" },
@@ -360,8 +361,11 @@ function AgentJobCard({ job, findings }: { job: AgentJob; findings: Finding[] })
 function CommentsPanel() {
   const reviewComments = useStore((s) => s.reviewComments);
   const setActiveFile = useStore((s) => s.setActiveFile);
+  const setScrollToLine = useStore((s) => s.setScrollToLine);
   const files = useStore((s) => s.files);
   const removeReviewComment = useStore((s) => s.removeReviewComment);
+  const updateReviewComment = useStore((s) => s.updateReviewComment);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   if (reviewComments.size === 0) {
     return (
@@ -378,6 +382,23 @@ function CommentsPanel() {
   const typeColor = (type: string) =>
     type === "suggestion" ? "var(--green)" : "var(--accent)";
 
+  const navigateToComment = (c: ReviewComment) => {
+    const fileIndex = files.findIndex((f) => f.path === c.filePath);
+    if (fileIndex >= 0) setActiveFile(fileIndex);
+    setScrollToLine({ line: c.endLine ?? c.line, side: c.side });
+  };
+
+  const handleEdit = (c: ReviewComment, body: string, type: ReviewComment["type"], suggestedCode?: string) => {
+    const updates: Partial<ReviewComment> = { body, type, suggestedCode };
+    fetch(apiUrl(`/comments/${c.id}`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    }).catch(console.error);
+    updateReviewComment(c.id, updates);
+    setEditingId(null);
+  };
+
   return (
     <div>
       <div style={{
@@ -388,31 +409,80 @@ function CommentsPanel() {
       }}>
         {reviewComments.size} pending comment{reviewComments.size !== 1 ? "s" : ""} — will be posted on submit
       </div>
-      {Array.from(reviewComments.values()).map((c) => {
-        const fileIndex = files.findIndex((f) => f.path === c.filePath);
-        return (
-          <div key={c.id} style={{
-            padding: 8,
-            marginBottom: 8,
-            background: "var(--bg-tertiary)",
-            borderRadius: 6,
-            fontSize: 13,
-            borderLeft: `3px solid ${typeColor(c.type)}`,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-              <span style={{
-                fontSize: 10,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                padding: "1px 5px",
-                borderRadius: 2,
-                background: typeColor(c.type) + "22",
-                color: typeColor(c.type),
-              }}>
-                {c.type}
-              </span>
+      {Array.from(reviewComments.values()).map((c) => (
+        <div key={c.id} style={{
+          padding: 8,
+          marginBottom: 8,
+          background: "var(--bg-tertiary)",
+          borderRadius: 6,
+          fontSize: 13,
+          borderLeft: `3px solid ${typeColor(c.type)}`,
+        }}>
+          {editingId === c.id ? (
+            <CommentForm
+              filePath={c.filePath}
+              lineNum={c.line}
+              endLineNum={c.endLine}
+              initialBody={c.body}
+              initialType={c.type}
+              initialSuggestedCode={c.suggestedCode}
+              submitLabel="Save"
+              onSubmit={(body, type, suggestedCode) => handleEdit(c, body, type, suggestedCode)}
+              onCancel={() => setEditingId(null)}
+            />
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 2 }}>
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  padding: "1px 5px 1px 0",
+                  color: typeColor(c.type),
+                }}>
+                  {c.type}
+                </span>
+                <div style={{ flex: 1 }} />
+                <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                  <button
+                    onClick={() => {
+                      navigateToComment(c);
+                      setEditingId(c.id);
+                    }}
+                    title="Edit comment"
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "var(--text-secondary)",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      padding: "0 2px",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {"\u270e"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      fetch(apiUrl(`/comments/${c.id}`), { method: "DELETE" }).catch(console.error);
+                      removeReviewComment(c.id);
+                    }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "var(--text-secondary)",
+                      cursor: "pointer",
+                      fontSize: 16,
+                      padding: "0 2px",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {"\u00d7"}
+                  </button>
+                </div>
+              </div>
               <button
-                onClick={() => { if (fileIndex >= 0) setActiveFile(fileIndex); }}
+                onClick={() => navigateToComment(c)}
                 style={{
                   border: "none",
                   background: "transparent",
@@ -421,52 +491,39 @@ function CommentsPanel() {
                   fontSize: 12,
                   fontFamily: "var(--font-mono)",
                   padding: 0,
+                  marginBottom: 4,
                   textDecoration: "underline",
+                  textAlign: "left",
+                  wordBreak: "break-all",
                 }}
               >
                 {c.filePath.split("/").pop()}:{c.line}{c.endLine ? `-${c.endLine}` : ""}
               </button>
-              <button
-                onClick={() => {
-                  fetch(apiUrl(`/comments/${c.id}`), { method: "DELETE" }).catch(console.error);
-                  removeReviewComment(c.id);
-                }}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  color: "var(--text-secondary)",
-                  cursor: "pointer",
-                  fontSize: 16,
-                  padding: "0 2px",
-                  marginLeft: "auto",
-                  lineHeight: 1,
-                }}
-              >
-                {"\u00d7"}
-              </button>
-            </div>
-            <div style={{ lineHeight: 1.5 }}>
-              {c.body ? (
-                <div>{c.body}</div>
-              ) : c.type === "suggestion" ? (
-                <div style={{ color: "var(--text-secondary)", fontSize: 12, fontStyle: "italic" }}>No comment</div>
-              ) : null}
-              {c.type === "suggestion" && c.suggestedCode && (
-                <HighlightedSuggestion
-                  code={c.suggestedCode}
-                  filePath={c.filePath}
-                  style={{
-                    marginTop: 6,
-                    padding: "6px 8px",
-                    borderRadius: 4,
-                    borderLeft: "2px solid var(--green)",
-                  }}
-                />
-              )}
-            </div>
-          </div>
-        );
-      })}
+              <div style={{ lineHeight: 1.5 }}>
+                {c.body ? (
+                  <div>{c.body}</div>
+                ) : c.type === "suggestion" ? (
+                  <div style={{ color: "var(--text-secondary)", fontSize: 12, fontStyle: "italic" }}>No comment</div>
+                ) : null}
+                {c.type === "suggestion" && c.suggestedCode && (
+                  <HighlightedSuggestion
+                    code={c.suggestedCode}
+                    filePath={c.filePath}
+                    style={{
+                      marginTop: 6,
+                      padding: "6px 8px",
+                      borderRadius: 4,
+                      maxHeight: 200,
+                      overflow: "auto",
+                      borderLeft: "2px solid var(--green)",
+                    }}
+                  />
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
