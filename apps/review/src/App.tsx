@@ -78,6 +78,7 @@ export default function App() {
   const setDiff = useStore((s) => s.setDiff);
   const setGroups = useStore((s) => s.setGroups);
   const addFinding = useStore((s) => s.addFinding);
+  const addReviewComment = useStore((s) => s.addReviewComment);
   const sessionError = useStore((s) => s.sessionError);
   const setSessionError = useStore((s) => s.setSessionError);
   const updateFindingScore = useStore((s) => s.updateFindingScore);
@@ -122,6 +123,15 @@ export default function App() {
       })
       .catch(console.error);
 
+    fetch(apiUrl("/comments"))
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          data.forEach((c: any) => addReviewComment(c));
+        }
+      })
+      .catch(console.error);
+
     fetch(apiUrl("/agents"))
       .then((r) => r.json())
       .then((data) => {
@@ -135,7 +145,7 @@ export default function App() {
       .then((r) => r.json())
       .then((data) => { if (data && !data.error) setConfig(data); })
       .catch(console.error);
-  }, [setPR, setDiff, setGroups, addFinding, updateAgentJob, setConfig]);
+  }, [setPR, setDiff, setGroups, addFinding, addReviewComment, updateAgentJob, setConfig]);
 
   useEffect(() => {
     fetchSessionData();
