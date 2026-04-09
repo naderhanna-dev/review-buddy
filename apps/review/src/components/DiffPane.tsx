@@ -5,6 +5,7 @@ import { useHighlightedLines } from "../hooks/useHighlightedLines";
 import { categoryColors } from "./GroupHeader";
 import { HighlightedTextarea } from "./HighlightedTextarea";
 import type { ReviewComment, DiffFile } from "@reviewradar/shared";
+import HighlightedSuggestion from "./HighlightedSuggestion";
 
 // CSS hover styles injected once — avoids stale JS hover state from missed mouseLeave events
 const DIFF_STYLES = `
@@ -317,17 +318,11 @@ function InlineComment({ comment, onDelete }: { comment: ReviewComment; onDelete
       <span style={{ flex: 1 }}>
         {comment.body && <span>{comment.body}</span>}
         {comment.type === "suggestion" && comment.suggestedCode && (
-          <code style={{
-            display: "block",
-            marginTop: comment.body ? 4 : 0,
-            padding: "2px 6px",
-            background: "var(--bg)",
-            borderRadius: 3,
-            fontSize: 12,
-            fontFamily: "var(--font-mono)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-          }}>{comment.suggestedCode}</code>
+          <HighlightedSuggestion
+            code={comment.suggestedCode}
+            filePath={comment.filePath}
+            style={{ marginTop: comment.body ? 4 : 0 }}
+          />
         )}
       </span>
       <button onClick={onDelete} title="Delete annotation" style={{

@@ -4,6 +4,7 @@ import { useStore } from "../store";
 import FindingCard from "./FindingCard";
 import ChatTab from "./ChatTab";
 import type { AgentJob, Finding } from "@reviewradar/shared";
+import HighlightedSuggestion from "./HighlightedSuggestion";
 
 const tabs = [
   { id: "comments" as const, label: "Comments" },
@@ -451,18 +452,16 @@ function CommentsPanel() {
                 <div style={{ color: "var(--text-secondary)", fontSize: 12, fontStyle: "italic" }}>No comment</div>
               ) : null}
               {c.type === "suggestion" && c.suggestedCode && (
-                <pre style={{
-                  margin: "6px 0 0",
-                  padding: "6px 8px",
-                  background: "var(--bg)",
-                  borderRadius: 4,
-                  fontSize: 12,
-                  fontFamily: "var(--font-mono)",
-                  overflow: "auto",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-all",
-                  borderLeft: "2px solid var(--green)",
-                }}>{c.suggestedCode}</pre>
+                <HighlightedSuggestion
+                  code={c.suggestedCode}
+                  filePath={c.filePath}
+                  style={{
+                    marginTop: 6,
+                    padding: "6px 8px",
+                    borderRadius: 4,
+                    borderLeft: "2px solid var(--green)",
+                  }}
+                />
               )}
             </div>
           </div>
