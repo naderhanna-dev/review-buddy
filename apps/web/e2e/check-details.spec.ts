@@ -2,27 +2,31 @@ import { test, expect } from '@playwright/test'
 import { prWithChecks } from './fixtures/pr-with-checks'
 
 const ORG = 'testorg'
+const ORG_ID = 'test-org-id'
 const TOKEN = 'test-token'
 
 test.beforeEach(async ({ page }) => {
-  // Inject localStorage before page scripts run so the app starts with mock data.
-  // Date.now() is called inside the browser context so the timestamp is always fresh,
-  // ensuring the cache is within the 5-minute revalidation TTL and no API calls are made.
   await page.addInitScript(
-    ({ token, org, pr, tokenKey, orgKey, cacheKey }) => {
-      localStorage.setItem(tokenKey, token)
-      localStorage.setItem(orgKey, org)
+    ({ token, org, orgId, pr, orgsKey, cacheKey }) => {
+      localStorage.setItem(
+        orgsKey,
+        JSON.stringify([{ id: orgId, org, token }]),
+      )
       const cache = {
-        version: 5,
-        timestamp: Date.now(),
-        org,
-        data: {
-          yourPrs: [],
-          needsAttention: [pr],
-          relatedToYou: [],
-          stalePrs: [],
-          recentlyMerged: [],
-          teamSignalsUnavailable: null,
+        version: 6,
+        entries: {
+          [orgId]: {
+            timestamp: Date.now(),
+            org,
+            data: {
+              yourPrs: [],
+              needsAttention: [pr],
+              relatedToYou: [],
+              stalePrs: [],
+              recentlyMerged: [],
+              teamSignalsUnavailable: null,
+            },
+          },
         },
       }
       localStorage.setItem(cacheKey, JSON.stringify(cache))
@@ -30,16 +34,13 @@ test.beforeEach(async ({ page }) => {
     {
       token: TOKEN,
       org: ORG,
+      orgId: ORG_ID,
       pr: prWithChecks,
-      tokenKey: 'review-radar.pat',
-      orgKey: 'review-radar.org',
+      orgsKey: 'review-radar.orgs',
       cacheKey: 'review-radar.prCache',
     },
   )
 
-  // Mock the GitHub GraphQL endpoint.
-  // PRChecks query (lazy-loaded on row expand) returns mock check data.
-  // All other queries (batch revalidation) return a minimal viewer/org response.
   await page.route('https://api.github.com/graphql', async (route) => {
     const body = route.request().postDataJSON() as { query: string }
     if (body.query.includes('PRChecks')) {
@@ -73,6 +74,11 @@ test.beforeEach(async ({ page }) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
+        headers: {
+          'x-ratelimit-limit': '5000',
+          'x-ratelimit-remaining': '4500',
+          'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 3600),
+        },
         body: JSON.stringify({
           data: {
             viewer: { login: 'testuser', databaseId: 1, avatarUrl: '', url: '' },

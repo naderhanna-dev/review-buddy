@@ -1,4 +1,5 @@
 import { checkForNotificationChanges, type NotificationCheckResult } from './notifications'
+import { rateLimitTracker } from './rate-limit-tracker'
 import type { OrgConfig } from './types'
 
 export type SmartRefreshConfig = {
@@ -63,6 +64,14 @@ export class SmartRefreshController {
     }
 
     this.fallbackTimerId = setTimeout(() => {
+      if (rateLimitTracker.isRateLimited(this.config.token)) {
+        const delayMs = rateLimitTracker.getMsUntilReset(this.config.token)
+        this.fallbackTimerId = setTimeout(() => {
+          this.triggerRefresh()
+          this.scheduleFallbackRefresh()
+        }, delayMs || this.config.fallbackIntervalMs)
+        return
+      }
       this.triggerRefresh()
       this.scheduleFallbackRefresh()
     }, this.config.fallbackIntervalMs)
@@ -82,6 +91,11 @@ export class SmartRefreshController {
       this.lastModified = result.lastModified
     }
 
+    if (result.rateLimited) {
+      this.scheduleNotificationPoll(result.pollIntervalSeconds)
+      return
+    }
+
     if (result.notificationsUnavailable) {
       this.triggerRefresh()
       this.scheduleNotificationPoll(this.config.degradedIntervalMs / 1000)
@@ -97,6 +111,10 @@ export class SmartRefreshController {
 
   private triggerRefresh(): void {
     if (this.debounceTimerId) {
+      return
+    }
+
+    if (rateLimitTracker.isRateLimited(this.config.token)) {
       return
     }
 

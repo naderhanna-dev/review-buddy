@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   prViewKey,
   RateLimitError,
+  rateLimitTracker,
   getCacheTimestamp,
   invalidatePRCache,
   isAnyCacheStale,
@@ -26,6 +27,7 @@ export type PRDataResult = {
   isRevalidating: boolean;
   errorToast: string | null;
   rateLimitWarning: boolean;
+  rateLimitResetMs: number;
   lastRefreshedAt: number | null;
   viewedMap: Record<string, number>;
   stalePreferences: Record<string, StalePreference>;
@@ -35,6 +37,15 @@ export type PRDataResult = {
   handleMarkActive: (repository: string, number: number) => void;
   handleClearStalePreference: (repository: string, number: number) => void;
 };
+
+function getMaxResetMs(configs: OrgConfig[]): number {
+  let max = 0
+  for (const config of configs) {
+    const ms = rateLimitTracker.getMsUntilReset(config.token)
+    if (ms > max) max = ms
+  }
+  return max
+}
 
 function mergeOrgCaches(orgConfigs: OrgConfig[], mergedLimit: number): {
   data: {
@@ -124,6 +135,7 @@ export function usePRData({
   const [isRevalidating, setIsRevalidating] = useState(false);
   const [errorToast, setErrorToast] = useState<string | null>(null);
   const [rateLimitWarning, setRateLimitWarning] = useState(false);
+  const [rateLimitResetMs, setRateLimitResetMs] = useState(0);
   const [teamSignalsUnavailable, setTeamSignalsUnavailable] = useState<string | null>(null);
   const [stalePrs, setStalePrs] = useState<PullRequest[]>([]);
   const [yourPrs, setYourPrs] = useState<PullRequest[]>([]);
@@ -212,9 +224,15 @@ export function usePRData({
       }
     }
 
-    // If all caches are fresh, skip the network fetch
     const orgIds = configs.map((c) => c.id);
     if (cached.data && !isAnyCacheStale(orgIds) && !refreshTickChanged) {
+      return () => { ignore = true; };
+    }
+
+    const allTokensRateLimited = configs.every((c) => rateLimitTracker.isRateLimited(c.token));
+    if (allTokensRateLimited) {
+      setRateLimitWarning(true);
+      setRateLimitResetMs(getMaxResetMs(configs));
       return () => { ignore = true; };
     }
 
@@ -266,12 +284,14 @@ export function usePRData({
           });
         }
 
+        const isRevalidation = !!cached.data;
+
         const result = await fetchAllOrgs(
           configs,
           viewedMapRef.current,
           stalePreferences,
           mergedCount,
-          handleOrgComplete,
+          isRevalidation ? undefined : handleOrgComplete,
         );
 
         if (!ignore) {
@@ -297,11 +317,15 @@ export function usePRData({
             setRecentlyMerged(result.recentlyMerged);
             setLastRefreshedAt(Date.now());
           }
-          setRateLimitWarning(false);
+          const hasRateLimitErrors = result.perOrgErrors.some((e) => e.error === 'rate-limit');
+          setRateLimitWarning(hasRateLimitErrors);
+          if (hasRateLimitErrors) {
+            setRateLimitResetMs(getMaxResetMs(orgConfigsRef.current));
+          }
 
-          // Show per-org errors as toasts
-          if (result.perOrgErrors.length > 0) {
-            const messages = result.perOrgErrors.map((e) => `${e.org}: ${e.error}`);
+          const nonRateLimitErrors = result.perOrgErrors.filter((e) => e.error !== 'rate-limit');
+          if (nonRateLimitErrors.length > 0) {
+            const messages = nonRateLimitErrors.map((e) => `${e.org}: ${e.error}`);
             setErrorToast(messages.join(" | "));
           }
 
@@ -327,6 +351,7 @@ export function usePRData({
                 : "Failed to load pull requests.";
             setErrorToast(message);
           }
+          setRateLimitResetMs(getMaxResetMs(orgConfigsRef.current));
         }
       } finally {
         if (!ignore) {
@@ -394,6 +419,7 @@ export function usePRData({
     isRevalidating,
     errorToast,
     rateLimitWarning,
+    rateLimitResetMs,
     lastRefreshedAt,
     viewedMap,
     stalePreferences,

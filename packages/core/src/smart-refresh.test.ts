@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { checkForNotificationChanges } from './notifications'
+import { rateLimitTracker } from './rate-limit-tracker'
 import { SmartRefreshController } from './smart-refresh'
 
 vi.mock('./notifications', () => ({
@@ -19,6 +20,7 @@ describe('SmartRefreshController', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.clearAllMocks()
+    rateLimitTracker.clear()
   })
 
   it('should schedule a notification poll on start', () => {
@@ -158,5 +160,87 @@ describe('SmartRefreshController', () => {
     await vi.advanceTimersByTimeAsync(500)
 
     expect(onRefresh).toHaveBeenCalledOnce()
+  })
+
+  it('should not call onRefresh when notification poll returns rateLimited', async () => {
+    const onRefresh = vi.fn()
+    vi.mocked(checkForNotificationChanges).mockResolvedValue({
+      hasChanges: true,
+      pollIntervalSeconds: 300,
+      rateLimited: true,
+    })
+
+    const controller = new SmartRefreshController({
+      token: 'token',
+      org: 'acme',
+      onRefresh,
+      debounceMs: 1_000,
+    })
+
+    controller.start()
+    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(onRefresh).not.toHaveBeenCalled()
+  })
+
+  it('should suppress triggerRefresh when token is rate limited', async () => {
+    const onRefresh = vi.fn()
+    const futureReset = Math.floor(Date.now() / 1000) + 600
+
+    rateLimitTracker.update('token', new Headers({
+      'x-ratelimit-limit': '5000',
+      'x-ratelimit-remaining': '0',
+      'x-ratelimit-reset': String(futureReset),
+    }))
+
+    vi.mocked(checkForNotificationChanges).mockResolvedValue({
+      hasChanges: true,
+      pollIntervalSeconds: 60,
+    })
+
+    const controller = new SmartRefreshController({
+      token: 'token',
+      org: 'acme',
+      onRefresh,
+      fallbackIntervalMs: 2_000,
+      debounceMs: 500,
+    })
+
+    controller.start()
+    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(onRefresh).not.toHaveBeenCalled()
+  })
+
+  it('should defer fallback refresh to reset time when rate limited', async () => {
+    const onRefresh = vi.fn()
+    const futureReset = Math.floor(Date.now() / 1000) + 30
+
+    rateLimitTracker.update('token', new Headers({
+      'x-ratelimit-limit': '5000',
+      'x-ratelimit-remaining': '0',
+      'x-ratelimit-reset': String(futureReset),
+    }))
+
+    const controller = new SmartRefreshController({
+      token: 'token',
+      org: 'acme',
+      onRefresh,
+      fallbackIntervalMs: 5_000,
+      debounceMs: 500,
+    })
+
+    controller.start()
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(onRefresh).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(26_000)
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(onRefresh).toHaveBeenCalledOnce()
+    controller.stop()
   })
 })

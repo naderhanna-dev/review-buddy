@@ -718,7 +718,10 @@ function App() {
 
       {prData.rateLimitWarning ? (
         <div className="toast toast-warning" role="status">
-          Rate limit hit — showing cached data. Will refresh automatically.
+          Rate limit hit — showing cached data.
+          {prData.rateLimitResetMs > 0
+            ? ` Resets in ${Math.ceil(prData.rateLimitResetMs / 60_000)} min.`
+            : " Will refresh automatically."}
         </div>
       ) : null}
       {prData.errorToast ? (
