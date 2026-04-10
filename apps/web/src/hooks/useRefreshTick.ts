@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import {
   MultiOrgRefreshController,
+  rateLimitTracker,
   FALLBACK_REFRESH_MS,
   NOTIFICATION_FALLBACK_MS,
   REFRESH_FOCUS_COOLDOWN_MS,
@@ -59,6 +60,11 @@ export function useRefreshTick({
 
       const now = Date.now();
       if (now - lastVisibilityRefreshAtRef.current < REFRESH_FOCUS_COOLDOWN_MS) {
+        return;
+      }
+
+      const anyTokenLimited = orgConfigs.some((c) => rateLimitTracker.isRateLimited(c.token));
+      if (anyTokenLimited) {
         return;
       }
 

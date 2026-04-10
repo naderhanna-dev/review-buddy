@@ -98,6 +98,10 @@ export {
 export type { SmartRefreshConfig } from "./smart-refresh";
 export { SmartRefreshController, MultiOrgRefreshController } from "./smart-refresh";
 
+// ── Rate Limiting ────────────────────────────────────────────────────
+export type { RateLimitState } from "./rate-limit-tracker";
+export { RateLimitTracker, rateLimitTracker } from "./rate-limit-tracker";
+
 // ── Retry ────────────────────────────────────────────────────────────
 export type { RetryOptions } from "./retry";
 export { delay, withRetry } from "./retry";

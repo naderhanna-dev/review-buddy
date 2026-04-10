@@ -1,6 +1,6 @@
 import { RateLimitError } from './github'
+import { rateLimitTracker } from './rate-limit-tracker'
 
-// Re-export RateLimitError for convenience
 export { RateLimitError }
 
 // ============================================================================
@@ -299,6 +299,10 @@ export async function graphqlFetch<T>(
   variables: Record<string, unknown>,
   token: string,
 ): Promise<T> {
+  if (rateLimitTracker.isRateLimited(token)) {
+    throw new RateLimitError()
+  }
+
   const response = await fetch('https://api.github.com/graphql', {
     method: 'POST',
     headers: {
@@ -309,7 +313,8 @@ export async function graphqlFetch<T>(
     body: JSON.stringify({ query, variables }),
   })
 
-  // Handle HTTP-level errors
+  rateLimitTracker.update(token, response.headers)
+
   if (response.status === 401) {
     throw new Error('Invalid token. Check PAT scope and retry.')
   }
@@ -322,13 +327,11 @@ export async function graphqlFetch<T>(
     throw new Error(`GitHub request failed (${response.status}).`)
   }
 
-  // Parse response body
   const responseBody = (await response.json()) as {
     data?: T
     errors?: Array<{ message: string }>
   }
 
-  // Handle GraphQL-level errors
   if (responseBody.errors && responseBody.errors.length > 0) {
     const errorMessage = responseBody.errors[0].message
     if (errorMessage.toLowerCase().includes('rate limit')) {

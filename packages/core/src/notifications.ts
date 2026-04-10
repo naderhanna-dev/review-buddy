@@ -1,3 +1,5 @@
+import { rateLimitTracker } from './rate-limit-tracker'
+
 export type GitHubNotification = {
   id: string
   subject: {
@@ -36,6 +38,7 @@ export type NotificationCheckResult = {
   pollIntervalSeconds: number
   lastModified?: string
   notificationsUnavailable?: boolean
+  rateLimited?: boolean
 }
 
 const GITHUB_AUTH_HEADERS = (token: string): Record<string, string> => ({
@@ -58,6 +61,15 @@ export async function checkForNotificationChanges(
   org: string,
   lastModified?: string,
 ): Promise<NotificationCheckResult> {
+  if (rateLimitTracker.isRateLimited(token)) {
+    const delayMs = rateLimitTracker.getMsUntilReset(token)
+    return {
+      hasChanges: false,
+      pollIntervalSeconds: Math.max(Math.ceil(delayMs / 1000), DEFAULT_POLL_INTERVAL_SECONDS),
+      rateLimited: true,
+    }
+  }
+
   const headers: Record<string, string> = {
     ...GITHUB_AUTH_HEADERS(token),
   }
@@ -76,6 +88,8 @@ export async function checkForNotificationChanges(
     return { hasChanges: false, pollIntervalSeconds: DEFAULT_POLL_INTERVAL_SECONDS }
   }
 
+  rateLimitTracker.update(token, response.headers)
+
   const pollIntervalSeconds = parsePollInterval(response.headers)
   const lastModifiedHeader = response.headers.get('last-modified') ?? undefined
 
@@ -92,11 +106,18 @@ export async function checkForNotificationChanges(
   }
 
   if (response.status === 429) {
+    const resetMs = rateLimitTracker.getMsUntilReset(token)
     const retryAfter = response.headers.get('retry-after')
-    const backoff = retryAfter ? parseInt(retryAfter, 10) : pollIntervalSeconds * 2
+    const backoffFromHeader = retryAfter ? parseInt(retryAfter, 10) : NaN
+    const backoff = !isNaN(backoffFromHeader)
+      ? backoffFromHeader
+      : resetMs > 0
+        ? Math.ceil(resetMs / 1000)
+        : pollIntervalSeconds * 2
     return {
       hasChanges: false,
-      pollIntervalSeconds: isNaN(backoff) ? pollIntervalSeconds * 2 : backoff,
+      pollIntervalSeconds: backoff,
+      rateLimited: true,
     }
   }
 

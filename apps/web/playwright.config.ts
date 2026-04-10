@@ -1,11 +1,14 @@
 import { defineConfig } from '@playwright/test'
+
+const port = process.env.PW_PORT ?? '5199'
+
 export default defineConfig({
   testDir: './e2e',
-  use: { baseURL: 'http://localhost:5173' },
+  use: { baseURL: `http://localhost:${port}` },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
   webServer: {
-    command: 'pnpm dev',
-    url: 'http://localhost:5173',
+    command: `pnpm exec vite --port ${port}`,
+    url: `http://localhost:${port}`,
     reuseExistingServer: true,
   },
 })

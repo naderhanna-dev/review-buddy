@@ -10,8 +10,10 @@ import {
   type PullRequest,
   type Review,
 } from "./classification";
+import { rateLimitTracker } from "./rate-limit-tracker";
 import {
   graphqlFetch,
+  RateLimitError,
   type GqlMergedPullRequestNode,
   type GqlPullRequestNode,
   type GqlSearchResponse,
@@ -592,6 +594,10 @@ async function fetchCheckRunsViaRest(
   sha: string,
   token: string,
 ): Promise<CheckStatus[]> {
+  if (rateLimitTracker.isRateLimited(token)) {
+    return []
+  }
+
   type RestCheckRun = { name: string; status: string; conclusion: string | null; details_url: string | null }
 
   const allRuns: RestCheckRun[] = []
@@ -605,6 +611,9 @@ async function fetchCheckRunsViaRest(
         'X-GitHub-Api-Version': '2022-11-28',
       },
     })
+
+    rateLimitTracker.update(token, response.headers)
+
     if (response.status === 401) {
       throw new Error('Check details unavailable — your GitHub token is invalid or has expired.')
     }
@@ -739,12 +748,16 @@ export async function fetchAllOrgs(
     }),
   );
 
-  // If a token's login resolution failed, we can't fetch for orgs using that token
   const failedTokens = new Set<string>();
+  const rateLimitedTokens = new Set<string>();
   const tokenEntries = Array.from(loginPromises.keys());
   for (let i = 0; i < loginResults.length; i++) {
-    if (loginResults[i].status === 'rejected') {
+    const result = loginResults[i];
+    if (result.status === 'rejected') {
       failedTokens.add(tokenEntries[i]);
+      if (result.reason instanceof RateLimitError) {
+        rateLimitedTokens.add(tokenEntries[i]);
+      }
     }
   }
 
@@ -794,7 +807,9 @@ export async function fetchAllOrgs(
       perOrgErrors.push({
         orgId: config.id,
         org: config.org,
-        error: 'Failed to authenticate — check your PAT.',
+        error: rateLimitedTokens.has(config.token)
+          ? 'rate-limit'
+          : 'Failed to authenticate — check your PAT.',
       });
     }
   }
@@ -804,8 +819,10 @@ export async function fetchAllOrgs(
     const config = configs.filter((c) => !failedTokens.has(c.token))[i];
 
     if (result.status === 'rejected') {
-      const message = result.reason instanceof Error ? result.reason.message : 'Unknown error';
-      perOrgErrors.push({ orgId: config.id, org: config.org, error: message });
+      const error = result.reason instanceof RateLimitError
+        ? 'rate-limit'
+        : result.reason instanceof Error ? result.reason.message : 'Unknown error';
+      perOrgErrors.push({ orgId: config.id, org: config.org, error });
       continue;
     }
 
