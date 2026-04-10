@@ -37,9 +37,9 @@ This serves both the PR dashboard and the AI review app from a single local serv
 > and AI analysis on your behalf. Only use `--host 0.0.0.0` on trusted networks
 > where you're comfortable with that exposure.
 
-### Install as a service (macOS)
+### Install as a service
 
-Run the server automatically on login:
+Run the server automatically on login. The command auto-detects your platform:
 
 ```bash
 pnpm run install-service
@@ -54,18 +54,29 @@ Example — bind to a specific network interface so other machines on the LAN ca
 pnpm run install-service --host 192.168.1.100
 ```
 
-This creates a launchd plist at `~/Library/LaunchAgents/com.reviewradar.server.plist` and starts the service. The launcher script auto-detects your node version manager (fnm or nvm). Logs go to `~/Library/Logs/ReviewRadar/`.
+The launcher script auto-detects your node version manager (fnm or nvm).
+
+#### macOS
+
+Creates a launchd plist at `~/Library/LaunchAgents/com.reviewradar.server.plist`. Logs go to `~/Library/Logs/ReviewRadar/`.
 
 ```bash
-# Remove the service
 pnpm run uninstall-service
-
-# Check service status
 launchctl list | grep reviewradar
-
-# View logs
 tail -f ~/Library/Logs/ReviewRadar/server.log
 ```
+
+#### Linux
+
+Creates a systemd user service at `~/.config/systemd/user/reviewradar.service`. Logs go to journald.
+
+```bash
+pnpm run uninstall-service
+systemctl --user status reviewradar
+journalctl --user -u reviewradar -f
+```
+
+> **Tip:** To start the service at boot (before login), run `loginctl enable-linger $USER`.
 
 ### Project Structure
 ```

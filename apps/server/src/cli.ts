@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { writeFileSync, mkdirSync, unlinkSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -43,32 +43,43 @@ function serve(portOverride?: number, hostOverride?: string) {
   process.on("SIGTERM", shutdown);
 }
 
-function installService(serveArgs: string[] = []) {
+// ── Shared launcher helpers ──
+
+function snapshotToolPaths(): string[] {
+  const dirs = new Set<string>();
+
+  dirs.add(dirname(process.execPath));
+
+  for (const bin of ["pnpm", "gh", "claude"]) {
+    try {
+      const p = execSync(`which ${bin}`, { encoding: "utf8" }).trim();
+      if (p) dirs.add(dirname(p));
+    } catch {}
+  }
+
+  return [...dirs];
+}
+
+function buildLauncherScript(serveArgs: string[] = []): string {
   const home = process.env.HOME || "~";
-  const plistDir = resolve(home, "Library/LaunchAgents");
-  const plistPath = resolve(plistDir, "com.reviewradar.server.plist");
-  const logDir = resolve(home, "Library/Logs/ReviewRadar");
-  const launcherPath = resolve(MONOREPO_ROOT, "apps/server/launcher.sh");
-
-  mkdirSync(logDir, { recursive: true });
-
-  // Detect which node version manager is in use
   const nvmDir = process.env.NVM_DIR || resolve(home, ".nvm");
-  // fnm can be installed via Homebrew, cargo, or manually
-  let fnmBin = "";
-  try { fnmBin = execSync("which fnm", { encoding: "utf8" }).trim(); } catch {}
-
   const serveArgStr = serveArgs.length > 0 ? " " + serveArgs.join(" ") : "";
 
-  const launcher = `#!/usr/bin/env bash
+  const snapshotted = snapshotToolPaths();
+  const extraPath = [
+    ...snapshotted,
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    `${home}/.local/bin`,
+  ].join(":");
+
+  return `#!/usr/bin/env bash
 set -euo pipefail
 
-# Ensure PATH includes common tool locations FIRST so we can find fnm/nvm
 export HOME="${home}"
-export PATH="/opt/homebrew/bin:/usr/local/bin:${home}/.local/bin:\$PATH"
+export PATH="${extraPath}:\$PATH"
 
-# Source node version manager so we get the right node/pnpm on PATH
-# Prefer fnm if available (installed via Homebrew), fall back to nvm
+# Source node version manager if present (fnm or nvm)
 if command -v fnm &>/dev/null; then
   eval "$(fnm env)"
 elif [ -s "${nvmDir}/nvm.sh" ]; then
@@ -78,7 +89,6 @@ fi
 
 cd "${MONOREPO_ROOT}"
 
-# Auto-install if node_modules is missing (e.g. after a git pull)
 if [ ! -d "node_modules" ] || [ ! -d "apps/server/node_modules" ]; then
   echo "Installing dependencies..."
   pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1
@@ -86,8 +96,19 @@ fi
 
 exec pnpm --filter server run serve${serveArgStr}
 `;
+}
 
-  writeFileSync(launcherPath, launcher, { mode: 0o755 });
+// ── macOS (launchd) ──
+
+function installServiceMacOS(serveArgs: string[] = []) {
+  const home = process.env.HOME || "~";
+  const plistPath = resolve(home, "Library/LaunchAgents/com.reviewradar.server.plist");
+  const logDir = resolve(home, "Library/Logs/ReviewRadar");
+  const launcherPath = resolve(MONOREPO_ROOT, "apps/server/launcher.sh");
+
+  mkdirSync(logDir, { recursive: true });
+
+  writeFileSync(launcherPath, buildLauncherScript(serveArgs), { mode: 0o755 });
 
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -129,7 +150,7 @@ exec pnpm --filter server run serve${serveArgStr}
   console.log(`Logs: ${logDir}/server.log`);
 }
 
-function uninstallService() {
+function uninstallServiceMacOS() {
   const home = process.env.HOME || "~";
   const plistPath = resolve(home, "Library/LaunchAgents/com.reviewradar.server.plist");
 
@@ -142,7 +163,104 @@ function uninstallService() {
     execSync(`launchctl unload ${plistPath}`);
   } catch {}
   unlinkSync(plistPath);
+  const launcherPath = resolve(MONOREPO_ROOT, "apps/server/launcher.sh");
+  if (existsSync(launcherPath)) unlinkSync(launcherPath);
   console.log("Service uninstalled");
+}
+
+// ── Linux (systemd user service) ──
+
+function installServiceLinux(serveArgs: string[] = []) {
+  const home = process.env.HOME || "~";
+  const unitDir = resolve(home, ".config/systemd/user");
+  const unitPath = resolve(unitDir, "reviewradar.service");
+  const launcherPath = resolve(MONOREPO_ROOT, "apps/server/launcher.sh");
+
+  mkdirSync(unitDir, { recursive: true });
+
+  writeFileSync(launcherPath, buildLauncherScript(serveArgs), { mode: 0o755 });
+
+  const unit = `[Unit]
+Description=ReviewRadar server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=${launcherPath}
+WorkingDirectory=${MONOREPO_ROOT}
+Restart=on-failure
+RestartSec=10
+Environment=HOME=${home}
+
+[Install]
+WantedBy=default.target
+`;
+
+  writeFileSync(unitPath, unit);
+  execSync("systemctl --user daemon-reload");
+  execSync("systemctl --user enable reviewradar.service");
+  execSync("systemctl --user restart reviewradar.service");
+  console.log(`Service installed: ${unitPath}`);
+  console.log(`Launcher: ${launcherPath}`);
+  console.log(`Logs: journalctl --user -u reviewradar`);
+}
+
+function uninstallServiceLinux() {
+  const home = process.env.HOME || "~";
+  const unitPath = resolve(home, ".config/systemd/user/reviewradar.service");
+
+  if (!existsSync(unitPath)) {
+    console.error("Service not installed");
+    process.exit(1);
+  }
+
+  try {
+    execSync("systemctl --user disable --now reviewradar.service");
+  } catch {}
+  unlinkSync(unitPath);
+  const launcherPath = resolve(MONOREPO_ROOT, "apps/server/launcher.sh");
+  if (existsSync(launcherPath)) unlinkSync(launcherPath);
+  execSync("systemctl --user daemon-reload");
+  console.log("Service uninstalled");
+}
+
+// ── Platform dispatch ──
+
+function resolveServeAddr(serveArgs: string[]): { host: string; port: number } {
+  let host = "127.0.0.1";
+  let port = DEFAULT_PORT;
+  for (let i = 0; i < serveArgs.length; i++) {
+    if ((serveArgs[i] === "--host" || serveArgs[i] === "-H") && serveArgs[i + 1]) host = serveArgs[++i];
+    else if ((serveArgs[i] === "--port" || serveArgs[i] === "-p") && serveArgs[i + 1]) port = parseInt(serveArgs[++i]) || DEFAULT_PORT;
+  }
+  return { host, port };
+}
+
+function installService(serveArgs: string[] = []) {
+  if (process.platform === "darwin") {
+    installServiceMacOS(serveArgs);
+  } else if (process.platform === "linux") {
+    installServiceLinux(serveArgs);
+  } else {
+    console.error(`Unsupported platform: ${process.platform}`);
+    process.exit(1);
+  }
+
+  const { host, port } = resolveServeAddr(serveArgs);
+  const displayHost = host === "127.0.0.1" ? "localhost" : host;
+  console.log(`\nReviewRadar is running at http://${displayHost}:${port}`);
+}
+
+function uninstallService() {
+  if (process.platform === "darwin") {
+    uninstallServiceMacOS();
+  } else if (process.platform === "linux") {
+    uninstallServiceLinux();
+  } else {
+    console.error(`Unsupported platform: ${process.platform}`);
+    process.exit(1);
+  }
 }
 
 // ── CLI dispatch ──
@@ -212,9 +330,9 @@ switch (command) {
     console.log("  serve              Start the ReviewRadar server");
     console.log("    --port, -p       Port to listen on (default: 7672)");
     console.log("    --host, -H       Host to bind to (default: 127.0.0.1)");
-    console.log("  install-service    Install launchd service (macOS)");
+    console.log("  install-service    Install as a service (macOS launchd / Linux systemd)");
     console.log("    --port, -p       Port for the service (default: 7672)");
     console.log("    --host, -H       Host for the service (default: 127.0.0.1)");
-    console.log("  uninstall-service  Remove launchd service");
+    console.log("  uninstall-service  Remove the service");
     process.exit(command ? 1 : 0);
 }
