@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 
 import { resolve, dirname } from "node:path";
+import { homedir } from "node:os";
 import { parseArgs } from "node:util";
 import { writeFileSync, mkdirSync, unlinkSync, existsSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { createServer } from "./server";
 import { ReviewSessionManager } from "./session-manager";
 import { loadConfig } from "./config";
 import { MONOREPO_ROOT, WEB_DIST, REVIEW_DIST } from "./paths";
 
 const DEFAULT_PORT = 7672;
+const LAUNCHER_PATH = resolve(MONOREPO_ROOT, "apps/server/launcher.sh");
 
 function serve(portOverride?: number, hostOverride?: string) {
   const config = loadConfig();
@@ -52,7 +54,7 @@ function snapshotToolPaths(): string[] {
 
   for (const bin of ["pnpm", "gh", "claude"]) {
     try {
-      const p = execSync(`which ${bin}`, { encoding: "utf8" }).trim();
+      const p = execFileSync("which", [bin], { encoding: "utf8" }).trim();
       if (p) dirs.add(dirname(p));
     } catch {}
   }
@@ -61,7 +63,7 @@ function snapshotToolPaths(): string[] {
 }
 
 function buildLauncherScript(serveArgs: string[] = []): string {
-  const home = process.env.HOME || "~";
+  const home = homedir();
   const nvmDir = process.env.NVM_DIR || resolve(home, ".nvm");
   const serveArgStr = serveArgs.length > 0 ? " " + serveArgs.join(" ") : "";
 
@@ -101,14 +103,13 @@ exec pnpm --filter server run serve${serveArgStr}
 // ── macOS (launchd) ──
 
 function installServiceMacOS(serveArgs: string[] = []) {
-  const home = process.env.HOME || "~";
+  const home = homedir();
   const plistPath = resolve(home, "Library/LaunchAgents/com.reviewradar.server.plist");
   const logDir = resolve(home, "Library/Logs/ReviewRadar");
-  const launcherPath = resolve(MONOREPO_ROOT, "apps/server/launcher.sh");
 
   mkdirSync(logDir, { recursive: true });
 
-  writeFileSync(launcherPath, buildLauncherScript(serveArgs), { mode: 0o755 });
+  writeFileSync(LAUNCHER_PATH, buildLauncherScript(serveArgs), { mode: 0o755 });
 
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -118,7 +119,7 @@ function installServiceMacOS(serveArgs: string[] = []) {
   <string>com.reviewradar.server</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${launcherPath}</string>
+    <string>${LAUNCHER_PATH}</string>
   </array>
   <key>WorkingDirectory</key>
   <string>${MONOREPO_ROOT}</string>
@@ -144,14 +145,15 @@ function installServiceMacOS(serveArgs: string[] = []) {
 </plist>`;
 
   writeFileSync(plistPath, plist);
+  try { execSync(`launchctl unload ${plistPath}`, { stdio: "ignore" }); } catch {}
   execSync(`launchctl load ${plistPath}`);
   console.log(`Service installed: ${plistPath}`);
-  console.log(`Launcher: ${launcherPath}`);
+  console.log(`Launcher: ${LAUNCHER_PATH}`);
   console.log(`Logs: ${logDir}/server.log`);
 }
 
 function uninstallServiceMacOS() {
-  const home = process.env.HOME || "~";
+  const home = homedir();
   const plistPath = resolve(home, "Library/LaunchAgents/com.reviewradar.server.plist");
 
   if (!existsSync(plistPath)) {
@@ -163,22 +165,20 @@ function uninstallServiceMacOS() {
     execSync(`launchctl unload ${plistPath}`);
   } catch {}
   unlinkSync(plistPath);
-  const launcherPath = resolve(MONOREPO_ROOT, "apps/server/launcher.sh");
-  if (existsSync(launcherPath)) unlinkSync(launcherPath);
+  if (existsSync(LAUNCHER_PATH)) unlinkSync(LAUNCHER_PATH);
   console.log("Service uninstalled");
 }
 
 // ── Linux (systemd user service) ──
 
 function installServiceLinux(serveArgs: string[] = []) {
-  const home = process.env.HOME || "~";
+  const home = homedir();
   const unitDir = resolve(home, ".config/systemd/user");
   const unitPath = resolve(unitDir, "reviewradar.service");
-  const launcherPath = resolve(MONOREPO_ROOT, "apps/server/launcher.sh");
 
   mkdirSync(unitDir, { recursive: true });
 
-  writeFileSync(launcherPath, buildLauncherScript(serveArgs), { mode: 0o755 });
+  writeFileSync(LAUNCHER_PATH, buildLauncherScript(serveArgs), { mode: 0o755 });
 
   const unit = `[Unit]
 Description=ReviewRadar server
@@ -187,7 +187,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${launcherPath}
+ExecStart=${LAUNCHER_PATH}
 WorkingDirectory=${MONOREPO_ROOT}
 Restart=on-failure
 RestartSec=10
@@ -202,12 +202,12 @@ WantedBy=default.target
   execSync("systemctl --user enable reviewradar.service");
   execSync("systemctl --user restart reviewradar.service");
   console.log(`Service installed: ${unitPath}`);
-  console.log(`Launcher: ${launcherPath}`);
+  console.log(`Launcher: ${LAUNCHER_PATH}`);
   console.log(`Logs: journalctl --user -u reviewradar`);
 }
 
 function uninstallServiceLinux() {
-  const home = process.env.HOME || "~";
+  const home = homedir();
   const unitPath = resolve(home, ".config/systemd/user/reviewradar.service");
 
   if (!existsSync(unitPath)) {
@@ -219,8 +219,7 @@ function uninstallServiceLinux() {
     execSync("systemctl --user disable --now reviewradar.service");
   } catch {}
   unlinkSync(unitPath);
-  const launcherPath = resolve(MONOREPO_ROOT, "apps/server/launcher.sh");
-  if (existsSync(launcherPath)) unlinkSync(launcherPath);
+  if (existsSync(LAUNCHER_PATH)) unlinkSync(LAUNCHER_PATH);
   execSync("systemctl --user daemon-reload");
   console.log("Service uninstalled");
 }
@@ -249,7 +248,7 @@ function installService(serveArgs: string[] = []) {
 
   const { host, port } = resolveServeAddr(serveArgs);
   const displayHost = host === "127.0.0.1" ? "localhost" : host;
-  console.log(`\nReviewRadar is running at http://${displayHost}:${port}`);
+  console.log(`\nReviewRadar starting at http://${displayHost}:${port}`);
 }
 
 function uninstallService() {

@@ -61,8 +61,13 @@ The launcher script auto-detects your node version manager (fnm or nvm).
 Creates a launchd plist at `~/Library/LaunchAgents/com.reviewradar.server.plist`. Logs go to `~/Library/Logs/ReviewRadar/`.
 
 ```bash
+# Remove the service
 pnpm run uninstall-service
+
+# Check service status
 launchctl list | grep reviewradar
+
+# View logs
 tail -f ~/Library/Logs/ReviewRadar/server.log
 ```
 
@@ -71,8 +76,13 @@ tail -f ~/Library/Logs/ReviewRadar/server.log
 Creates a systemd user service at `~/.config/systemd/user/reviewradar.service`. Logs go to journald.
 
 ```bash
+# Remove the service
 pnpm run uninstall-service
+
+# Check service status
 systemctl --user status reviewradar
+
+# View logs
 journalctl --user -u reviewradar -f
 ```
 
