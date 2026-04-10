@@ -171,7 +171,7 @@ export const PR_DETAILS_FRAGMENT = `
         oid
         statusCheckRollup {
           state
-          contexts(first: 100) {
+          contexts(first: 250) {
             nodes {
               __typename
               ... on StatusContext {
