@@ -14,33 +14,38 @@ import type { SSEEvent } from "@reviewradar/shared";
 // --- Injected styles for the new layout ---
 
 const LAYOUT_STYLES = `
-/* ── Shell ── */
+/* ── Shell — the outer rounded container ── */
 .rb-shell {
   display: flex; flex-direction: column; height: 100vh;
   background: var(--background); color: var(--text);
   font-family: var(--font-sans);
+  border-radius: 16px; border: 2.5px solid var(--card-border);
+  overflow: hidden;
+  margin: 0;
 }
 
 /* ── Top bar ── */
 .rb-topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; background: var(--topbar-bg);
-  border-bottom: 2.5px solid var(--card-border);
+  padding: 11px 16px; background: var(--topbar-bg);
   flex-shrink: 0;
 }
 .rb-pr-badge {
-  font-size: 10px; font-weight: 500; padding: 3px 9px;
+  font-size: 10px; font-weight: 600; padding: 3px 10px;
   border-radius: 20px; background: var(--yellow); color: var(--text);
-  flex-shrink: 0;
+  flex-shrink: 0; border: 1.5px solid var(--text);
 }
-.rb-pr-title { font-size: 13px; font-weight: 500; color: var(--topbar-text); }
-.rb-pr-sub { font-size: 10px; color: var(--muted); }
+.rb-pr-title {
+  font-size: 13px; font-weight: 500; color: var(--topbar-text);
+  max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rb-pr-sub { font-size: 10px; color: #888; }
 .rb-progress-bar {
   width: 80px; height: 5px; background: #333;
   border-radius: 3px; overflow: hidden; border: 1px solid #444;
 }
 .rb-progress-fill { height: 100%; background: var(--green); transition: width 0.3s ease; }
-.rb-progress-label { font-size: 10px; color: var(--muted); white-space: nowrap; }
+.rb-progress-label { font-size: 10px; color: #888; white-space: nowrap; }
 
 /* ── Desktop body ── */
 .rb-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
@@ -52,7 +57,7 @@ const LAYOUT_STYLES = `
   display: flex; flex-direction: column; overflow: hidden;
 }
 .rb-ai-summary {
-  padding: 11px 13px; border-bottom: 1.5px solid var(--bg-tertiary);
+  padding: 11px 13px; border-bottom: 1.5px solid #C8C4BC;
 }
 .rb-ai-tag {
   display: inline-flex; align-items: center; gap: 5px;
@@ -62,6 +67,12 @@ const LAYOUT_STYLES = `
 }
 .rb-change-desc {
   font-size: 11px; color: var(--text); line-height: 1.6; opacity: 0.7;
+}
+.rb-panel-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--text); font-weight: 500; opacity: 0.45;
+  padding: 7px 12px 5px;
+  border-bottom: 1px solid #C8C4BC;
 }
 
 /* ── Center stack area ── */
@@ -79,20 +90,23 @@ const LAYOUT_STYLES = `
 
 /* ── Icon button ── */
 .rb-icon-btn {
-  width: 32px; height: 32px; border-radius: 7px;
+  width: 34px; height: 34px; border-radius: 8px;
   border: 1.5px solid #444; background: #2a2a2a;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0;
+  transition: opacity 0.15s;
 }
-.rb-icon-btn svg { width: 14px; height: 14px; stroke: var(--topbar-text); fill: none; stroke-width: 1.8; }
+.rb-icon-btn:hover { opacity: 0.85; }
+.rb-icon-btn svg { width: 15px; height: 15px; stroke: var(--topbar-text); fill: none; stroke-width: 1.8; }
 .rb-icon-btn.chat-btn { background: var(--blue); border-color: var(--blue); }
 
 /* ── Mobile ── */
 @media (max-width: 768px) {
+  .rb-shell { border-radius: 0; border: none; }
   .rb-left-panel { display: none; }
   .rb-right-panel { display: none; }
   .rb-topbar { padding: 10px 12px; }
-  .rb-pr-title { font-size: 12px; }
+  .rb-pr-title { font-size: 12px; max-width: 200px; }
   .rb-progress-bar { display: none; }
 }
 
@@ -157,7 +171,7 @@ function TopBar() {
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
         {pr && <span className="rb-pr-badge">PR #{pr.number}</span>}
         <div style={{ minWidth: 0 }}>
-          <div className="rb-pr-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div className="rb-pr-title">
             {pr?.title || "Loading..."}
           </div>
           {pr && (
@@ -192,7 +206,6 @@ function AISummary() {
   const pr = useStore((s) => s.pr);
   const groups = useStore((s) => s.groups);
 
-  // Derive summary from first group or PR body
   const summary = groups.length > 0
     ? groups.map((g) => g.summary).filter(Boolean).join(" ")
     : pr?.body?.slice(0, 200) || "Analyzing PR...";
@@ -234,7 +247,6 @@ export default function App() {
 
   useKeyboardShortcuts();
 
-  // Fetch all session data on mount
   const fetchSessionData = useCallback(() => {
     fetch(apiUrl("/pr"))
       .then((r) => r.json())
@@ -284,7 +296,6 @@ export default function App() {
     fetchSessionData();
   }, [fetchSessionData]);
 
-  // Poll for groups until ready
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     let stopped = false;
@@ -300,7 +311,6 @@ export default function App() {
     return () => { stopped = true; clearInterval(interval); };
   }, [setGroups]);
 
-  // SSE handler
   const handleSSE = useCallback((event: unknown) => {
     const e = event as SSEEvent;
     switch (e.type) {
@@ -353,9 +363,9 @@ export default function App() {
           {sessionError}
         </div>
         <a href="/" style={{
-          marginTop: 12, padding: "8px 20px", borderRadius: 6,
+          marginTop: 12, padding: "8px 20px", borderRadius: 8,
           border: "2px solid var(--card-border)", color: "var(--text)",
-          textDecoration: "none", fontSize: 13,
+          textDecoration: "none", fontSize: 13, fontWeight: 500,
         }}>Back to dashboard</a>
       </div>
     );
@@ -370,14 +380,7 @@ export default function App() {
         {/* Desktop left panel */}
         <div className="rb-left-panel desktop-only">
           <AISummary />
-          <div style={{ padding: "7px 12px 3px", borderBottom: "1px solid var(--bg-tertiary)" }}>
-            <div style={{
-              fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em",
-              color: "var(--text)", fontWeight: 500, opacity: 0.45,
-            }}>
-              Change explorer
-            </div>
-          </div>
+          <div className="rb-panel-label">Change explorer</div>
           <div style={{ flex: 1, overflow: "auto" }}>
             <FileTree />
           </div>
@@ -386,14 +389,7 @@ export default function App() {
         {/* Mobile sidebar (slide-out) */}
         <div className={`rb-mobile-sidebar rb-mobile-only ${mobileSidebarOpen ? "open" : ""}`}>
           <div className="rb-mobile-sidebar-inner">
-            <div style={{ padding: "7px 12px 3px" }}>
-              <div style={{
-                fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em",
-                color: "var(--text)", fontWeight: 500, opacity: 0.45,
-              }}>
-                Change explorer
-              </div>
-            </div>
+            <div className="rb-panel-label">Change explorer</div>
             <FileTree />
           </div>
         </div>
@@ -431,7 +427,6 @@ function HelpOverlay() {
 
   const shortcuts = [
     ["j / k", "Next / previous file"],
-    ["1 / 2 / 3", "Comments / Analysis / Chat tab"],
     ["\u2318/Ctrl + Enter", "Add comment"],
     ["Esc", "Cancel / close"],
     ["?", "Toggle this help"],
@@ -450,55 +445,51 @@ function HelpOverlay() {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "var(--bg-secondary)",
-          border: "2px solid var(--card-border)",
-          borderRadius: 12,
+          background: "var(--card-bg)",
+          border: "2.5px solid var(--card-border)",
+          borderRadius: 14,
           padding: "24px 32px",
-          minWidth: 420, maxWidth: 520, maxHeight: "80vh", overflow: "auto",
+          minWidth: 400, maxWidth: 480, maxHeight: "80vh", overflow: "auto",
+          boxShadow: "8px 8px 0px var(--card-border)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600 }}>Help</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 600 }}>Keyboard shortcuts</h2>
           <button
             onClick={close}
             style={{
-              border: "none", background: "transparent",
-              color: "var(--text-secondary)", fontSize: 18,
-              cursor: "pointer", padding: "2px 6px", lineHeight: 1,
+              border: "2px solid var(--card-border)", background: "var(--card-bg)",
+              color: "var(--text)", fontSize: 14, fontWeight: 600,
+              cursor: "pointer", padding: "4px 10px", borderRadius: 6,
+              boxShadow: "2px 2px 0px var(--card-border)",
             }}
           >{"\u2715"}</button>
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Getting started</div>
-          <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 6 }}>
-            Swipe through files in the <strong>card stack</strong> — swipe right or tap the green button to approve, left or red to request changes.
-          </p>
-          <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 6 }}>
-            Tap any diff line to leave a comment. Use the <strong>chat panel</strong> to ask AI about the PR.
+          <p style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.7, opacity: 0.7 }}>
+            Swipe through files in the card stack. Swipe right or tap the green button to approve, left or red to request changes. Tap any diff line to leave a comment.
           </p>
         </div>
 
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Keyboard shortcuts</div>
-          <table style={{ fontSize: 13, lineHeight: 2, width: "100%" }}>
-            <tbody>
-              {shortcuts.map(([key, desc]) => (
-                <tr key={key}>
-                  <td style={{ paddingRight: 20, whiteSpace: "nowrap" }}>
-                    <kbd style={{
-                      background: "var(--bg-tertiary)",
-                      border: "1px solid var(--card-border)",
-                      borderRadius: 4, padding: "2px 8px",
-                      fontSize: 12, fontFamily: "var(--font-mono)",
-                    }}>{key}</kbd>
-                  </td>
-                  <td style={{ color: "var(--text-secondary)" }}>{desc}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <table style={{ fontSize: 12, lineHeight: 2.2, width: "100%" }}>
+          <tbody>
+            {shortcuts.map(([key, desc]) => (
+              <tr key={key}>
+                <td style={{ paddingRight: 16, whiteSpace: "nowrap" }}>
+                  <kbd style={{
+                    background: "var(--bg-tertiary)",
+                    border: "1.5px solid var(--card-border)",
+                    borderRadius: 5, padding: "2px 8px",
+                    fontSize: 11, fontFamily: "var(--font-mono)",
+                    boxShadow: "1px 1px 0px var(--card-border)",
+                  }}>{key}</kbd>
+                </td>
+                <td style={{ color: "var(--text)", opacity: 0.6 }}>{desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

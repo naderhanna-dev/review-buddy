@@ -71,9 +71,12 @@ const CARD_STYLES = `
 }
 .rb-card.swiping { transition: none; }
 .rb-card-0 { z-index: 4; }
-.rb-card-1 { z-index: 3; transform: translate(7px, 7px); opacity: 1; }
-.rb-card-2 { z-index: 2; transform: translate(14px, 14px); opacity: 0.9; }
-.rb-card-3 { z-index: 1; transform: translate(21px, 21px); opacity: 0.8; }
+.rb-card-1 { z-index: 3; transform: translate(7px, 7px); }
+.rb-card-2 { z-index: 2; transform: translate(14px, 14px); }
+.rb-card-3 { z-index: 1; transform: translate(21px, 21px); }
+/* Behind cards: hide content, just show card edge */
+.rb-card-1 > *, .rb-card-2 > *, .rb-card-3 > * { visibility: hidden; }
+.rb-card-1 .rb-card-overlay, .rb-card-2 .rb-card-overlay, .rb-card-3 .rb-card-overlay { visibility: hidden; }
 
 /* --- Swipe overlays --- */
 .rb-card-overlay {

@@ -29,67 +29,55 @@ export default function GroupHeader({ group, expanded, onToggle, fileCount }: Pr
       onMouseLeave={() => setHovered(false)}
       style={{
         display: "flex",
-        alignItems: "flex-start",
-        gap: 8,
+        alignItems: "center",
+        gap: 6,
         width: "100%",
-        padding: "8px 12px",
+        padding: "6px 12px",
         border: "none",
-        background: hovered ? "var(--bg-tertiary)" : "var(--bg-secondary)",
+        background: hovered ? "var(--bg-tertiary)" : "transparent",
         color: "var(--text)",
         cursor: "pointer",
         textAlign: "left",
-        borderBottom: "1px solid var(--border)",
+        borderBottom: "1px solid #C8C4BC",
         transition: "background 0.1s",
+        fontFamily: "var(--font-sans)",
       }}
     >
       <span style={{
-        fontSize: 11,
+        fontSize: 9,
         transition: "transform 0.15s",
         transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
-        marginTop: 2,
-        color: "var(--text-secondary)",
+        color: "var(--text)",
+        opacity: 0.4,
       }}>
         {"\u25B6"}
       </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{
-            fontSize: 10,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            padding: "1px 5px",
-            borderRadius: 3,
-            background: color + "22",
-            color,
-          }}>
-            {group.category}
-          </span>
-          <span style={{ fontWeight: 600, fontSize: 13 }}>
-            {group.label}
-          </span>
-          <span style={{ color: "var(--text-secondary)", fontSize: 12, marginLeft: "auto", flexShrink: 0 }}>
-            {fileCount} file{fileCount !== 1 ? "s" : ""}
-          </span>
-        </div>
-        {group.summary && (
-          <div
-            title={group.summary}
-            style={{
-              fontSize: 11,
-              color: "var(--text-secondary)",
-              marginTop: 2,
-              lineHeight: 1.4,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {group.summary}
-          </div>
-        )}
-      </div>
+      <span style={{
+        fontSize: 9,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+        padding: "1px 6px",
+        borderRadius: 3,
+        background: color + "22",
+        color,
+        flexShrink: 0,
+      }}>
+        {group.category}
+      </span>
+      <span style={{
+        fontWeight: 600, fontSize: 11,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        flex: 1,
+      }}>
+        {group.label}
+      </span>
+      <span style={{
+        color: "var(--text)", opacity: 0.35,
+        fontSize: 10, flexShrink: 0,
+      }}>
+        {fileCount}
+      </span>
     </button>
   );
 }
