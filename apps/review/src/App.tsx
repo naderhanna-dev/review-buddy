@@ -77,7 +77,8 @@ const LAYOUT_STYLES = `
 
 /* ── Center stack area ── */
 .rb-stack-area {
-  flex: 1; min-width: 0; background: var(--bg-tertiary);
+  flex: 1; min-width: 0;
+  background: #D8D4CC;
   display: flex; flex-direction: column; overflow: hidden;
 }
 

@@ -111,8 +111,33 @@ export default function ChatPanel() {
 
       <div className="rb-chat-messages" ref={messagesRef}>
         {chatMessages.length === 0 && (
-          <div style={{ fontSize: 11, color: "var(--muted)", textAlign: "center", padding: 20 }}>
-            Ask anything about this PR...
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "center", flex: 1, gap: 10, padding: "40px 16px", opacity: 0.5,
+          }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <div style={{ fontSize: 12, color: "var(--text)", textAlign: "center", lineHeight: 1.5 }}>
+              Ask anything about this PR...
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
+              {["What does this PR change?", "Any potential issues?", "Summarize the key files"].map((q) => (
+                <button
+                  key={q}
+                  onClick={() => { setInput(q); }}
+                  style={{
+                    padding: "6px 10px", fontSize: 10, textAlign: "left",
+                    border: "1px solid #C8C4BC", borderRadius: 6,
+                    background: "transparent", color: "var(--text)",
+                    cursor: "pointer", fontFamily: "var(--font-sans)",
+                    opacity: 0.7,
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {chatMessages.map((msg, i) => (
