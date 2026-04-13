@@ -17,4 +17,10 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
   },
+  resolve: {
+    alias: {
+      // pr-provider uses node:child_process — stub it out for the browser
+      "node:child_process": new URL("./src/stubs/child_process.ts", import.meta.url).pathname,
+    },
+  },
 });

@@ -1,73 +1,84 @@
-/* ReviewRadar shared design tokens — light (default) and dark themes */
-/* Source of truth: ReviewRadar dashboard palette + ODR review aliases */
+/* Review Buddy shared design tokens — light (default) and dark themes */
+/* Palette: cream/ink with yellow, blue, green, red, orange accents */
 
 :root {
-  /* ── Core palette (ReviewRadar canonical) ── */
-  --background: #f6f8fa;
-  --surface: #ffffff;
-  --subtle: #f6f8fa;
-  --border: #d0d7de;
-  --text: #24292f;
-  --muted: #57606a;
-  --link: #0969da;
+  /* ── Core palette (Review Buddy) ── */
+  --background: #F5F0E8;
+  --surface: #EDEAE2;
+  --subtle: #E5E1D9;
+  --border: #1A1A1A;
+  --text: #1A1A1A;
+  --muted: #6B6760;
+  --link: #0066FF;
   --input-bg: #ffffff;
-  --success-bg: #1f883d;
-  --success-bg-hover: #1a7f37;
-  --warning-bg: #fff8c5;
-  --warning-fg: #9a6700;
-  --error-fg: #cf222e;
+  --success-bg: #00B050;
+  --success-bg-hover: #009944;
+  --warning-bg: #F5C400;
+  --warning-fg: #1A1A1A;
+  --error-fg: #E8200A;
 
-  /* ── Status pills (dashboard) ── */
-  --status-danger-bg: #ffebe9;
-  --status-danger-border: #ff8182;
-  --status-danger-fg: #cf222e;
-  --status-warn-bg: #fff8c5;
-  --status-warn-border: #d4a72c;
-  --status-warn-fg: #9a6700;
-  --status-info-bg: #ddf4ff;
-  --status-info-border: #54aeff;
-  --status-info-fg: #0969da;
-  --status-note-bg: #fbefff;
-  --status-note-border: #bf87ff;
+  /* ── Status pills ── */
+  --status-danger-bg: #FAD6D5;
+  --status-danger-border: #E8200A;
+  --status-danger-fg: #E8200A;
+  --status-warn-bg: #FFF3C4;
+  --status-warn-border: #F5C400;
+  --status-warn-fg: #8A7000;
+  --status-info-bg: #D6E8FF;
+  --status-info-border: #0066FF;
+  --status-info-fg: #0066FF;
+  --status-note-bg: #F0E6FF;
+  --status-note-border: #8250df;
   --status-note-fg: #8250df;
-  --status-own-bg: #eaf5ff;
-  --status-own-border: #91c8ff;
-  --status-own-fg: #0b69c7;
-  --check-success: #1a7f37;
-  --check-pending: #9a6700;
-  --check-failure: #cf222e;
-  --tooltip-bg: #24292f;
-  --tooltip-border: #444d56;
-  --tooltip-fg: #f6f8fa;
+  --status-own-bg: #D6E8FF;
+  --status-own-border: #0066FF;
+  --status-own-fg: #0066FF;
+  --check-success: #00B050;
+  --check-pending: #F5C400;
+  --check-failure: #E8200A;
+  --tooltip-bg: #1A1A1A;
+  --tooltip-border: #333;
+  --tooltip-fg: #F5F0E8;
 
-  /* ── Review UI aliases (map to canonical names) ── */
+  /* ── Review UI aliases ── */
   --bg: var(--surface);
   --bg-secondary: var(--background);
-  --bg-tertiary: #eaeef2;
+  --bg-tertiary: #E5E1D9;
   --text-secondary: var(--muted);
   --accent: var(--link);
-  --green: #1a7f37;
-  --red: #cf222e;
-  --yellow: #9a6700;
-  --blue: #0969da;
-  --green-bg: rgba(26, 127, 55, 0.12);
-  --green-bg-hover: rgba(26, 127, 55, 0.22);
-  --red-bg: rgba(207, 34, 46, 0.12);
-  --red-bg-hover: rgba(207, 34, 46, 0.22);
-  --yellow-bg: rgba(154, 103, 0, 0.12);
-  --yellow-bg-hover: rgba(154, 103, 0, 0.22);
-  --accent-bg: rgba(9, 105, 218, 0.12);
-  --accent-bg-hover: rgba(9, 105, 218, 0.22);
+  --green: #00B050;
+  --red: #E8200A;
+  --yellow: #F5C400;
+  --blue: #0066FF;
+  --orange: #FF6B00;
+  --green-bg: #D6EDCC;
+  --green-bg-hover: rgba(0, 176, 80, 0.25);
+  --red-bg: #FAD6D5;
+  --red-bg-hover: rgba(232, 32, 10, 0.25);
+  --yellow-bg: #FFF3C4;
+  --yellow-bg-hover: rgba(245, 196, 0, 0.25);
+  --accent-bg: rgba(0, 102, 255, 0.10);
+  --accent-bg-hover: rgba(0, 102, 255, 0.20);
   --hover-overlay: rgba(0, 0, 0, 0.05);
-  --diff-add-bg: rgba(26, 127, 55, 0.12);
-  --diff-add-hover: rgba(26, 127, 55, 0.20);
-  --diff-del-bg: rgba(207, 34, 46, 0.12);
-  --diff-del-hover: rgba(207, 34, 46, 0.20);
+  --diff-add-bg: #D6EDCC;
+  --diff-add-hover: rgba(0, 176, 80, 0.22);
+  --diff-del-bg: #FAD6D5;
+  --diff-del-hover: rgba(232, 32, 10, 0.22);
   --diff-ctx-hover: rgba(0, 0, 0, 0.04);
-  --diff-hdr-bg: rgba(9, 105, 218, 0.06);
-  --diff-expand-bg: rgba(9, 105, 218, 0.04);
+  --diff-hdr-bg: var(--surface);
+  --diff-expand-bg: rgba(0, 102, 255, 0.04);
   --diff-filler-bg: rgba(0, 0, 0, 0.03);
   --diff-split-border: var(--border);
+
+  /* ── Card UI tokens ── */
+  --card-bg: var(--background);
+  --card-border: var(--border);
+  --card-radius: 12px;
+  --card-shadow-offset: 4px;
+  --card-stack-offset: 6px;
+  --topbar-bg: var(--border);
+  --topbar-text: var(--background);
+  --panel-bg: var(--surface);
 
   /* ── Fonts ── */
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
@@ -76,69 +87,80 @@
 
 :root[data-theme='dark'] {
   /* ── Core palette ── */
-  --background: #0d1117;
-  --surface: #161b22;
-  --subtle: #1f2630;
-  --border: #30363d;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --link: #58a6ff;
-  --input-bg: #0d1117;
-  --success-bg: #238636;
-  --success-bg-hover: #2ea043;
-  --warning-bg: #2f2a11;
-  --warning-fg: #e3b341;
-  --error-fg: #ff7b72;
+  --background: #1A1A1A;
+  --surface: #242424;
+  --subtle: #2E2E2E;
+  --border: #444;
+  --text: #E8E4DC;
+  --muted: #9A9590;
+  --link: #5599FF;
+  --input-bg: #1A1A1A;
+  --success-bg: #00B050;
+  --success-bg-hover: #00C65A;
+  --warning-bg: #3D3200;
+  --warning-fg: #F5C400;
+  --error-fg: #FF6B5E;
 
   /* ── Status pills ── */
-  --status-danger-bg: #3a1516;
-  --status-danger-border: #8e3538;
-  --status-danger-fg: #ff9b95;
-  --status-warn-bg: #32290f;
+  --status-danger-bg: #3A1516;
+  --status-danger-border: #8E3538;
+  --status-danger-fg: #FF9B95;
+  --status-warn-bg: #3D3200;
   --status-warn-border: #806219;
-  --status-warn-fg: #e3b341;
-  --status-info-bg: #0c2d4a;
-  --status-info-border: #1f6feb;
-  --status-info-fg: #79c0ff;
-  --status-note-bg: #2b1548;
-  --status-note-border: #8250df;
-  --status-note-fg: #d2a8ff;
-  --status-own-bg: #11253a;
-  --status-own-border: #1f6feb;
-  --status-own-fg: #79c0ff;
-  --check-success: #3fb950;
-  --check-pending: #d29922;
-  --check-failure: #f85149;
-  --tooltip-bg: #f6f8fa;
-  --tooltip-border: #30363d;
-  --tooltip-fg: #0d1117;
+  --status-warn-fg: #F5C400;
+  --status-info-bg: #0C2D4A;
+  --status-info-border: #1F6FEB;
+  --status-info-fg: #79C0FF;
+  --status-note-bg: #2B1548;
+  --status-note-border: #8250DF;
+  --status-note-fg: #D2A8FF;
+  --status-own-bg: #0C2D4A;
+  --status-own-border: #1F6FEB;
+  --status-own-fg: #79C0FF;
+  --check-success: #00B050;
+  --check-pending: #F5C400;
+  --check-failure: #FF6B5E;
+  --tooltip-bg: #E8E4DC;
+  --tooltip-border: #444;
+  --tooltip-fg: #1A1A1A;
 
   /* ── Review UI aliases ── */
   --bg: var(--background);
   --bg-secondary: var(--surface);
-  --bg-tertiary: #21262d;
-  --text-secondary: #9da5ad;
+  --bg-tertiary: #2E2E2E;
+  --text-secondary: #9A9590;
   --accent: var(--link);
-  --green: #3fb950;
-  --red: #f85149;
-  --yellow: #d29922;
-  --blue: #58a6ff;
+  --green: #3FB950;
+  --red: #FF6B5E;
+  --yellow: #F5C400;
+  --blue: #5599FF;
+  --orange: #FF8C40;
   --green-bg: rgba(63, 185, 80, 0.15);
   --green-bg-hover: rgba(63, 185, 80, 0.3);
-  --red-bg: rgba(248, 81, 73, 0.15);
-  --red-bg-hover: rgba(248, 81, 73, 0.3);
-  --yellow-bg: rgba(210, 153, 34, 0.15);
-  --yellow-bg-hover: rgba(210, 153, 34, 0.3);
-  --accent-bg: rgba(88, 166, 255, 0.15);
-  --accent-bg-hover: rgba(88, 166, 255, 0.3);
+  --red-bg: rgba(255, 107, 94, 0.15);
+  --red-bg-hover: rgba(255, 107, 94, 0.3);
+  --yellow-bg: rgba(245, 196, 0, 0.15);
+  --yellow-bg-hover: rgba(245, 196, 0, 0.3);
+  --accent-bg: rgba(85, 153, 255, 0.15);
+  --accent-bg-hover: rgba(85, 153, 255, 0.3);
   --hover-overlay: rgba(255, 255, 255, 0.08);
   --diff-add-bg: rgba(63, 185, 80, 0.12);
   --diff-add-hover: rgba(63, 185, 80, 0.18);
-  --diff-del-bg: rgba(248, 81, 73, 0.12);
-  --diff-del-hover: rgba(248, 81, 73, 0.18);
+  --diff-del-bg: rgba(255, 107, 94, 0.12);
+  --diff-del-hover: rgba(255, 107, 94, 0.18);
   --diff-ctx-hover: rgba(255, 255, 255, 0.03);
-  --diff-hdr-bg: rgba(88, 166, 255, 0.08);
-  --diff-expand-bg: rgba(88, 166, 255, 0.04);
+  --diff-hdr-bg: rgba(85, 153, 255, 0.08);
+  --diff-expand-bg: rgba(85, 153, 255, 0.04);
   --diff-filler-bg: rgba(255, 255, 255, 0.03);
   --diff-split-border: var(--border);
+
+  /* ── Card UI tokens ── */
+  --card-bg: var(--background);
+  --card-border: #555;
+  --card-radius: 12px;
+  --card-shadow-offset: 4px;
+  --card-stack-offset: 6px;
+  --topbar-bg: #111;
+  --topbar-text: #E8E4DC;
+  --panel-bg: var(--surface);
 }

@@ -63,63 +63,65 @@ function ViewedCheckbox({ checked, onClick }: { checked: boolean; onClick: (e: R
 
 function FileNode({ file, index, isActive, isGroupSibling }: { file: DiffFile; index: number; isActive: boolean; isGroupSibling?: boolean }) {
   const setActiveFile = useStore((s) => s.setActiveFile);
+  const setCardIndex = useStore((s) => s.setCardIndex);
   const viewed = useStore((s) => s.viewedFiles.has(file.path));
-  const toggleFileViewed = useStore((s) => s.toggleFileViewed);
   const [hovered, setHovered] = useState(false);
 
-  const bg = isActive ? "var(--bg-tertiary)"
-    : isGroupSibling ? "rgba(88, 166, 255, 0.06)"
-    : hovered ? "rgba(255,255,255,0.03)"
+  const bg = isActive ? "var(--blue)"
+    : hovered ? "var(--bg-tertiary)"
     : "transparent";
+  const textColor = isActive ? "#fff" : "var(--text)";
 
   return (
     <button
-      onClick={() => setActiveFile(index)}
+      onClick={() => { setActiveFile(index); setCardIndex(index); }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 6,
+        gap: 7,
         width: "100%",
-        padding: "4px 12px 4px 28px",
+        padding: "5px 12px",
         border: "none",
         background: bg,
-        color: "var(--text)",
+        color: textColor,
         cursor: "pointer",
-        fontSize: 13,
+        fontSize: 11,
         fontFamily: "var(--font-mono)",
         textAlign: "left",
-        borderLeft: isActive ? "2px solid var(--accent)" : isGroupSibling ? "2px solid rgba(88, 166, 255, 0.3)" : "2px solid transparent",
+        borderLeft: isActive ? "3px solid var(--text)" : "3px solid transparent",
         transition: "background 0.1s",
         opacity: viewed && !isActive ? 0.55 : 1,
       }}
     >
-      <ViewedCheckbox
-        checked={viewed}
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleFileViewed(file.path);
-        }}
-      />
+      {/* Colored dot indicator */}
       <span style={{
-        color: statusColor(file.status),
-        fontWeight: 600,
-        fontSize: 11,
-        minWidth: 14,
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        flexShrink: 0,
+        border: "1.5px solid var(--text)",
+        background: statusColor(file.status),
+      }} />
+      <span style={{
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        flex: 1,
+        color: isActive ? "#fff" : "var(--text)",
       }}>
-        {statusLabel(file.status)}
-      </span>
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, direction: "rtl", textAlign: "left" }}>
-        <span style={{ color: "var(--text-secondary)" }}>
-          {dirName(file.path) ? dirName(file.path) + "/" : ""}
-        </span>
         {fileName(file.path)}
       </span>
-      <span style={{ fontSize: 11, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-        <span style={{ color: "var(--green)" }}>+{file.additions}</span>
-        {" "}
-        <span style={{ color: "var(--red)" }}>-{file.deletions}</span>
+      <span style={{
+        fontSize: 10,
+        color: isActive ? "rgba(255,255,255,0.7)" : "var(--text)",
+        opacity: isActive ? 0.8 : 0.4,
+        whiteSpace: "nowrap",
+      }}>
+        {file.additions > 0 && `+${file.additions}`}
+        {file.additions > 0 && file.deletions > 0 && " "}
+        {file.deletions > 0 && `-${file.deletions}`}
       </span>
     </button>
   );

@@ -93,6 +93,14 @@ interface ODRStore {
   viewedFiles: Set<string>;
   toggleFileViewed: (filePath: string) => void;
 
+  // Card review (tinder-style)
+  cardIndex: number;
+  fileVerdicts: Map<string, "approved" | "rejected">;
+  setCardIndex: (index: number) => void;
+  swipeFile: (filePath: string, verdict: "approved" | "rejected") => void;
+  resetFileVerdicts: () => void;
+  reviewedCount: () => number;
+
   // UI
   rightTab: "comments" | "analysis" | "chat";
   setRightTab: (tab: ODRStore["rightTab"]) => void;
@@ -100,6 +108,18 @@ interface ODRStore {
   setDiffViewMode: (mode: ODRStore["diffViewMode"]) => void;
   showShortcuts: boolean;
   showSettings: boolean;
+
+  // Mobile panels
+  mobileSidebarOpen: boolean;
+  mobileChatOpen: boolean;
+  toggleMobileSidebar: () => void;
+  toggleMobileChat: () => void;
+
+  // Bottom sheet
+  bottomSheetOpen: boolean;
+  bottomSheetContext: string;
+  openBottomSheet: (lineContent: string) => void;
+  closeBottomSheet: () => void;
 }
 
 export const useStore = create<ODRStore>((set, get) => ({
@@ -293,6 +313,45 @@ export const useStore = create<ODRStore>((set, get) => ({
 
   showShortcuts: false,
   showSettings: false,
+
+  // Card review
+  cardIndex: 0,
+  fileVerdicts: new Map(),
+  setCardIndex: (index) => set({ cardIndex: index }),
+  swipeFile: (filePath, verdict) =>
+    set((s) => {
+      const next = new Map(s.fileVerdicts);
+      next.set(filePath, verdict);
+      const nextIndex = Math.min(s.cardIndex + 1, s.files.length - 1);
+      // Also mark as viewed
+      const viewed = new Set(s.viewedFiles);
+      viewed.add(filePath);
+      return { fileVerdicts: next, cardIndex: nextIndex, viewedFiles: viewed };
+    }),
+  resetFileVerdicts: () => set({ fileVerdicts: new Map(), cardIndex: 0 }),
+  reviewedCount: () => get().fileVerdicts.size,
+
+  // Mobile panels
+  mobileSidebarOpen: false,
+  mobileChatOpen: false,
+  toggleMobileSidebar: () =>
+    set((s) => ({
+      mobileSidebarOpen: !s.mobileSidebarOpen,
+      mobileChatOpen: false,
+    })),
+  toggleMobileChat: () =>
+    set((s) => ({
+      mobileChatOpen: !s.mobileChatOpen,
+      mobileSidebarOpen: false,
+    })),
+
+  // Bottom sheet
+  bottomSheetOpen: false,
+  bottomSheetContext: "",
+  openBottomSheet: (lineContent) =>
+    set({ bottomSheetOpen: true, bottomSheetContext: lineContent }),
+  closeBottomSheet: () =>
+    set({ bottomSheetOpen: false, bottomSheetContext: "" }),
 }));
 
 function applyTheme(theme: string) {
